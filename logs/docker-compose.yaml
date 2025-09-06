@@ -15,7 +15,8 @@ services:
       - "3100:3100"
     volumes:
       - loki_data:/loki
-      - ./loki-config.yaml:/etc/loki/config.yml:ro   # <-- relative to logs/
+      # mount a DIRECTORY so /etc/loki exists inside the container
+      - ./loki:/etc/loki:ro
     networks: [observability]
     restart: unless-stopped
 
@@ -23,10 +24,11 @@ services:
     image: grafana/promtail:2.9.8
     command: ["-config.file=/etc/promtail/config.yml"]
     volumes:
-      - ./promtail-config.yaml:/etc/promtail/config.yml:ro  # <-- relative to logs/
+      # mount a DIRECTORY so /etc/promtail exists inside the container
+      - ./promtail:/etc/promtail:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/log:/var/log:ro   # keep if your config scrapes host logs
+      - /var/log:/var/log:ro
     networks: [observability]
     restart: unless-stopped
     depends_on: [loki]
