@@ -2,7 +2,6 @@ version: "3.9"
 
 networks:
   observability:
-    driver: bridge
 
 volumes:
   loki_data:
@@ -16,7 +15,7 @@ services:
       - "3100:3100"
     volumes:
       - loki_data:/loki
-      - ./loki-config.yml:/etc/loki/config.yml:ro
+      - ./loki-config.yaml:/etc/loki/config.yml:ro   # <-- relative to logs/
     networks: [observability]
     restart: unless-stopped
 
@@ -24,10 +23,10 @@ services:
     image: grafana/promtail:2.9.8
     command: ["-config.file=/etc/promtail/config.yml"]
     volumes:
-      - /var/log:/var/log:ro
+      - ./promtail-config.yaml:/etc/promtail/config.yml:ro  # <-- relative to logs/
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro   # keep if your config scrapes host logs
     networks: [observability]
     restart: unless-stopped
     depends_on: [loki]
