@@ -1,0 +1,154 @@
+/* Terminal styling */
+body {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  background: #0a0a0a;
+  color: #00ff00;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.terminal-container {
+  background: #0a0a0a;
+  color: #00ff00;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.4;
+  padding: 20px;
+  min-height: 100vh;
+  overflow-x: auto;
+}
+
+.terminal-header {
+  color: #888;
+  font-size: 0.9em;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 10px;
+}
+
+.terminal-output {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 10px;
+}
+
+.terminal-prompt {
+  color: #00ff00;
+  font-weight: bold;
+}
+
+.terminal-input {
+  background: transparent;
+  border: none;
+  color: #00ff00;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  width: 100%;
+  caret-color: #00ff00;
+}
+
+.terminal-cursor {
+  animation: blink 1s infinite;
+  background: #00ff00;
+  color: #0a0a0a;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Neofetch styling */
+.neofetch-container {
+  display: flex;
+  gap: 20px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.neofetch-ascii {
+  color: #0099ff;
+  font-size: 0.8em;
+  white-space: pre;
+  flex-shrink: 0;
+}
+
+.neofetch-info {
+  flex: 1;
+  min-width: 300px;
+}
+
+.neofetch-line {
+  margin: 2px 0;
+}
+
+.neofetch-label {
+  color: #0099ff;
+  font-weight: bold;
+}
+
+.neofetch-value {
+  color: #ffffff;
+}
+
+/* Command styling */
+.command-link {
+  color: #ffff00;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.command-link:hover {
+  text-decoration: underline;
+}
+
+.error-text {
+  color: #ff4444;
+}
+
+.success-text {
+  color: #44ff44;
+}
+
+.warning-text {
+  color: #ffaa00;
+}
+
+.info-text {
+  color: #4488ff;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .terminal-container {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .neofetch-container {
+    flex-direction: column;
+  }
+
+  .neofetch-ascii {
+    font-size: 0.6em;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

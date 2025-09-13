@@ -247,9 +247,9 @@ def main():
         print("  python dns_manager.py test <subdomain>         # Test service")
         print()
         print("Examples:")
-        print("  python dns_manager.py add hello                # Add hello.ops.markcheli.com")
-        print("  python dns_manager.py check hello              # Check hello.ops.markcheli.com")
-        print("  python dns_manager.py test hello               # Test hello service")
+        print("  python dns_manager.py add jupyter              # Add jupyter.ops.markcheli.com")
+        print("  python dns_manager.py check jupyter            # Check jupyter.ops.markcheli.com")
+        print("  python dns_manager.py test jupyter             # Test jupyter service")
         return
 
     command = sys.argv[1].lower()
