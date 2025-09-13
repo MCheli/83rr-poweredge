@@ -94,6 +94,7 @@ services:
       - internal
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
       # Development website (LAN-only)
       - "traefik.http.routers.website-dev.rule=Host(`www-dev.ops.markcheli.com`)"
       - "traefik.http.routers.website-dev.entrypoints=websecure"
