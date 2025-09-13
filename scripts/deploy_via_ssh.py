@@ -34,6 +34,11 @@ def deploy_via_ssh(stack_name, compose_file_path):
         # Copy compose file to server (uses SCP - separate connection)
         remote_path = f"/tmp/{stack_name}-compose.yml"
         remote_env_path = f"/tmp/.env"
+        remote_dir = f"/tmp/{stack_name}"
+
+        # Create remote directory structure
+        mkdir_cmd = f"ssh -o ConnectTimeout=30 {ssh_user}@{ssh_host} 'mkdir -p {remote_dir}'"
+        subprocess.run(mkdir_cmd, shell=True, capture_output=True, text=True)
 
         scp_cmd = f"scp -o ConnectTimeout=30 {compose_file} {ssh_user}@{ssh_host}:{remote_path}"
         print(f"📁 Copying compose file to server...")
@@ -42,6 +47,18 @@ def deploy_via_ssh(stack_name, compose_file_path):
         if result.returncode != 0:
             print(f"❌ Failed to copy file: {result.stderr}")
             return False
+
+        # Copy additional directories if they exist (like backend/)
+        compose_dir = compose_file.parent
+        backend_dir = compose_dir / "backend"
+        if backend_dir.exists():
+            print(f"📁 Copying backend directory to server...")
+            scp_backend_cmd = f"scp -r -o ConnectTimeout=30 {backend_dir} {ssh_user}@{ssh_host}:{remote_dir}/"
+            result = subprocess.run(scp_backend_cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"⚠️ Warning: Failed to copy backend directory: {result.stderr}")
+            else:
+                print("✅ Backend directory copied successfully")
 
         # Copy .env file if it exists
         env_file = Path(".env")
@@ -60,11 +77,12 @@ def deploy_via_ssh(stack_name, compose_file_path):
         # Deploy stack using docker compose on remote server
         # Uses single SSH connection with proper timeout and cleanup
         deploy_cmd = f'''ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 {ssh_user}@{ssh_host} "
-            cd /tmp &&
+            cd {remote_dir} &&
+            cp {remote_path} docker-compose.yml &&
             echo 'Stopping existing containers...' &&
-            docker compose -p {stack_name} -f {remote_path} down &&
+            docker compose -p {stack_name} down &&
             echo 'Starting updated stack...' &&
-            docker compose -p {stack_name} -f {remote_path} up -d &&
+            docker compose -p {stack_name} up -d &&
             echo 'Deployment complete!' &&
             rm {remote_path} &&
             echo 'SSH session closing...'
