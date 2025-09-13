@@ -7,6 +7,7 @@ services:
     ports:
       - "80:80"                        # Public port for Let's Encrypt challenges
       - "443:443"                      # Public port for your apps
+      - "25565:25565"                  # Minecraft server port
       - "192.168.1.179:8080:8080"     # HTTP dashboard (local only)
       - "192.168.1.179:8443:443"      # HTTPS dashboard (local only, reusing port 443 internally)
     # ── Volumes ──────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ services:
       # Entrypoints
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.minecraft.address=:25565"        # Minecraft TCP port
       - "--entrypoints.dashboard.address=:8080"         # HTTP dashboard
       # HTTP-01 resolver for single domain certificates (fallback only)
       - "--certificatesresolvers.letsencrypt-http.acme.email=mpcheli7@gmail.com"

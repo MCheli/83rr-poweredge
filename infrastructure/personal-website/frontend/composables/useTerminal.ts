@@ -18,6 +18,7 @@ services               List all services and infrastructure
 weather                Check weather in Ashland, MA
 home                   Open Home Assistant
 jupyter                Open JupyterHub
+minecraft              Open Minecraft server status
 about                  About Mark Cheli
 contact                Contact information
 exit                   Exit terminal
@@ -117,6 +118,7 @@ Services:
   API Server: https://flask.markcheli.com
   Development Environment: https://jupyter.markcheli.com
   Smart Home: https://home.markcheli.com
+  Minecraft Server: https://minecraft.markcheli.com
 
 Infrastructure:
   All services are self-hosted on my homelab infrastructure
@@ -129,6 +131,7 @@ Infrastructure:
     github: () => window.open('https://github.com/MCheli', '_blank'),
     home: () => window.open('https://home.markcheli.com', '_blank'),
     jupyter: () => window.open('https://jupyter.markcheli.com', '_blank'),
+    minecraft: () => window.open('https://minecraft.markcheli.com', '_blank'),
   }
 
   const executeCommand = async (command: string): Promise<string> => {
@@ -151,6 +154,7 @@ https://www.markcheli.com      Interactive terminal website
 https://flask.markcheli.com    Flask API server with weather data
 https://jupyter.markcheli.com  JupyterHub data science environment
 https://home.markcheli.com     Home Assistant smart home platform
+https://minecraft.markcheli.com Minecraft Java Edition server
 https://ops.markcheli.com      Whoami test service
 
 Internal Infrastructure (LAN-only):
@@ -159,7 +163,8 @@ https://traefik-local.ops.markcheli.com   Traefik reverse proxy dashboard
 https://portainer-local.ops.markcheli.com Docker container management
 https://logs-local.ops.markcheli.com      OpenSearch Dashboards log aggregation
 
-Type a service name to open it, or 'linkedin' to connect professionally.`
+Type a service name to open it, or 'linkedin' to connect professionally.
+Connect to Minecraft: minecraft.markcheli.com:25565`
     }
 
     if (cmd === 'weather') {

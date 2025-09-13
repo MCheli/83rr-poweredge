@@ -1,0 +1,45 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft-server
+    restart: unless-stopped
+    environment:
+      - EULA=true
+      - VERSION=LATEST
+      - TYPE=VANILLA
+      - MEMORY=2G
+      - SERVER_NAME=Mark Cheli's Minecraft Server
+      - MOTD=Welcome to Mark Cheli's Minecraft Server! Password: MarkCheli
+      - DIFFICULTY=normal
+      - MODE=survival
+      - MAX_PLAYERS=20
+      - OVERRIDE_SERVER_PROPERTIES=true
+      - ONLINE_MODE=true
+      - SERVER_PASSWORD=MarkCheli
+    volumes:
+      - minecraft_data:/data
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      # TCP router for Minecraft protocol
+      - "traefik.tcp.routers.minecraft.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.minecraft.entrypoints=minecraft"
+      - "traefik.tcp.routers.minecraft.service=minecraft"
+      - "traefik.tcp.services.minecraft.loadbalancer.server.port=25565"
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+
+
+volumes:
+  minecraft_data:
+    driver: local
+
+networks:
+  traefik_default:
+    external: true

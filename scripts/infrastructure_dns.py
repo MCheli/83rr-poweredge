@@ -39,6 +39,12 @@ class InfrastructureDNS:
                     'ip': self.dns.public_ip,
                     'description': 'Personal API Server - Weather & Profile Data',
                     'domain': 'markcheli.com'
+                },
+                'minecraft': {
+                    'subdomain': 'minecraft',
+                    'ip': self.dns.public_ip,
+                    'description': 'Minecraft Java Edition Server',
+                    'domain': 'markcheli.com'
                 }
             },
             # Local services (internal network only)
