@@ -8,7 +8,7 @@ A comprehensive Docker-based homelab infrastructure management system with autom
 ├── infrastructure/           # Local copies of stack configurations
 │   ├── jupyter/             # JupyterHub data science environment
 │   ├── traefik/             # Reverse proxy with SSL termination
-│   └── logs/                # Grafana/Loki/Promtail logging stack
+│   └── opensearch/          # OpenSearch logging stack
 ├── scripts/                 # Management and utility scripts
 ├── .env                     # Environment configuration (secrets)
 ├── requirements.txt         # Python dependencies
@@ -48,7 +48,7 @@ python scripts/pull_stack_configs.py
 ### Active Services
 - **Traefik** - Reverse proxy with SSL termination (ports 80, 443, 8080, 8443)
 - **JupyterHub** - Multi-user data science environment with collaboration features
-- **Grafana/Loki/Promtail** - Log aggregation and visualization stack
+- **OpenSearch Stack** - Log aggregation, search and visualization (OpenSearch + Dashboards + Logstash + Filebeat)
 - **Portainer** - Container management interface
 
 ### Server Details

@@ -41,14 +41,15 @@
 - **Shared Volume**: jupyterhub-shared
 - **Stack ID in Portainer**: 8
 
-### 3. Logging Stack
+### 3. OpenSearch Logging Stack
 - **Components**:
-  - Loki (logs-loki-1) - Log aggregation
-  - Promtail (logs-promtail-1) - Log collection
-  - Grafana (logs-grafana-1) - Visualization
-- **Grafana URL**: https://grafana.ops.markcheli.com (if configured)
-- **Stack ID in Portainer**: 34
-- **Storage Path**: `/data/compose/34/logs/`
+  - OpenSearch (opensearch) - Search and analytics engine
+  - OpenSearch Dashboards (opensearch-dashboards) - Web interface
+  - Logstash (logstash) - Log processing pipeline
+  - Filebeat (filebeat) - Log collection agent
+- **OpenSearch Dashboards**: https://logs-local.ops.markcheli.com (LAN-only)
+- **OpenSearch API**: https://opensearch-local.ops.markcheli.com (LAN-only)
+- **Stack ID in Portainer**: opensearch
 
 ### 4. Portainer
 - **URL**: https://portainer-local.ops.markcheli.com
@@ -116,10 +117,11 @@ ssh 83rr-poweredge "docker logs {container_name}"
 3. Script auto-checks health and rollbacks if needed
 
 ## Known Issues & Quirks
-1. Portainer adds number suffixes to containers (e.g., logs-loki-1)
+1. Portainer adds number suffixes to containers for multi-container services
 2. Some services take 15-30 seconds to fully start
 3. JupyterHub requires custom image rebuild for package changes
 4. Let's Encrypt rate limits: 50 certs per week per domain
+5. OpenSearch requires sufficient memory (1GB+ JVM heap)
 
 ## Emergency Procedures
 

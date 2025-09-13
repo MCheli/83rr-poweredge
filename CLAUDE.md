@@ -132,7 +132,8 @@ When deploying a new service that requires DNS:
 - **Local Services** (LAN-only): Point to `192.168.1.179`
   - `traefik-local.ops.markcheli.com` - Traefik dashboard
   - `portainer-local.ops.markcheli.com` - Portainer management
-  - `grafana.ops.markcheli.com` - Logging dashboard
+  - `logs-local.ops.markcheli.com` - OpenSearch Dashboards
+  - `opensearch-local.ops.markcheli.com` - OpenSearch API
 
 ### **Manual DNS Steps in Squarespace**
 1. Login to Squarespace account

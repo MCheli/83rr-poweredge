@@ -89,7 +89,27 @@ When modifying Traefik:
 3. **Test locally** before deploying: `docker-compose -f infrastructure/traefik/docker-compose.yaml config`
 4. **Check dashboard** after deployment: https://traefik-local.ops.markcheli.com
 
-Required labels for new services behind Traefik:
+## Service Access Policies
+
+**Default Rule**: All infrastructure services should be **LAN-only** unless explicitly designated as public.
+
+### LAN-Only Services (Default)
+Use for admin interfaces, management tools, and internal services:
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.{service}.rule=Host(`{subdomain}-local.ops.markcheli.com`)"
+  - "traefik.http.routers.{service}.entrypoints=websecure"
+  - "traefik.http.routers.{service}.tls=true"
+  - "traefik.http.routers.{service}.tls.certresolver=letsencrypt"
+  - "traefik.http.routers.{service}.middlewares=lan-only@docker"
+  - "traefik.http.services.{service}.loadbalancer.server.port={port}"
+networks:
+  - traefik_default
+```
+
+### Public Services (Explicit Only)
+Use only for services intended for internet access:
 ```yaml
 labels:
   - "traefik.enable=true"
@@ -97,10 +117,17 @@ labels:
   - "traefik.http.routers.{service}.entrypoints=websecure"
   - "traefik.http.routers.{service}.tls=true"
   - "traefik.http.routers.{service}.tls.certresolver=letsencrypt"
+  - "traefik.http.routers.{service}.middlewares=secure-headers@docker"
   - "traefik.http.services.{service}.loadbalancer.server.port={port}"
 networks:
   - traefik_default
 ```
+
+**Public Services Criteria:**
+- User-facing applications (JupyterHub, demo sites)
+- Public APIs or webhooks
+- Services requiring external access
+- **Always require explicit justification**
 
 ### JupyterHub Updates
 When modifying JupyterHub:
@@ -110,13 +137,26 @@ When modifying JupyterHub:
 4. **Proxy** must be running for external access
 
 ### Adding a New Service
+
+**IMPORTANT**: By default, all new services should be **LAN-only** for security.
+
 1. Create `infrastructure/{service}/docker-compose.yaml`
 2. Include necessary networks (usually `traefik_default`)
-3. Add Traefik labels if it needs web access
-4. Create a README.md explaining the service
-5. Deploy: `python scripts/deploy.py {service} infrastructure/{service}/docker-compose.yaml`
-6. Add health checks to deploy.py if needed
-7. Commit changes to git
+3. **Add LAN-only Traefik labels** (see LAN-Only Services template above)
+4. Use `-local` subdomain naming convention: `{service}-local.ops.markcheli.com`
+5. Create a README.md explaining the service and access policy
+6. Deploy: `python scripts/deploy.py {service} infrastructure/{service}/docker-compose.yaml`
+7. Add health checks to deploy.py if needed
+8. **Only make public if explicitly required and justified**
+9. Update `scripts/infrastructure_dns.py` with new service mapping
+10. Commit changes to git
+
+**Security Checklist**:
+- [ ] Service uses LAN-only middleware by default
+- [ ] Subdomain uses `-local` suffix
+- [ ] Public access justified if applicable
+- [ ] Authentication configured for admin interfaces
+- [ ] DNS mapping added to infrastructure_dns.py
 
 ## Container Naming Conventions
 
@@ -129,9 +169,10 @@ Portainer modifies container names. Here's the mapping:
 | JupyterHub | jupyterhub | jupyterhub |
 | JupyterHub Proxy | chp | jupyterhub-proxy |
 | JupyterHub DB | hub-db | jupyterhub-db |
-| Loki | loki | logs-loki-1 |
-| Promtail | promtail | logs-promtail-1 |
-| Grafana | grafana | logs-grafana-1 |
+| OpenSearch | opensearch | opensearch |
+| OpenSearch Dashboards | opensearch-dashboards | opensearch-dashboards |
+| Logstash | logstash | logstash |
+| Filebeat | filebeat | filebeat |
 
 ## Error Resolution Playbook
 
