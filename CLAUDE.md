@@ -71,6 +71,30 @@ source venv/bin/activate && python scripts/deploy_stack.py <stack_name> <compose
 source venv/bin/activate && python scripts/deploy_via_ssh.py <stack_name> <compose_file_path>
 ```
 
+### DNS Management (Squarespace Domains)
+```bash
+# IMPORTANT: Squarespace does not offer a public DNS API
+# These scripts provide guided manual DNS management
+
+# Audit all infrastructure DNS records
+source venv/bin/activate && python scripts/infrastructure_dns.py audit
+
+# Setup DNS for a specific service (provides manual instructions)
+source venv/bin/activate && python scripts/infrastructure_dns.py setup <service_name>
+
+# Verify deployment after DNS changes
+source venv/bin/activate && python scripts/infrastructure_dns.py verify <service_name>
+
+# Generate deployment checklist for service
+source venv/bin/activate && python scripts/infrastructure_dns.py checklist <service_name>
+
+# Manual DNS record management
+source venv/bin/activate && python scripts/dns_manager.py add <subdomain> [ip]
+source venv/bin/activate && python scripts/dns_manager.py check <subdomain>
+source venv/bin/activate && python scripts/dns_manager.py wait <subdomain> <expected_ip>
+source venv/bin/activate && python scripts/dns_manager.py test <subdomain>
+```
+
 ## Environment Variables Required
 
 The following environment variables must be set in `.env`:
@@ -78,7 +102,60 @@ The following environment variables must be set in `.env`:
 - `PORTAINER_API_KEY` - API key for Portainer authentication
 - `SSH_HOST` - Target server hostname
 - `SSH_USER` - SSH username
-- `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID (default: 1)
+- `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID (default: 3)
+
+### DNS Configuration Variables (for reference):
+- `PUBLIC_IP` - Server's public IP address (173.48.98.211)
+- `LOCAL_IP` - Server's local network IP (192.168.1.179)
+- `DOMAIN` - Base domain name (ops.markcheli.com)
+
+## DNS Management Workflow
+
+### **Important Limitation**: Squarespace DNS API
+Squarespace does not provide a public API for DNS record management. All DNS changes must be made manually through the Squarespace dashboard. The scripts provided offer guided assistance and validation.
+
+### **Service Deployment with DNS**
+When deploying a new service that requires DNS:
+
+1. **Deploy the service/container**
+2. **Request DNS setup**: `python scripts/infrastructure_dns.py setup <service_name>`
+3. **Manually add DNS record** in Squarespace dashboard using provided instructions
+4. **Wait for propagation**: 5-15 minutes
+5. **Verify deployment**: `python scripts/infrastructure_dns.py verify <service_name>`
+
+### **DNS Record Types by Service Category**
+- **Public Services** (internet-accessible): Point to `173.48.98.211`
+  - `jupyter.ops.markcheli.com` - JupyterHub
+  - `hello.ops.markcheli.com` - Test container
+  - `ops.markcheli.com` - Base domain (whoami)
+
+- **Local Services** (LAN-only): Point to `192.168.1.179`
+  - `traefik-local.ops.markcheli.com` - Traefik dashboard
+  - `portainer-local.ops.markcheli.com` - Portainer management
+  - `grafana.ops.markcheli.com` - Logging dashboard
+
+### **Manual DNS Steps in Squarespace**
+1. Login to Squarespace account
+2. Go to Settings → Domains
+3. Click on "ops.markcheli.com"
+4. Click "DNS" in left sidebar
+5. Scroll to "Custom Records"
+6. Click "Add Record" → "A Record"
+7. Enter Host (subdomain) and Points to (IP)
+8. Save and wait for propagation
+
+### **DNS Troubleshooting Commands**
+```bash
+# Check if DNS record exists
+dig hello.ops.markcheli.com A +short
+
+# Check DNS propagation from multiple servers
+dig @8.8.8.8 hello.ops.markcheli.com A +short
+dig @1.1.1.1 hello.ops.markcheli.com A +short
+
+# Test service connectivity after DNS resolves
+curl -I https://hello.ops.markcheli.com
+```
 
 ## Git Usage and Security
 
