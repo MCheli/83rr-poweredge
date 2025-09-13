@@ -1,0 +1,23 @@
+# Visual Enhancement Mods (No Gameplay Changes)
+# These mods improve graphics, lighting, and visual effects without changing mechanics
+
+# JEI (Just Enough Items) - Better item viewing/recipes
+https://www.curseforge.com/minecraft/mc-mods/jei/download
+
+# OptiFine Alternative for Forge - Better graphics and performance
+https://www.curseforge.com/minecraft/mc-mods/rubidium/download
+
+# Better lighting and shadows
+https://www.curseforge.com/minecraft/mc-mods/dynamic-lights/download
+
+# Enhanced particle effects
+https://www.curseforge.com/minecraft/mc-mods/particle-culling/download
+
+# Better water graphics
+https://www.curseforge.com/minecraft/mc-mods/better-foliage/download
+
+# Enhanced sky and weather visuals
+https://www.curseforge.com/minecraft/mc-mods/better-weather/download
+
+# Smooth lighting improvements
+https://www.curseforge.com/minecraft/mc-mods/smooth-boot-forge/download

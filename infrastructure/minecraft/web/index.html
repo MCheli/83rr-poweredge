@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Cheli's Minecraft Server</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #2b2b2b;
+            color: #00ff00;
+            margin: 0;
+            padding: 40px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        .server-info {
+            background-color: #1a1a1a;
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #00ff00;
+            margin: 20px 0;
+        }
+        .server-address {
+            font-size: 1.5em;
+            color: #ffff00;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .info-item {
+            margin: 15px 0;
+            font-size: 1.1em;
+        }
+        .info-label {
+            color: #00ffff;
+            font-weight: bold;
+        }
+        .copy-button {
+            background-color: #333;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+        .copy-button:hover {
+            background-color: #00ff00;
+            color: #2b2b2b;
+        }
+        .status {
+            color: #00ff00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Mark Cheli's Minecraft Server</h1>
+
+        <div class="server-info">
+            <div class="server-address">minecraft.markcheli.com:25565</div>
+            <button class="copy-button" onclick="copyToClipboard('minecraft.markcheli.com:25565')">
+                Copy Server Address
+            </button>
+
+            <div class="info-item">
+                <span class="info-label">Version:</span> Latest Java Edition
+            </div>
+            <div class="info-item">
+                <span class="info-label">Game Mode:</span> Survival
+            </div>
+            <div class="info-item">
+                <span class="info-label">Difficulty:</span> Normal
+            </div>
+            <div class="info-item">
+                <span class="info-label">Max Players:</span> 20
+            </div>
+            <div class="info-item">
+                <span class="info-label">Status:</span> <span class="status">Online</span>
+            </div>
+        </div>
+
+        <div class="server-info">
+            <h3>How to Connect:</h3>
+            <p>1. Launch Minecraft Java Edition</p>
+            <p>2. Click "Multiplayer"</p>
+            <p>3. Click "Add Server"</p>
+            <p>4. Server Address: <strong>minecraft.markcheli.com:25565</strong></p>
+            <p>5. Click "Done" and connect!</p>
+        </div>
+
+        <div class="server-info">
+            <h3>Server Rules:</h3>
+            <p>• Be respectful to other players</p>
+            <p>• No griefing or destroying others' builds</p>
+            <p>• Have fun building and exploring!</p>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('Server address copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
