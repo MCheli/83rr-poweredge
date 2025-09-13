@@ -29,7 +29,7 @@ services:
       - "traefik.http.routers.opensearch.rule=Host(`opensearch-local.ops.markcheli.com`)"
       - "traefik.http.routers.opensearch.entrypoints=websecure"
       - "traefik.http.routers.opensearch.tls=true"
-      - "traefik.http.routers.opensearch.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.opensearch.tls=true"
       - "traefik.http.routers.opensearch.middlewares=lan-only@docker"
       - "traefik.http.services.opensearch.loadbalancer.server.port=9200"
 
@@ -53,7 +53,7 @@ services:
       - "traefik.http.routers.dashboards.rule=Host(`logs-local.ops.markcheli.com`)"
       - "traefik.http.routers.dashboards.entrypoints=websecure"
       - "traefik.http.routers.dashboards.tls=true"
-      - "traefik.http.routers.dashboards.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboards.tls=true"
       - "traefik.http.routers.dashboards.middlewares=lan-only@docker"
       - "traefik.http.services.dashboards.loadbalancer.server.port=5601"
 

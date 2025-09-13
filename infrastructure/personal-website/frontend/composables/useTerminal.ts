@@ -107,7 +107,7 @@ Professional:
 
 Services:
   Personal Website: https://www.markcheli.com
-  Development Environment: https://jupyter.ops.markcheli.com
+  Development Environment: https://jupyter.markcheli.com
   Smart Home: https://home.markcheli.com
 
 Infrastructure:
@@ -120,7 +120,7 @@ Infrastructure:
     linkedin: () => window.open('https://www.linkedin.com/in/mark-cheli-0354a163/', '_blank'),
     github: () => window.open('https://github.com/MCheli', '_blank'),
     home: () => window.open('https://home.markcheli.com', '_blank'),
-    jupyter: () => window.open('https://jupyter.ops.markcheli.com', '_blank'),
+    jupyter: () => window.open('https://jupyter.markcheli.com', '_blank'),
   }
 
   const executeCommand = async (command: string): Promise<string> => {
@@ -144,7 +144,7 @@ flask.markcheli.com    Flask API server with weather data
 home.markcheli.com     Home Assistant automation platform
 
 Additional Services:
-jupyter.ops.markcheli.com  JupyterHub data science environment
+jupyter.markcheli.com  JupyterHub data science environment
 
 Type a service name to open it, or 'linkedin' to connect professionally.`
     }
