@@ -49,12 +49,12 @@ services:
       - traefik_default
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
       # LAN-only dashboard access (infrastructure service)
       - "traefik.http.routers.dashboards.rule=Host(`logs-local.ops.markcheli.com`)"
       - "traefik.http.routers.dashboards.entrypoints=websecure"
       - "traefik.http.routers.dashboards.tls=true"
-      - "traefik.http.routers.dashboards.tls=true"
-      - "traefik.http.routers.dashboards.middlewares=lan-only@docker"
+      - "traefik.http.routers.dashboards.middlewares=lan-only"
       - "traefik.http.services.dashboards.loadbalancer.server.port=5601"
 
   logstash:
