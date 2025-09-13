@@ -1,9 +1,9 @@
 <template>
   <div class="terminal-container">
     <div class="terminal-header">
-      Mark Cheli Developer Terminal v1.0.0 - Interactive Interface
+      Welcome to Mark Cheli's Personal Website!
       <br>
-      Type 'help' for available commands | Type 'neofetch' for system info
+      Type 'help' for available commands
     </div>
 
     <div class="terminal-content">
@@ -13,7 +13,7 @@
         <br>
         Last login: {{ formatDate(new Date()) }} from local-machine
         <br><br>
-        <span class="info-text">Tip: Try 'neofetch' to see system information or 'help' for available commands.</span>
+        <span class="info-text">Type 'help' for available commands. Try 'linkedin' to connect.</span>
         <br><br>
       </div>
 
@@ -24,7 +24,7 @@
         class="terminal-output"
       >
         <div class="command-line">
-          <span class="terminal-prompt">mark@homelab:~$ </span>
+          <span class="terminal-prompt">user@83rr-poweredge:~$ </span>
           <span class="command-text">{{ entry.command }}</span>
         </div>
         <div v-if="entry.output === 'CLEAR_SCREEN'" class="clear-marker"></div>
@@ -35,13 +35,14 @@
 
       <!-- Current input line -->
       <div class="terminal-input-line">
-        <span class="terminal-prompt">mark@homelab:~$ </span>
+        <span class="terminal-prompt">user@83rr-poweredge:~$ </span>
         <input
           ref="inputElement"
           v-model="currentInput"
           class="terminal-input"
           type="text"
           @keydown="handleKeydown"
+          @input="handleInput"
           @focus="inputFocused = true"
           @blur="inputFocused = false"
           placeholder=""
@@ -50,20 +51,26 @@
         />
         <span v-if="inputFocused" class="terminal-cursor">_</span>
       </div>
+
+      <!-- LinkedIn suggestion -->
+      <div v-if="showLinkedinSuggestion && !currentInput" class="suggestion-line">
+        <span class="suggestion-text">Try: linkedin (or press Enter)</span>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-const { executeCommand, addToHistory, navigateHistory } = useTerminal()
+const { executeCommand, addToHistory, navigateHistory, currentCommand } = useTerminal()
 
 const terminalHistory = ref([])
 const currentInput = ref('')
 const inputElement = ref(null)
 const inputFocused = ref(true)
+const showLinkedinSuggestion = ref(true)
 
 // Auto-focus input when component mounts
-onMounted(() => {
+onMounted(async () => {
   nextTick(() => {
     inputElement.value?.focus()
   })
@@ -71,6 +78,15 @@ onMounted(() => {
   // Keep input focused when clicking anywhere on terminal
   document.addEventListener('click', () => {
     inputElement.value?.focus()
+  })
+
+  // Auto-run neofetch on page load
+  await nextTick()
+  const neofetchOutput = await executeCommand('neofetch')
+  terminalHistory.value.push({
+    command: 'neofetch',
+    output: neofetchOutput,
+    timestamp: new Date()
   })
 })
 
@@ -83,6 +99,13 @@ const formatDate = (date) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const handleInput = () => {
+  // Hide LinkedIn suggestion when user starts typing
+  if (currentInput.value) {
+    showLinkedinSuggestion.value = false
+  }
 }
 
 const handleKeydown = async (event) => {
@@ -107,10 +130,11 @@ const handleKeydown = async (event) => {
         })
       }
     } else {
-      // Empty command, just show prompt
+      // Empty command - execute linkedin as default
+      const output = await executeCommand('linkedin')
       terminalHistory.value.push({
-        command: '',
-        output: '',
+        command: 'linkedin',
+        output,
         timestamp: new Date()
       })
     }
@@ -141,7 +165,6 @@ const handleKeydown = async (event) => {
 }
 
 // Watch for changes in currentCommand from composable (for history navigation)
-const { currentCommand } = useTerminal()
 watch(currentCommand, (newValue) => {
   currentInput.value = newValue
 })
@@ -157,6 +180,10 @@ watch(currentCommand, (newValue) => {
 }
 
 .command-text {
+  color: #ffffff;
+}
+
+.terminal-input {
   color: #ffffff;
 }
 
@@ -182,5 +209,16 @@ watch(currentCommand, (newValue) => {
 .terminal-input {
   flex: 1;
   margin-left: 0;
+}
+
+.suggestion-line {
+  margin-top: 5px;
+  margin-left: 250px; /* Align with input after prompt */
+}
+
+.suggestion-text {
+  color: #888;
+  font-style: italic;
+  font-size: 0.9em;
 }
 </style>

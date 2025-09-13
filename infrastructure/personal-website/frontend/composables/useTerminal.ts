@@ -44,18 +44,15 @@ Use 'help <command>' for more information about a specific command.`
 
      Mark Cheli | Developer
      ────────────────────────────────────────
-     OS: Ubuntu 24.04 LTS (Infrastructure)
-     Host: 83RR PowerEdge Homelab
-     Kernel: Docker Containerized
+     OS: Ubuntu 24.04 LTS
+     Host: Dell PowerEdge R630
+     Kernel: 5.15.0-91-generic
      Shell: Interactive Terminal
-     DE: Vue3 + NuxtJS
-     Terminal: Terminal Emulator
-     CPU: Developer Brain (Multi-core)
-     Memory: Extensive Experience
+     CPU: Intel Xeon (16 cores)
+     Memory: 64GB DDR4
      ────────────────────────────────────────
      Services: 6 running
      Infrastructure: Operational
-     Weather: Available via API
      ────────────────────────────────────────`
     },
 
@@ -140,18 +137,16 @@ Infrastructure:
     }
 
     if (cmd === 'services') {
-      try {
-        const { data } = await $fetch('/api/profile')
-        const services = data.services.public
-        let output = 'Public Services:\n\n'
-        services.forEach(service => {
-          output += `${service.name.padEnd(20)} ${service.description}\n`
-          output += `${' '.repeat(20)} URL: ${service.url}\n\n`
-        })
-        return output
-      } catch (error) {
-        return 'Error: Unable to fetch services information'
-      }
+      return `Public Services hosted on markcheli.com:
+
+www.markcheli.com      Interactive terminal website
+flask.markcheli.com    Flask API server with weather data
+home.markcheli.com     Home Assistant automation platform
+
+Additional Services:
+jupyter.ops.markcheli.com  JupyterHub data science environment
+
+Type a service name to open it, or 'linkedin' to connect professionally.`
     }
 
     if (cmd === 'infrastructure') {
