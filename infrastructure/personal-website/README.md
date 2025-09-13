@@ -33,8 +33,10 @@ A modern, interactive terminal-style personal website built with Vue3/NuxtJS. Th
 ### Terminal Interface
 - **Interactive Commands**: `help`, `neofetch`, `weather`, `services`, etc.
 - **Command History**: Arrow key navigation through command history
-- **Auto-completion**: Tab completion for available commands
+- **Tab Auto-completion**: Press Tab to complete command names
 - **Real-time API Integration**: Weather data, profile info, service status
+- **Clean Terminal Cursor**: Standard terminal cursor behavior
+- **Auto-run Neofetch**: System info displays on page load without command prompt
 - **Responsive Design**: Works on desktop and mobile devices
 
 ### Flask API Integration
@@ -239,19 +241,21 @@ Personal profile and services
 |---------|-------------|
 | `help` | Show all available commands |
 | `clear` | Clear terminal screen |
-| `neofetch` | Display system information with ASCII art |
+| `neofetch` | Display system information with ASCII art (auto-runs on page load) |
 | `whoami` | Show current user information |
-| `ls` | List available services |
-| `about` | About Mark Cheli |
-| `contact` | Contact information |
+| `ls` | List available files and directories |
+| `about` | About Mark Cheli - Product strategist and engineering leader background |
+| `contact` | Contact information and professional links |
 | `weather` | Current weather in Ashland, MA |
-| `services` | List public services |
-| `infrastructure` | List infrastructure services (LAN-only) |
+| `services` | List all public services and internal infrastructure |
 | `linkedin` | Open LinkedIn profile |
 | `github` | Open GitHub profile |
-| `home` | Open Home Assistant |
-| `jupyter` | Open JupyterHub |
+| `home` | Open Home Assistant smart home platform |
+| `jupyter` | Open JupyterHub data science environment |
 | `exit` | Exit message |
+
+### Tab Completion
+Press `Tab` while typing any command to auto-complete it. Supports all available commands and shows common prefix for multiple matches.
 
 ## 🔒 Security Features
 

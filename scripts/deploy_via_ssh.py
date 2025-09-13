@@ -48,8 +48,10 @@ def deploy_via_ssh(stack_name, compose_file_path):
             print(f"❌ Failed to copy file: {result.stderr}")
             return False
 
-        # Copy additional directories if they exist (like backend/)
+        # Copy additional directories if they exist (like backend/ or frontend/)
         compose_dir = compose_file.parent
+
+        # Copy backend directory
         backend_dir = compose_dir / "backend"
         if backend_dir.exists():
             print(f"📁 Copying backend directory to server...")
@@ -59,6 +61,17 @@ def deploy_via_ssh(stack_name, compose_file_path):
                 print(f"⚠️ Warning: Failed to copy backend directory: {result.stderr}")
             else:
                 print("✅ Backend directory copied successfully")
+
+        # Copy frontend directory
+        frontend_dir = compose_dir / "frontend"
+        if frontend_dir.exists():
+            print(f"📁 Copying frontend directory to server...")
+            scp_frontend_cmd = f"scp -r -o ConnectTimeout=30 {frontend_dir} {ssh_user}@{ssh_host}:{remote_dir}/"
+            result = subprocess.run(scp_frontend_cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"⚠️ Warning: Failed to copy frontend directory: {result.stderr}")
+            else:
+                print("✅ Frontend directory copied successfully")
 
         # Copy .env file if it exists
         env_file = Path(".env")
@@ -81,6 +94,8 @@ def deploy_via_ssh(stack_name, compose_file_path):
             cp {remote_path} docker-compose.yml &&
             echo 'Stopping existing containers...' &&
             docker compose -p {stack_name} down &&
+            echo 'Rebuilding images with updated code...' &&
+            docker compose -p {stack_name} build --no-cache &&
             echo 'Starting updated stack...' &&
             docker compose -p {stack_name} up -d &&
             echo 'Deployment complete!' &&
