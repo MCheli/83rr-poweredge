@@ -45,10 +45,10 @@ class InfrastructureDNS:
                     'ip': self.dns.local_ip,
                     'description': 'Portainer container management (LAN only)'
                 },
-                'grafana': {
-                    'subdomain': 'grafana',
-                    'ip': self.dns.local_ip,  # Could be public, currently local
-                    'description': 'Grafana logging dashboard'
+                'logs': {
+                    'subdomain': 'logs-local',
+                    'ip': self.dns.local_ip,
+                    'description': 'OpenSearch Dashboards logging interface (LAN-only)'
                 }
             }
         }
