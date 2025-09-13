@@ -1,0 +1,40 @@
+# Environment files and secrets
+.env
+*.env.local
+*.env.backup
+*.env.production
+stack.env
+**/stack.env
+secrets/
+**/secrets/
+*.key
+*.pem
+*.p12
+*.keystore
+
+# Python
+venv/
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Logs
+logs/
+*.log
+
+# Backups  
+backups/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Claude Code
+.claude-code/
