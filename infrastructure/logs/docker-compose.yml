@@ -1,0 +1,47 @@
+version: "3.9"
+
+networks:
+  observability:
+
+volumes:
+  loki_data:
+  grafana_data:
+
+services:
+  loki:
+    image: grafana/loki:2.9.8
+    command: ["-config.file=/etc/loki/config.yml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      # mount a DIRECTORY so /etc/loki exists inside the container
+      - ./loki:/etc/loki:ro
+    networks: [observability]
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      # mount a DIRECTORY so /etc/promtail exists inside the container
+      - ./promtail:/etc/promtail:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log:/var/log:ro
+    networks: [observability]
+    restart: unless-stopped
+    depends_on: [loki]
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks: [observability]
+    restart: unless-stopped
+    depends_on: [loki]

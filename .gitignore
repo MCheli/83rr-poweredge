@@ -18,8 +18,8 @@ venv/
 __pycache__/
 .pytest_cache/
 
-# Logs
-logs/
+# Logs (but not infrastructure/logs config)
+/logs/
 *.log
 
 # Backups  
