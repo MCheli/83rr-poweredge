@@ -197,11 +197,11 @@ test_ssl() {
     echo "Testing public services:"
     curl -I -k https://www.markcheli.com 2>/dev/null | head -1 || echo "❌ www.markcheli.com failed"
     curl -I -k https://flask.markcheli.com 2>/dev/null | head -1 || echo "❌ flask.markcheli.com failed"
+    curl -I -k https://jupyter.markcheli.com 2>/dev/null | head -1 || echo "❌ jupyter.markcheli.com failed"
 
     echo
     echo "Testing LAN services (from local network):"
     curl -I -k https://traefik-local.ops.markcheli.com 2>/dev/null | head -1 || echo "❌ traefik-local.ops.markcheli.com failed"
-    curl -I -k https://jupyter.ops.markcheli.com 2>/dev/null | head -1 || echo "❌ jupyter.ops.markcheli.com failed"
 
     print_success "SSL testing complete"
 }

@@ -43,7 +43,7 @@ class InfrastructureHealthTest:
                 'description': 'Whoami service at base domain'
             },
             'jupyter': {
-                'url': 'https://jupyter.ops.markcheli.com',
+                'url': 'https://jupyter.markcheli.com',
                 'expected_content': 'JupyterHub',
                 'description': 'JupyterHub login page'
             },

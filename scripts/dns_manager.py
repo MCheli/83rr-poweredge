@@ -23,7 +23,7 @@ class SquarespaceDNSManager:
         # Define current DNS records based on investigation
         self.existing_records = {
             "ops.markcheli.com": self.public_ip,
-            "jupyter.ops.markcheli.com": self.public_ip,
+            "jupyter.markcheli.com": self.public_ip,
             "traefik-local.ops.markcheli.com": self.local_ip,
             "portainer-local.ops.markcheli.com": self.local_ip
         }
@@ -247,8 +247,8 @@ def main():
         print("  python dns_manager.py test <subdomain>         # Test service")
         print()
         print("Examples:")
-        print("  python dns_manager.py add jupyter              # Add jupyter.ops.markcheli.com")
-        print("  python dns_manager.py check jupyter            # Check jupyter.ops.markcheli.com")
+        print("  python dns_manager.py add jupyter              # Add jupyter.markcheli.com")
+        print("  python dns_manager.py check jupyter            # Check jupyter.markcheli.com")
         print("  python dns_manager.py test jupyter             # Test jupyter service")
         return
 
