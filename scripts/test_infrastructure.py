@@ -84,6 +84,12 @@ class InfrastructureHealthTest:
                 'expected_content': 'Mark Cheli Developer Terminal',
                 'description': 'Development website (LAN-only)',
                 'auth_required': False
+            },
+            'flask-api-dev': {
+                'url': 'https://flask-dev.ops.markcheli.com/health',
+                'expected_content': 'healthy',
+                'description': 'Flask API Development Environment (LAN-only)',
+                'auth_required': False
             }
         }
 
@@ -100,6 +106,7 @@ class InfrastructureHealthTest:
             'jupyterhub-db': {'status': 'running', 'health': 'healthy'},
             'portainer': {'status': 'running', 'health': None},
             'mark-cheli-flask-api': {'status': 'running', 'health': 'healthy'},
+            'mark-cheli-flask-api-dev': {'status': 'running', 'health': 'healthy'},
             'mark-cheli-website': {'status': 'running', 'health': 'healthy'},
             'mark-cheli-website-dev': {'status': 'running', 'health': 'healthy'}
         }

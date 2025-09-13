@@ -62,6 +62,11 @@ class InfrastructureDNS:
                     'subdomain': 'www-dev',
                     'ip': self.dns.local_ip,
                     'description': 'Personal Website Development Environment (LAN-only)'
+                },
+                'flask-api-dev': {
+                    'subdomain': 'flask-dev',
+                    'ip': self.dns.local_ip,
+                    'description': 'Flask API Development Environment (LAN-only)'
                 }
             }
         }

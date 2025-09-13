@@ -1,30 +1,32 @@
 # Mark Cheli Personal Website
 
-A modern, interactive terminal-style personal website with Flask API backend, built with Vue3/NuxtJS and deployed using Docker containers with Traefik reverse proxy.
+A modern, interactive terminal-style personal website built with Vue3/NuxtJS. The website communicates with a separate Flask API service for dynamic content and weather data.
 
 ## 🚀 Live Services
 
 - **Production Website**: https://www.markcheli.com
 - **Development Site**: https://www-dev.ops.markcheli.com (LAN-only)
-- **API Server**: https://flask.markcheli.com
-- **API Proxy**: https://www.markcheli.com/api (proxied to Flask server)
+- **API Integration**: Communicates with separate Flask API stack
+- **API Proxy**: https://www.markcheli.com/api (proxied to external Flask API)
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Vue3/NuxtJS      │    │   Flask API      │    │   Traefik       │
-│   Terminal UI       │◄──►│   Server         │◄──►│   Reverse Proxy │
-│   Port: 3000        │    │   Port: 5000     │    │   Ports: 80/443 │
+│   Vue3/NuxtJS      │    │   External       │    │   Traefik       │
+│   Terminal UI       │◄──►│   Flask API      │◄──►│   Reverse Proxy │
+│   Port: 3000        │    │   Stack          │    │   Ports: 80/443 │
 └─────────────────────┘    └──────────────────┘    └─────────────────┘
          │                           │                       │
          └───────────────────────────┼───────────────────────┘
                                      │
                          ┌──────────────────┐
-                         │   Docker         │
+                         │   Shared Docker  │
                          │   Network        │
                          └──────────────────┘
 ```
+
+**Note**: The Flask API runs as a separate Docker stack (`flask-api`) with its own containers, but communicates with the website via the shared `traefik_default` network.
 
 ## 🎯 Features
 
@@ -35,11 +37,12 @@ A modern, interactive terminal-style personal website with Flask API backend, bu
 - **Real-time API Integration**: Weather data, profile info, service status
 - **Responsive Design**: Works on desktop and mobile devices
 
-### Flask API Backend
-- **Health Endpoint**: `/health` - Service status
-- **Weather API**: `/weather` - Current weather in Ashland, MA
-- **Profile Data**: `/profile` - Personal and service information
-- **Ping Service**: `/ping` - Simple connectivity test
+### Flask API Integration
+- **External API**: Communicates with separate `flask-api` stack
+- **Health Endpoint**: Available via `/api/health` proxy
+- **Weather API**: Available via `/api/weather` proxy
+- **Profile Data**: Available via `/api/profile` proxy
+- **Ping Service**: Available via `/api/ping` proxy
 
 ### Infrastructure Features
 - **SSL Certificates**: Automatic Let's Encrypt certificates
@@ -62,9 +65,10 @@ A modern, interactive terminal-style personal website with Flask API backend, bu
    cd infrastructure/personal-website
    ```
 
-2. **Backend Development**:
+2. **API Development**:
    ```bash
-   cd backend
+   # Flask API is now in separate infrastructure/flask-api/ directory
+   cd ../flask-api/backend
    python -m venv venv
    source venv/bin/activate  # or `venv\Scripts\activate` on Windows
    pip install -r requirements.txt
@@ -94,9 +98,10 @@ FLASK_ENV=development
 
 ## 🧪 Testing
 
-### Backend Tests
+### API Tests
 ```bash
-cd backend
+# Flask API tests are now in separate flask-api directory
+cd ../flask-api/backend
 source venv/bin/activate
 pytest test_app.py -v
 
@@ -260,11 +265,6 @@ Personal profile and services
 
 ```
 infrastructure/personal-website/
-├── backend/                 # Flask API server
-│   ├── app.py              # Main Flask application
-│   ├── test_app.py         # API tests
-│   ├── requirements.txt    # Python dependencies
-│   └── Dockerfile         # Backend container config
 ├── frontend/               # Vue3/NuxtJS website
 │   ├── app.vue            # Main application component
 │   ├── composables/       # Vue composables
@@ -277,6 +277,12 @@ infrastructure/personal-website/
 │   └── Dockerfile         # Frontend container config
 ├── docker-compose.yml      # Service orchestration
 └── README.md              # This documentation
+
+Related:
+└── ../flask-api/           # Separate Flask API stack
+    ├── backend/            # Flask API server
+    ├── docker-compose.yml  # API service orchestration
+    └── README.md          # API documentation
 ```
 
 ## 🚨 Troubleshooting

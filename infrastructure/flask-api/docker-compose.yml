@@ -1,0 +1,67 @@
+services:
+  # Production Flask API
+  flask-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mark-cheli-flask-api
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - PORT=5000
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-demo-key}
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      # HTTP router for Let's Encrypt challenge and redirect
+      - "traefik.http.routers.flask-api-http.rule=Host(`flask.markcheli.com`)"
+      - "traefik.http.routers.flask-api-http.entrypoints=web"
+      - "traefik.http.routers.flask-api-http.middlewares=redirect-to-https@docker"
+      # HTTPS router for secure API access
+      - "traefik.http.routers.flask-api.rule=Host(`flask.markcheli.com`)"
+      - "traefik.http.routers.flask-api.entrypoints=websecure"
+      - "traefik.http.routers.flask-api.tls=true"
+      - "traefik.http.routers.flask-api.middlewares=secure-headers@docker"
+      - "traefik.http.services.flask-api.loadbalancer.server.port=5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Development Flask API (LAN-only)
+  flask-api-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mark-cheli-flask-api-dev
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=development
+      - PORT=5000
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-demo-key}
+      - FLASK_DEBUG=1
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      # Development Flask API (LAN-only)
+      - "traefik.http.routers.flask-api-dev.rule=Host(`flask-dev.ops.markcheli.com`)"
+      - "traefik.http.routers.flask-api-dev.entrypoints=websecure"
+      - "traefik.http.routers.flask-api-dev.tls=true"
+      - "traefik.http.routers.flask-api-dev.middlewares=lan-only,secure-headers"
+      - "traefik.http.services.flask-api-dev.loadbalancer.server.port=5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  traefik_default:
+    external: true
