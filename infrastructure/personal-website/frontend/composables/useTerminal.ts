@@ -114,6 +114,7 @@ Professional:
 
 Services:
   Personal Website: https://www.markcheli.com
+  API Server: https://flask.markcheli.com
   Development Environment: https://jupyter.markcheli.com
   Smart Home: https://home.markcheli.com
 
@@ -146,23 +147,17 @@ Infrastructure:
     if (cmd === 'services') {
       return `Public Services (Internet accessible):
 
-www.markcheli.com      Interactive terminal website
-flask.markcheli.com    Flask API server with weather data
-home.markcheli.com     Home Assistant smart home platform
-jupyter.markcheli.com  JupyterHub data science environment
+https://www.markcheli.com      Interactive terminal website
+https://flask.markcheli.com    Flask API server with weather data
+https://jupyter.markcheli.com  JupyterHub data science environment
+https://home.markcheli.com     Home Assistant smart home platform
+https://ops.markcheli.com      Whoami test service
 
 Internal Infrastructure (LAN-only):
 
-traefik.ops.markcheli.com     Traefik reverse proxy dashboard
-portainer.ops.markcheli.com   Docker container management
-logs.ops.markcheli.com        Centralized log aggregation
-monitoring.ops.markcheli.com  System metrics and alerting
-vault.ops.markcheli.com       HashiCorp Vault secrets manager
-
-Development Services:
-
-www-dev.ops.markcheli.com     Development website
-flask-dev.ops.markcheli.com   Development API server
+https://traefik-local.ops.markcheli.com   Traefik reverse proxy dashboard
+https://portainer-local.ops.markcheli.com Docker container management
+https://logs-local.ops.markcheli.com      OpenSearch Dashboards log aggregation
 
 Type a service name to open it, or 'linkedin' to connect professionally.`
     }
