@@ -71,6 +71,20 @@ source venv/bin/activate && python scripts/deploy_stack.py <stack_name> <compose
 source venv/bin/activate && python scripts/deploy_via_ssh.py <stack_name> <compose_file_path>
 ```
 
+### Infrastructure Health Testing
+```bash
+# MANDATORY: Run before ANY git commit or when verifying system health
+source venv/bin/activate && python scripts/test_infrastructure.py
+
+# Comprehensive test suite includes:
+# - DNS resolution for all services
+# - Docker container health and status
+# - OpenSearch cluster health and log ingestion
+# - Web service HTTPS connectivity and performance
+# - Backup file integrity
+# - Git repository status
+```
+
 ### DNS Management (Squarespace Domains)
 ```bash
 # IMPORTANT: Squarespace does not offer a public DNS API

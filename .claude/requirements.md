@@ -10,6 +10,20 @@ You are managing a homelab infrastructure running on Ubuntu Server 24.04.3. The 
 4. **Document Changes**: Commit to git with clear messages
 5. **Rollback on Failure**: Automatically revert if deployment fails
 
+## Infrastructure Health Testing
+
+**CRITICAL**: Always run the comprehensive health test before committing changes and when verifying system health.
+
+### Pre-Commit Health Check
+```bash
+# MANDATORY: Run before ANY git commit
+source venv/bin/activate
+python scripts/test_infrastructure.py
+
+# Only proceed with commit if all critical tests pass
+# Warnings are acceptable, failures must be addressed
+```
+
 ## Workflow for ANY Configuration Change
 
 ### Standard Deployment Process
@@ -25,12 +39,17 @@ python scripts/deploy.py {service} infrastructure/{service}/docker-compose.yaml
 
 # The script automatically:
 # - Creates backup
-# - Deploys via Portainer API  
+# - Deploys via Portainer API
 # - Waits for stabilization
 # - Checks container health
 # - Shows logs if issues
 # - Rolls back on failure
 # - Retries if configured
+
+# 4. Run comprehensive health test
+python scripts/test_infrastructure.py
+
+# 5. Only commit if health tests pass
 ```
 
 ### Quick Commands Reference

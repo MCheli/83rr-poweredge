@@ -30,6 +30,9 @@ pip install -r requirements.txt
 ### 2. Available Management Scripts
 
 ```bash
+# CRITICAL: Comprehensive infrastructure health test (run before commits)
+python scripts/test_infrastructure.py
+
 # Test connectivity to server and Portainer API
 python scripts/test_connectivity.py
 
