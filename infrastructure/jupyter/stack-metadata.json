@@ -1,0 +1,10 @@
+{
+  "stack_name": "jupyter",
+  "stack_id": 8,
+  "status": "Active",
+  "endpoint_id": 3,
+  "creation_date": "2025-08-24T20:29:48",
+  "update_date": "2025-09-06T00:59:46",
+  "pulled_at": "2025-09-13T12:25:32.960836",
+  "portainer_url": "https://portainer-local.ops.markcheli.com"
+}
