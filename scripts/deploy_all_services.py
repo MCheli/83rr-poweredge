@@ -131,7 +131,7 @@ class ManagedSSHDeployer:
             ('https://www.markcheli.com', 'Personal website'),
             ('https://flask.markcheli.com', 'Flask API'),
             ('https://traefik-local.ops.markcheli.com', 'Traefik dashboard (LAN)'),
-            ('https://jupyter.ops.markcheli.com', 'JupyterHub (LAN)')
+            ('https://jupyter.markcheli.com', 'JupyterHub')
         ]
 
         ssh_host = os.getenv('SSH_HOST')

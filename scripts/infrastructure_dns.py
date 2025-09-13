@@ -20,7 +20,8 @@ class InfrastructureDNS:
                 'jupyter': {
                     'subdomain': 'jupyter',
                     'ip': self.dns.public_ip,
-                    'description': 'JupyterHub data science environment'
+                    'description': 'JupyterHub data science environment',
+                    'domain': 'markcheli.com'
                 },
                 'whoami': {
                     'subdomain': '',  # Base domain ops.markcheli.com

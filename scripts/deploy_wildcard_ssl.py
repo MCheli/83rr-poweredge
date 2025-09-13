@@ -41,8 +41,8 @@ class WildcardSSLDeployer:
             },
             'jupyter': {
                 'path': 'infrastructure/jupyter',
-                'public_domains': [],
-                'lan_domains': ['jupyter.ops.markcheli.com']
+                'public_domains': ['jupyter.markcheli.com'],
+                'lan_domains': []
             },
             'opensearch': {
                 'path': 'infrastructure/opensearch',
