@@ -1,0 +1,119 @@
+services:
+  # Flask API Backend
+  flask-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mark-cheli-flask-api
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - PORT=5000
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-demo-key}
+    networks:
+      - traefik_default
+      - internal
+    labels:
+      - "traefik.enable=true"
+      # Public API access
+      - "traefik.http.routers.flask-api.rule=Host(`flask.markcheli.com`)"
+      - "traefik.http.routers.flask-api.entrypoints=websecure"
+      - "traefik.http.routers.flask-api.tls=true"
+      - "traefik.http.routers.flask-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.flask-api.middlewares=secure-headers@docker"
+      - "traefik.http.services.flask-api.loadbalancer.server.port=5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Production Website
+  website:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mark-cheli-website
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NUXT_PUBLIC_API_BASE=/api
+      - API_URL=http://flask-api:5000
+    networks:
+      - traefik_default
+      - internal
+    labels:
+      - "traefik.enable=true"
+      # Main website
+      - "traefik.http.routers.website.rule=Host(`www.markcheli.com`)"
+      - "traefik.http.routers.website.entrypoints=websecure"
+      - "traefik.http.routers.website.tls=true"
+      - "traefik.http.routers.website.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.website.middlewares=secure-headers@docker"
+      - "traefik.http.services.website.loadbalancer.server.port=3000"
+
+      # API proxy - forward /api requests to Flask backend
+      - "traefik.http.routers.website-api.rule=Host(`www.markcheli.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.website-api.entrypoints=websecure"
+      - "traefik.http.routers.website-api.tls=true"
+      - "traefik.http.routers.website-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.website-api.middlewares=api-stripprefix,secure-headers@docker"
+      - "traefik.http.routers.website-api.service=flask-api"
+      - "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      flask-api:
+        condition: service_healthy
+
+  # Development Website
+  website-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mark-cheli-website-dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - NUXT_PUBLIC_API_BASE=/api
+      - API_URL=http://flask-api:5000
+    networks:
+      - traefik_default
+      - internal
+    labels:
+      - "traefik.enable=true"
+      # Development website (LAN-only)
+      - "traefik.http.routers.website-dev.rule=Host(`www-dev.ops.markcheli.com`)"
+      - "traefik.http.routers.website-dev.entrypoints=websecure"
+      - "traefik.http.routers.website-dev.tls=true"
+      - "traefik.http.routers.website-dev.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.website-dev.middlewares=lan-only@docker,secure-headers@docker"
+      - "traefik.http.services.website-dev.loadbalancer.server.port=3000"
+
+      # Development API proxy
+      - "traefik.http.routers.website-dev-api.rule=Host(`www-dev.ops.markcheli.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.website-dev-api.entrypoints=websecure"
+      - "traefik.http.routers.website-dev-api.tls=true"
+      - "traefik.http.routers.website-dev-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.website-dev-api.middlewares=api-stripprefix,lan-only@docker,secure-headers@docker"
+      - "traefik.http.routers.website-dev-api.service=flask-api"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      flask-api:
+        condition: service_healthy
+
+networks:
+  traefik_default:
+    external: true
+  internal:
+    driver: bridge

@@ -140,7 +140,6 @@ When deploying a new service that requires DNS:
 ### **DNS Record Types by Service Category**
 - **Public Services** (internet-accessible): Point to `173.48.98.211`
   - `jupyter.ops.markcheli.com` - JupyterHub
-  - `hello.ops.markcheli.com` - Test container
   - `ops.markcheli.com` - Base domain (whoami)
 
 - **Local Services** (LAN-only): Point to `192.168.1.179`
@@ -162,14 +161,14 @@ When deploying a new service that requires DNS:
 ### **DNS Troubleshooting Commands**
 ```bash
 # Check if DNS record exists
-dig hello.ops.markcheli.com A +short
+dig jupyter.ops.markcheli.com A +short
 
 # Check DNS propagation from multiple servers
-dig @8.8.8.8 hello.ops.markcheli.com A +short
-dig @1.1.1.1 hello.ops.markcheli.com A +short
+dig @8.8.8.8 jupyter.ops.markcheli.com A +short
+dig @1.1.1.1 jupyter.ops.markcheli.com A +short
 
 # Test service connectivity after DNS resolves
-curl -I https://hello.ops.markcheli.com
+curl -I https://jupyter.ops.markcheli.com
 ```
 
 ## Git Usage and Security

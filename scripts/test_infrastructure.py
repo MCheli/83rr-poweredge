@@ -37,11 +37,6 @@ class InfrastructureHealthTest:
 
         # Test configuration
         self.public_services = {
-            'hello': {
-                'url': 'https://hello.ops.markcheli.com',
-                'expected_content': 'Hello World!',
-                'description': 'Hello world test container'
-            },
             'whoami': {
                 'url': 'https://ops.markcheli.com',
                 'expected_content': 'Hostname:',
@@ -51,6 +46,16 @@ class InfrastructureHealthTest:
                 'url': 'https://jupyter.ops.markcheli.com',
                 'expected_content': 'JupyterHub',
                 'description': 'JupyterHub login page'
+            },
+            'personal-website': {
+                'url': 'https://www.markcheli.com',
+                'expected_content': 'Mark Cheli Developer Terminal',
+                'description': 'Personal website terminal interface'
+            },
+            'flask-api': {
+                'url': 'https://flask.markcheli.com/health',
+                'expected_content': 'healthy',
+                'description': 'Flask API health endpoint'
             }
         }
 
@@ -73,6 +78,12 @@ class InfrastructureHealthTest:
                 'expected_content': 'OpenSearch',
                 'description': 'OpenSearch Dashboards',
                 'auth_required': False
+            },
+            'website-dev': {
+                'url': 'https://www-dev.ops.markcheli.com',
+                'expected_content': 'Mark Cheli Developer Terminal',
+                'description': 'Development website (LAN-only)',
+                'auth_required': False
             }
         }
 
@@ -80,7 +91,6 @@ class InfrastructureHealthTest:
         self.expected_containers = {
             'traefik': {'status': 'running', 'health': None},
             'whoami': {'status': 'running', 'health': None},
-            'hello-world': {'status': 'running', 'health': None},
             'opensearch': {'status': 'running', 'health': None},
             'opensearch-dashboards': {'status': 'running', 'health': None},
             'logstash': {'status': 'running', 'health': None},
@@ -88,7 +98,10 @@ class InfrastructureHealthTest:
             'jupyterhub': {'status': 'running', 'health': None},
             'jupyterhub-proxy': {'status': 'running', 'health': None},
             'jupyterhub-db': {'status': 'running', 'health': 'healthy'},
-            'portainer': {'status': 'running', 'health': None}
+            'portainer': {'status': 'running', 'health': None},
+            'mark-cheli-flask-api': {'status': 'running', 'health': 'healthy'},
+            'mark-cheli-website': {'status': 'running', 'health': 'healthy'},
+            'mark-cheli-website-dev': {'status': 'running', 'health': 'healthy'}
         }
 
         self.results = []
@@ -213,48 +226,59 @@ class InfrastructureHealthTest:
             self.log_test("OpenSearch Indices", "FAIL", "No log indices found")
 
     def test_web_service(self, name, config, timeout=10):
-        """Test individual web service"""
+        """Test individual web service with proper SSL certificate validation"""
         url = config['url']
         expected_content = config.get('expected_content', '')
         auth_required = config.get('auth_required', False)
 
+        # First test with SSL verification enabled
+        ssl_valid = False
         try:
-            # Test HTTPS connectivity
-            response = requests.get(url, timeout=timeout, verify=False, allow_redirects=True)
+            response_verified = requests.get(url, timeout=timeout, verify=True, allow_redirects=True)
+            ssl_valid = True
+            self.log_test(f"SSL Certificate: {name}", "PASS", "Valid SSL certificate")
+            response = response_verified
+        except requests.exceptions.SSLError as ssl_error:
+            self.log_test(f"SSL Certificate: {name}", "FAIL", f"Invalid SSL certificate: {str(ssl_error)}")
 
-            if response.status_code == 401 and auth_required:
-                self.log_test(f"Web Service: {name}", "PASS", f"Authentication required (expected): {response.status_code}")
+            # Try without SSL verification to test basic connectivity
+            try:
+                response = requests.get(url, timeout=timeout, verify=False, allow_redirects=True)
+                self.log_test(f"Basic Connectivity: {name}", "WARN", "Service accessible but SSL certificate invalid")
+            except Exception as e:
+                self.log_test(f"Basic Connectivity: {name}", "FAIL", f"Service not accessible: {str(e)}")
                 return
-            elif response.status_code not in [200, 302]:
-                self.log_test(f"Web Service: {name}", "FAIL", f"HTTP error: {response.status_code}")
-                return
-
-            # Check SSL certificate
-            if url.startswith('https://'):
-                # SSL is working if we get here without exception
-                self.log_test(f"SSL Certificate: {name}", "PASS", "HTTPS working")
-
-            # Check content if response is successful
-            if response.status_code == 200 and expected_content:
-                if expected_content.lower() in response.text.lower():
-                    self.log_test(f"Content Check: {name}", "PASS", f"Found expected content: '{expected_content}'")
-                else:
-                    self.log_test(f"Content Check: {name}", "WARN", f"Expected content '{expected_content}' not found")
-
-            # Check response time
-            if response.elapsed.total_seconds() > 5:
-                self.log_test(f"Performance: {name}", "WARN", f"Slow response: {response.elapsed.total_seconds():.2f}s")
-            else:
-                self.log_test(f"Performance: {name}", "PASS", f"Response time: {response.elapsed.total_seconds():.2f}s")
-
-        except requests.exceptions.SSLError as e:
-            self.log_test(f"Web Service: {name}", "FAIL", f"SSL error: {str(e)}")
         except requests.exceptions.ConnectionError as e:
             self.log_test(f"Web Service: {name}", "FAIL", f"Connection error: {str(e)}")
+            return
         except requests.exceptions.Timeout:
             self.log_test(f"Web Service: {name}", "FAIL", f"Request timeout ({timeout}s)")
+            return
         except Exception as e:
             self.log_test(f"Web Service: {name}", "FAIL", f"Unexpected error: {str(e)}")
+            return
+
+        # Test HTTP response
+        if response.status_code == 401 and auth_required:
+            self.log_test(f"Web Service: {name}", "PASS", f"Authentication required (expected): {response.status_code}")
+        elif response.status_code not in [200, 302]:
+            self.log_test(f"Web Service: {name}", "FAIL", f"HTTP error: {response.status_code}")
+            return
+        else:
+            self.log_test(f"Web Service: {name}", "PASS", f"HTTP response: {response.status_code}")
+
+        # Check content if response is successful
+        if response.status_code == 200 and expected_content:
+            if expected_content.lower() in response.text.lower():
+                self.log_test(f"Content Check: {name}", "PASS", f"Found expected content: '{expected_content}'")
+            else:
+                self.log_test(f"Content Check: {name}", "WARN", f"Expected content '{expected_content}' not found")
+
+        # Check response time
+        if response.elapsed.total_seconds() > 5:
+            self.log_test(f"Performance: {name}", "WARN", f"Slow response: {response.elapsed.total_seconds():.2f}s")
+        else:
+            self.log_test(f"Performance: {name}", "PASS", f"Response time: {response.elapsed.total_seconds():.2f}s")
 
     def test_web_services(self):
         """Test all web services"""

@@ -22,15 +22,22 @@ class InfrastructureDNS:
                     'ip': self.dns.public_ip,
                     'description': 'JupyterHub data science environment'
                 },
-                'hello': {
-                    'subdomain': 'hello',
-                    'ip': self.dns.public_ip,
-                    'description': 'Hello world test container'
-                },
                 'whoami': {
                     'subdomain': '',  # Base domain ops.markcheli.com
                     'ip': self.dns.public_ip,
                     'description': 'Whoami test service at base domain'
+                },
+                'personal-website': {
+                    'subdomain': 'www',
+                    'ip': self.dns.public_ip,
+                    'description': 'Mark Cheli Personal Website - Terminal Interface',
+                    'domain': 'markcheli.com'
+                },
+                'flask-api': {
+                    'subdomain': 'flask',
+                    'ip': self.dns.public_ip,
+                    'description': 'Personal API Server - Weather & Profile Data',
+                    'domain': 'markcheli.com'
                 }
             },
             # Local services (internal network only)
@@ -49,6 +56,11 @@ class InfrastructureDNS:
                     'subdomain': 'logs-local',
                     'ip': self.dns.local_ip,
                     'description': 'OpenSearch Dashboards logging interface (LAN-only)'
+                },
+                'website-dev': {
+                    'subdomain': 'www-dev',
+                    'ip': self.dns.local_ip,
+                    'description': 'Personal Website Development Environment (LAN-only)'
                 }
             }
         }
@@ -69,7 +81,48 @@ class InfrastructureDNS:
                 expected_ip = config['ip']
                 description = config['description']
 
-                result = self.dns.check_dns_record(subdomain, expected_ip)
+                # Check if service has custom domain
+                domain = config.get('domain', self.dns.domain)
+                if domain != self.dns.domain:
+                    # For custom domains, check directly
+                    fqdn = f"{subdomain}.{domain}" if subdomain else domain
+                    import subprocess
+                    try:
+                        dig_result = subprocess.run(
+                            ["dig", fqdn, "A", "+short"],
+                            capture_output=True, text=True, timeout=10
+                        )
+                        if dig_result.returncode == 0:
+                            current_ip = dig_result.stdout.strip()
+                            matches = current_ip == expected_ip if current_ip else False
+                            result = {
+                                "fqdn": fqdn,
+                                "exists": bool(current_ip),
+                                "current_ip": current_ip if current_ip else None,
+                                "expected_ip": expected_ip,
+                                "status": "✅" if matches else "❌",
+                                "matches": matches
+                            }
+                        else:
+                            result = {
+                                "fqdn": fqdn,
+                                "exists": False,
+                                "current_ip": None,
+                                "expected_ip": expected_ip,
+                                "status": "❌",
+                                "matches": False
+                            }
+                    except Exception:
+                        result = {
+                            "fqdn": fqdn,
+                            "exists": False,
+                            "current_ip": None,
+                            "expected_ip": expected_ip,
+                            "status": "❌",
+                            "matches": False
+                        }
+                else:
+                    result = self.dns.check_dns_record(subdomain, expected_ip)
 
                 service_fqdn = result['fqdn']
                 status = result['status']
@@ -95,7 +148,13 @@ class InfrastructureDNS:
         if missing_records:
             print(f"⚠️  Found {len(missing_records)} DNS records that need attention:")
             for record in missing_records:
-                print(f"   • {record['service']}: {record['subdomain'] or 'root'}.{self.dns.domain}")
+                # Handle custom domains
+                if record['service'] in ['personal-website', 'flask-api']:
+                    domain = 'markcheli.com'
+                    fqdn = f"{record['subdomain']}.{domain}" if record['subdomain'] else domain
+                else:
+                    fqdn = f"{record['subdomain'] or 'root'}.{self.dns.domain}"
+                print(f"   • {record['service']}: {fqdn}")
         else:
             print("✅ All infrastructure DNS records are configured correctly!")
 

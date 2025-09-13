@@ -8,7 +8,8 @@ A comprehensive Docker-based homelab infrastructure management system with autom
 ├── infrastructure/           # Local copies of stack configurations
 │   ├── jupyter/             # JupyterHub data science environment
 │   ├── traefik/             # Reverse proxy with SSL termination
-│   └── opensearch/          # OpenSearch logging stack
+│   ├── opensearch/          # OpenSearch logging stack
+│   └── personal-website/    # Mark Cheli's personal website (Vue3/NuxtJS + Flask API)
 ├── scripts/                 # Management and utility scripts
 ├── .env                     # Environment configuration (secrets)
 ├── requirements.txt         # Python dependencies
@@ -50,15 +51,20 @@ python scripts/pull_stack_configs.py
 
 ### Active Services
 - **Traefik** - Reverse proxy with SSL termination (ports 80, 443, 8080, 8443)
+- **Personal Website** - Mark Cheli's interactive terminal-style website with Flask API backend
+  - **Main Site**: https://www.markcheli.com - Vue3/NuxtJS terminal interface
+  - **Flask API**: https://flask.markcheli.com - Python API with weather endpoint
+  - **Dev Site**: https://www-dev.ops.markcheli.com - Development environment (LAN-only)
 - **JupyterHub** - Multi-user data science environment with collaboration features
 - **OpenSearch Stack** - Log aggregation, search and visualization (OpenSearch + Dashboards + Logstash + Filebeat)
 - **Portainer** - Container management interface
+- **Home Assistant** - https://home.markcheli.com - Smart home automation
 
 ### Server Details
 - **Host**: 83rr-poweredge
 - **User**: mcheli
 - **Portainer**: https://portainer-local.ops.markcheli.com
-- **Management**: 3 active stacks, 7 healthy containers
+- **Management**: 4 active stacks, 13 healthy containers
 
 ## Configuration Management
 
