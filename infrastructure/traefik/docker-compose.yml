@@ -13,20 +13,24 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/home/mcheli/letsencrypt:/letsencrypt"
+      - "/home/mcheli/traefik/dynamic:/etc/traefik/dynamic:ro"
+      - "/home/mcheli/traefik/certs:/etc/traefik/certs:ro"
     # ── Traefik flags ───────────────────────────────────────────────────────
     command:
       # Providers
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
       # Entrypoints
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.dashboard.address=:8080"         # HTTP dashboard
-      # ACME (Let's Encrypt via HTTP-01)
-      - "--certificatesresolvers.letsencrypt.acme.email=mpcheli7@gmail.com"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      # HTTP-01 resolver for single domain certificates (fallback only)
+      - "--certificatesresolvers.letsencrypt-http.acme.email=mpcheli7@gmail.com"
+      - "--certificatesresolvers.letsencrypt-http.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt-http.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt-http.acme.storage=/letsencrypt/acme-http.json"
       # Dashboard / API
       - "--api.dashboard=true"
       - "--api=true"
@@ -49,14 +53,14 @@ services:
       - "traefik.http.routers.dashboard-secure.service=api@internal"
       - "traefik.http.routers.dashboard-secure.middlewares=dashboard-auth,lan-only"  # LAN-only for extra security
       - "traefik.http.routers.dashboard-secure.tls=true"
-      - "traefik.http.routers.dashboard-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard-secure.tls=true"
       
       # Redirect root to dashboard
       - "traefik.http.routers.dashboard-root.rule=Host(`traefik-local.ops.markcheli.com`) && Path(`/`)"
       - "traefik.http.routers.dashboard-root.entrypoints=websecure"
       - "traefik.http.routers.dashboard-root.middlewares=dashboard-root-redirect,lan-only"
       - "traefik.http.routers.dashboard-root.tls=true"
-      - "traefik.http.routers.dashboard-root.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard-root.tls=true"
       - "traefik.http.middlewares.dashboard-root-redirect.redirectregex.regex=^https://(.*)/$"
       - "traefik.http.middlewares.dashboard-root-redirect.redirectregex.replacement=https://$${1}/dashboard/"
       
@@ -89,8 +93,10 @@ services:
       # Public HTTPS router for testing
       - "traefik.http.routers.whoami.rule=Host(`ops.markcheli.com`)"
       - "traefik.http.routers.whoami.entrypoints=websecure"
-      - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.whoami.tls=true"
       # Attach the security headers middleware defined on Traefik
       - "traefik.http.routers.whoami.middlewares=secure-headers@docker"
 
-volumes:
+networks:
+  traefik_default:
+    external: true

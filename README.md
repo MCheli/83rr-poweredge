@@ -55,7 +55,7 @@ python scripts/pull_stack_configs.py
   - **Main Site**: https://www.markcheli.com - Vue3/NuxtJS terminal interface
   - **Flask API**: https://flask.markcheli.com - Python API with weather endpoint
   - **Dev Site**: https://www-dev.ops.markcheli.com - Development environment (LAN-only)
-- **JupyterHub** - Multi-user data science environment with collaboration features
+- **JupyterHub** - https://jupyter.markcheli.com - Multi-user data science environment with collaboration features
 - **OpenSearch Stack** - Log aggregation, search and visualization (OpenSearch + Dashboards + Logstash + Filebeat)
 - **Portainer** - Container management interface
 - **Home Assistant** - https://home.markcheli.com - Smart home automation
@@ -87,9 +87,26 @@ Required variables in `.env`:
 
 See `CLAUDE.md` for detailed development instructions and script management policies.
 
+## SSL Certificate Management
+
+This project uses **manual wildcard SSL certificates** from Let's Encrypt to avoid rate limiting issues:
+
+- **Wildcard Coverage**: `*.markcheli.com` and `*.ops.markcheli.com`
+- **Manual DNS Verification**: Certificates obtained via `certbot` with manual DNS-01 challenges
+- **Traefik Integration**: Certificates loaded via file provider for automatic SSL termination
+- **Renewal**: Manual process every 90 days (see `scripts/setup_manual_wildcard_ssl.sh`)
+
+### SSH Session Management
+
+**CRITICAL**: The server has a limit of **2 concurrent SSH sessions**. All deployment scripts have been updated to:
+- Properly close SSH connections after use
+- Include connection timeouts and keep-alive settings
+- Support sequential deployment to respect session limits
+
 ## Security
 
 - All secrets managed via environment variables
 - Virtual environment isolation for Python dependencies
 - SSH key-based authentication for server access
 - API key authentication for Portainer access
+- Manual wildcard SSL certificates for secure connections

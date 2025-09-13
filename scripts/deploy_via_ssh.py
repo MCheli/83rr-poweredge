@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Deploy stack via SSH by copying compose file and using docker stack deploy
+Deploy stack via SSH by copying compose file and using docker compose
+
+IMPORTANT: This server has a limit of 2 concurrent SSH sessions.
+Do not run multiple deployment scripts simultaneously.
+Each script uses exactly one SSH session that is properly closed.
 """
 import os
 import tempfile
@@ -27,10 +31,11 @@ def deploy_via_ssh(stack_name, compose_file_path):
     print("=" * 40)
 
     try:
-        # Copy compose file to server
+        # Copy compose file to server (uses SCP - separate connection)
         remote_path = f"/tmp/{stack_name}-compose.yml"
+        remote_env_path = f"/tmp/.env"
 
-        scp_cmd = f"scp {compose_file} {ssh_user}@{ssh_host}:{remote_path}"
+        scp_cmd = f"scp -o ConnectTimeout=30 {compose_file} {ssh_user}@{ssh_host}:{remote_path}"
         print(f"📁 Copying compose file to server...")
 
         result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True)
@@ -38,17 +43,31 @@ def deploy_via_ssh(stack_name, compose_file_path):
             print(f"❌ Failed to copy file: {result.stderr}")
             return False
 
-        print("✅ File copied successfully")
+        # Copy .env file if it exists
+        env_file = Path(".env")
+        if env_file.exists():
+            scp_env_cmd = f"scp -o ConnectTimeout=30 {env_file} {ssh_user}@{ssh_host}:{remote_env_path}"
+            print(f"📁 Copying .env file to server...")
+
+            result = subprocess.run(scp_env_cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"⚠️ Warning: Failed to copy .env file: {result.stderr}")
+            else:
+                print("✅ .env file copied successfully")
+
+        print("✅ Files copied successfully")
 
         # Deploy stack using docker compose on remote server
-        deploy_cmd = f'''ssh {ssh_user}@{ssh_host} "
+        # Uses single SSH connection with proper timeout and cleanup
+        deploy_cmd = f'''ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 {ssh_user}@{ssh_host} "
             cd /tmp &&
             echo 'Stopping existing containers...' &&
             docker compose -p {stack_name} -f {remote_path} down &&
             echo 'Starting updated stack...' &&
             docker compose -p {stack_name} -f {remote_path} up -d &&
             echo 'Deployment complete!' &&
-            rm {remote_path}
+            rm {remote_path} &&
+            echo 'SSH session closing...'
         "'''
 
         print(f"🔄 Deploying stack on remote server...")

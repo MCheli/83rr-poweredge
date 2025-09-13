@@ -67,8 +67,11 @@ source venv/bin/activate && python scripts/pull_stack_configs.py
 # Deploy updated stack configuration to Portainer (API method)
 source venv/bin/activate && python scripts/deploy_stack.py <stack_name> <compose_file_path>
 
-# Deploy updated stack configuration via SSH (backup method)
+# Deploy updated stack configuration via SSH (copies .env file automatically)
 source venv/bin/activate && python scripts/deploy_via_ssh.py <stack_name> <compose_file_path>
+
+# Deploy all services with SSL verification and health checks
+source venv/bin/activate && python scripts/deploy_all_services.py
 ```
 
 ### Infrastructure Health Testing
@@ -109,6 +112,30 @@ source venv/bin/activate && python scripts/dns_manager.py wait <subdomain> <expe
 source venv/bin/activate && python scripts/dns_manager.py test <subdomain>
 ```
 
+### SSL Certificate Management
+```bash
+# Setup manual wildcard SSL certificates (one-time setup)
+source venv/bin/activate && bash scripts/setup_manual_wildcard_ssl.sh
+
+# IMPORTANT: Manual certificate renewal every 90 days
+# 1. Run setup script again when certificates are near expiration
+# 2. Follow DNS verification prompts for both wildcard domains
+# 3. Restart Traefik after certificate renewal: scripts/deploy_via_ssh.py traefik infrastructure/traefik/docker-compose.yml
+```
+
+### SSH Session Management
+```bash
+# CRITICAL: Server limit of 2 concurrent SSH sessions
+
+# All deployment scripts automatically manage SSH sessions:
+# - Connection timeouts (30 seconds)
+# - Keep-alive settings (10 second intervals)
+# - Proper session cleanup after completion
+
+# Never run multiple deployment scripts simultaneously
+# Wait for completion before starting next deployment
+```
+
 ## Environment Variables Required
 
 The following environment variables must be set in `.env`:
@@ -139,7 +166,9 @@ When deploying a new service that requires DNS:
 
 ### **DNS Record Types by Service Category**
 - **Public Services** (internet-accessible): Point to `173.48.98.211`
-  - `jupyter.ops.markcheli.com` - JupyterHub
+  - `jupyter.markcheli.com` - JupyterHub (moved from ops subdomain)
+  - `www.markcheli.com` - Personal website
+  - `flask.markcheli.com` - Flask API
   - `ops.markcheli.com` - Base domain (whoami)
 
 - **Local Services** (LAN-only): Point to `192.168.1.179`
