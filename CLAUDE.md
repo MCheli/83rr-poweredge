@@ -63,6 +63,12 @@ source venv/bin/activate && python scripts/list_stacks.py
 
 # Pull all stack configurations from Portainer to local infrastructure/ directory
 source venv/bin/activate && python scripts/pull_stack_configs.py
+
+# Deploy updated stack configuration to Portainer (API method)
+source venv/bin/activate && python scripts/deploy_stack.py <stack_name> <compose_file_path>
+
+# Deploy updated stack configuration via SSH (backup method)
+source venv/bin/activate && python scripts/deploy_via_ssh.py <stack_name> <compose_file_path>
 ```
 
 ## Environment Variables Required
