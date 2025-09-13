@@ -24,7 +24,7 @@
         </div>
         <div v-if="entry.output === 'CLEAR_SCREEN'" class="clear-marker"></div>
         <div v-else-if="entry.output" class="command-output">
-          <pre>{{ entry.output }}</pre>
+          <pre v-html="formatOutputWithClickableUrls(entry.output)"></pre>
         </div>
       </div>
 
@@ -93,6 +93,20 @@ const formatDate = (date) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const formatOutputWithClickableUrls = (text) => {
+  // URL regex that matches https:// URLs
+  const urlRegex = /(https:\/\/[^\s]+)/g
+
+  // Escape HTML characters first
+  const escapedText = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  // Replace URLs with clickable links
+  return escapedText.replace(urlRegex, '<a href="$1" target="_blank" class="terminal-link">$1</a>')
 }
 
 const handleInput = () => {
@@ -219,5 +233,17 @@ watch(currentCommand, (newValue) => {
   color: #888;
   font-style: italic;
   font-size: 0.9em;
+}
+
+.terminal-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: default;
+}
+
+.terminal-link:hover {
+  color: #4a9eff;
+  text-decoration: underline;
+  cursor: pointer;
 }
 </style>
