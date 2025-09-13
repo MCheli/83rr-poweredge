@@ -15,6 +15,7 @@ services:
       - internal
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
       # HTTP router for Let's Encrypt challenge and redirect
       - "traefik.http.routers.flask-api-http.rule=Host(`flask.markcheli.com`)"
       - "traefik.http.routers.flask-api-http.entrypoints=web"
@@ -22,7 +23,6 @@ services:
       # HTTPS router for secure API access
       - "traefik.http.routers.flask-api.rule=Host(`flask.markcheli.com`)"
       - "traefik.http.routers.flask-api.entrypoints=websecure"
-      - "traefik.http.routers.flask-api.tls=true"
       - "traefik.http.routers.flask-api.tls=true"
       - "traefik.http.routers.flask-api.middlewares=secure-headers@docker"
       - "traefik.http.services.flask-api.loadbalancer.server.port=5000"
@@ -49,6 +49,7 @@ services:
       - internal
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
       # HTTP router for Let's Encrypt challenge and redirect
       - "traefik.http.routers.website-http.rule=Host(`www.markcheli.com`)"
       - "traefik.http.routers.website-http.entrypoints=web"
@@ -57,14 +58,12 @@ services:
       - "traefik.http.routers.website.rule=Host(`www.markcheli.com`)"
       - "traefik.http.routers.website.entrypoints=websecure"
       - "traefik.http.routers.website.tls=true"
-      - "traefik.http.routers.website.tls=true"
       - "traefik.http.routers.website.middlewares=secure-headers@docker"
       - "traefik.http.services.website.loadbalancer.server.port=3000"
 
       # API proxy - forward /api requests to Flask backend
       - "traefik.http.routers.website-api.rule=Host(`www.markcheli.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.website-api.entrypoints=websecure"
-      - "traefik.http.routers.website-api.tls=true"
       - "traefik.http.routers.website-api.tls=true"
       - "traefik.http.routers.website-api.middlewares=api-stripprefix,secure-headers@docker"
       - "traefik.http.routers.website-api.service=flask-api"
@@ -99,16 +98,14 @@ services:
       - "traefik.http.routers.website-dev.rule=Host(`www-dev.ops.markcheli.com`)"
       - "traefik.http.routers.website-dev.entrypoints=websecure"
       - "traefik.http.routers.website-dev.tls=true"
-      - "traefik.http.routers.website-dev.tls=true"
-      - "traefik.http.routers.website-dev.middlewares=lan-only@docker,secure-headers@docker"
+      - "traefik.http.routers.website-dev.middlewares=lan-only,secure-headers"
       - "traefik.http.services.website-dev.loadbalancer.server.port=3000"
 
       # Development API proxy
       - "traefik.http.routers.website-dev-api.rule=Host(`www-dev.ops.markcheli.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.website-dev-api.entrypoints=websecure"
       - "traefik.http.routers.website-dev-api.tls=true"
-      - "traefik.http.routers.website-dev-api.tls=true"
-      - "traefik.http.routers.website-dev-api.middlewares=api-stripprefix,lan-only@docker,secure-headers@docker"
+      - "traefik.http.routers.website-dev-api.middlewares=api-stripprefix,lan-only,secure-headers"
       - "traefik.http.routers.website-dev-api.service=flask-api"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]

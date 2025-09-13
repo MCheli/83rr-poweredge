@@ -76,16 +76,20 @@ source venv/bin/activate && python scripts/deploy_all_services.py
 
 ### Infrastructure Health Testing
 ```bash
-# MANDATORY: Run before ANY git commit or when verifying system health
+# CRITICAL SERVICE AVAILABILITY TEST
+# MANDATORY: Must pass 100% before ANY git commit
+source venv/bin/activate && python scripts/test_service_availability.py
+
+# Comprehensive infrastructure test (for detailed diagnostics)
 source venv/bin/activate && python scripts/test_infrastructure.py
 
-# Comprehensive test suite includes:
+# Test suite includes:
+# - Service availability with expected HTTP status codes
 # - DNS resolution for all services
 # - Docker container health and status
 # - OpenSearch cluster health and log ingestion
-# - Web service HTTPS connectivity and performance
-# - Backup file integrity
-# - Git repository status
+# - SSL certificate validation
+# - Content verification for critical endpoints
 ```
 
 ### DNS Management (Squarespace Domains)
@@ -134,6 +138,28 @@ source venv/bin/activate && bash scripts/setup_manual_wildcard_ssl.sh
 
 # Never run multiple deployment scripts simultaneously
 # Wait for completion before starting next deployment
+```
+
+### Traefik Routing Troubleshooting
+```bash
+# CRITICAL: Service availability test must pass before commits
+source venv/bin/activate && python scripts/test_service_availability.py
+
+# Common Traefik routing issues and fixes:
+# 1. Missing network specification
+#    - Add: traefik.docker.network=traefik_default
+# 2. Incorrect middleware references
+#    - Use: secure-headers@docker (not secure-headers)
+# 3. Services not connected to traefik_default network
+#    - Verify: docker inspect <container> | grep traefik_default
+# 4. SSL certificate issues
+#    - Check: curl -I https://domain.com
+#    - Verify wildcard cert covers domain
+
+# Diagnostic commands:
+source venv/bin/activate && python scripts/test_infrastructure.py
+docker logs traefik --tail 20
+docker exec traefik wget -qO- http://service:port/health
 ```
 
 ## Environment Variables Required
@@ -211,6 +237,15 @@ curl -I https://jupyter.ops.markcheli.com
 - Use `git diff --cached` to review staged changes before committing
 
 ### Git Workflow with Claude
+
+**MANDATORY Pre-commit Service Availability Check:**
+```bash
+# CRITICAL: Must pass 100% before committing
+source venv/bin/activate && python scripts/test_service_availability.py
+
+# Only proceed with commit if all services are available
+# Any failing service indicates broken infrastructure
+```
 
 **Pre-commit Security Check:**
 ```bash
