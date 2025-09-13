@@ -10,13 +10,11 @@ export const useTerminal = () => {
 
 help                    Show this help message
 clear                   Clear terminal screen
-neofetch               Show system information
 whoami                 Display user information
 ls                     List available services
 linkedin               Open LinkedIn profile
 github                 Open GitHub profile
-services               List all public services
-infrastructure         List infrastructure services
+services               List all services and infrastructure
 weather                Check weather in Ashland, MA
 home                   Open Home Assistant
 jupyter                Open JupyterHub
@@ -35,24 +33,30 @@ Use 'help <command>' for more information about a specific command.`
     neofetch: {
       description: 'Display system information',
       action: () => `
-     ██████╗  ███████╗ ██╗   ██╗
-     ██╔══██╗ ██╔════╝ ██║   ██║
-     ██║  ██║ █████╗   ██║   ██║
-     ██║  ██║ ██╔══╝   ╚██╗ ██╔╝
-     ██████╔╝ ███████╗  ╚████╔╝
-     ╚═════╝  ╚══════╝   ╚═══╝
+     ███╗   ███╗ █████╗ ██████╗ ██╗  ██╗
+     ████╗ ████║██╔══██╗██╔══██╗██║ ██╔╝
+     ██╔████╔██║███████║██████╔╝█████╔╝
+     ██║╚██╔╝██║██╔══██║██╔══██╗██╔═██╗
+     ██║ ╚═╝ ██║██║  ██║██║  ██║██║  ██╗
+     ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
 
-     Mark Cheli | Developer
+      ██████╗██╗  ██╗███████╗██╗     ██╗
+     ██╔════╝██║  ██║██╔════╝██║     ██║
+     ██║     ███████║█████╗  ██║     ██║
+     ██║     ██╔══██║██╔══╝  ██║     ██║
+     ╚██████╗██║  ██║███████╗███████╗██║
+      ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝
+
+     Development | Engineering | Strategy | Data Analysis | Operations
      ────────────────────────────────────────
      OS: Ubuntu 24.04 LTS
      Host: Dell PowerEdge R630
      Kernel: 5.15.0-91-generic
-     Shell: Interactive Terminal
      CPU: Intel Xeon (16 cores)
-     Memory: 64GB DDR4
+     Memory: 128GB DDR4
      ────────────────────────────────────────
      Services: 6 running
-     Infrastructure: Operational
+     Status: Operational
      ────────────────────────────────────────`
     },
 
@@ -74,27 +78,30 @@ drwxr-xr-x  2 mark users  4096 Dec 13 12:00 infrastructure/
 -rw-r--r--  1 mark users   512 Dec 13 12:00 links.txt
 -rw-r--r--  1 mark users    64 Dec 13 12:00 contact.info
 
-Use 'services' to view public services or 'infrastructure' to view internal services.`
+Use 'services' to view all available services and infrastructure.`
     },
 
     about: {
       description: 'About Mark Cheli',
-      action: () => `Mark Cheli - Developer & Infrastructure Engineer
+      action: () => `Mark Cheli - Product Strategist & Engineering Leader
 
-I'm a passionate developer who loves building robust systems and
-exploring new technologies. My homelab infrastructure demonstrates
-my commitment to automation, monitoring, and reliable service delivery.
+A developer-turned-product strategist with a passion for the cross-functional
+journey of bringing innovative products to market. I thrive at the intersection
+of engineering and business strategy, leading initiatives that bridge technical
+and go-to-market teams.
 
-Key interests:
+Professional Focus:
+• Product-led growth strategies for technical products
+• Cross-functional team leadership (R&D, PM, UX, Sales, Marketing)
+• Viral product adoption and user engagement
+• MCAD and EdTech product development
+• Engineering management and team scaling
+
+Background:
+• Experience with PTC's product ecosystem (Onshape, Creo, Windchill, ThingWorx)
 • Full-stack development
-• Infrastructure automation
-• Container orchestration
-• Data science and analytics
-• Smart home integration
-
-This terminal interface showcases some of my public services and
-provides a glimpse into my infrastructure setup. Feel free to
-explore the various commands and services!`
+• Self-hosted infrastructure enthusiast
+`
     },
 
     contact: {
@@ -137,32 +144,27 @@ Infrastructure:
     }
 
     if (cmd === 'services') {
-      return `Public Services hosted on markcheli.com:
+      return `Public Services (Internet accessible):
 
 www.markcheli.com      Interactive terminal website
 flask.markcheli.com    Flask API server with weather data
-home.markcheli.com     Home Assistant automation platform
-
-Additional Services:
+home.markcheli.com     Home Assistant smart home platform
 jupyter.markcheli.com  JupyterHub data science environment
 
-Type a service name to open it, or 'linkedin' to connect professionally.`
-    }
+Internal Infrastructure (LAN-only):
 
-    if (cmd === 'infrastructure') {
-      try {
-        const { data } = await $fetch('/api/profile')
-        const services = data.services.infrastructure
-        let output = 'Infrastructure Services (LAN-only):\n\n'
-        services.forEach(service => {
-          output += `${service.name.padEnd(20)} ${service.description}\n`
-          output += `${' '.repeat(20)} URL: ${service.url}\n\n`
-        })
-        output += '\nNote: Infrastructure services are only accessible from local network'
-        return output
-      } catch (error) {
-        return 'Error: Unable to fetch infrastructure information'
-      }
+traefik.ops.markcheli.com     Traefik reverse proxy dashboard
+portainer.ops.markcheli.com   Docker container management
+logs.ops.markcheli.com        Centralized log aggregation
+monitoring.ops.markcheli.com  System metrics and alerting
+vault.ops.markcheli.com       HashiCorp Vault secrets manager
+
+Development Services:
+
+www-dev.ops.markcheli.com     Development website
+flask-dev.ops.markcheli.com   Development API server
+
+Type a service name to open it, or 'linkedin' to connect professionally.`
     }
 
     if (cmd === 'weather') {
@@ -221,12 +223,41 @@ Type 'help' to see available commands.`
     }
   }
 
+  const getCommandCompletions = (partial: string): string[] => {
+    const allCommands = [...Object.keys(commands), ...Object.keys(actionCommands), 'services', 'weather', 'exit']
+    return allCommands.filter(cmd => cmd.startsWith(partial.toLowerCase()))
+  }
+
+  const getTabCompletion = (input: string): string => {
+    const parts = input.trim().split(' ')
+    const partial = parts[parts.length - 1]
+
+    if (parts.length === 1) {
+      const completions = getCommandCompletions(partial)
+      if (completions.length === 1) {
+        return completions[0]
+      } else if (completions.length > 1) {
+        // Return the longest common prefix
+        return completions.reduce((acc, cmd) => {
+          let i = 0
+          while (i < acc.length && i < cmd.length && acc[i] === cmd[i]) {
+            i++
+          }
+          return acc.substring(0, i)
+        })
+      }
+    }
+
+    return input
+  }
+
   return {
     history,
     currentCommand,
     executeCommand,
     addToHistory,
     navigateHistory,
+    getTabCompletion,
     commands: Object.keys(commands)
   }
 }

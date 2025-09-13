@@ -1,10 +1,5 @@
 <template>
   <div class="terminal-container">
-    <div class="terminal-header">
-      Welcome to Mark Cheli's Personal Website!
-      <br>
-      Type 'help' for available commands
-    </div>
 
     <div class="terminal-content">
       <!-- Welcome message -->
@@ -23,7 +18,7 @@
         :key="index"
         class="terminal-output"
       >
-        <div class="command-line">
+        <div v-if="entry.command" class="command-line">
           <span class="terminal-prompt">user@83rr-poweredge:~$ </span>
           <span class="command-text">{{ entry.command }}</span>
         </div>
@@ -39,7 +34,7 @@
         <input
           ref="inputElement"
           v-model="currentInput"
-          class="terminal-input"
+          :class="['terminal-input', { 'terminal-input-focused': inputFocused }]"
           type="text"
           @keydown="handleKeydown"
           @input="handleInput"
@@ -49,7 +44,6 @@
           autocomplete="off"
           spellcheck="false"
         />
-        <span v-if="inputFocused" class="terminal-cursor">_</span>
       </div>
 
       <!-- LinkedIn suggestion -->
@@ -61,7 +55,7 @@
 </template>
 
 <script setup>
-const { executeCommand, addToHistory, navigateHistory, currentCommand } = useTerminal()
+const { executeCommand, addToHistory, navigateHistory, currentCommand, getTabCompletion } = useTerminal()
 
 const terminalHistory = ref([])
 const currentInput = ref('')
@@ -80,11 +74,11 @@ onMounted(async () => {
     inputElement.value?.focus()
   })
 
-  // Auto-run neofetch on page load
+  // Auto-run neofetch on page load (hidden from command history)
   await nextTick()
   const neofetchOutput = await executeCommand('neofetch')
   terminalHistory.value.push({
-    command: 'neofetch',
+    command: '',
     output: neofetchOutput,
     timestamp: new Date()
   })
@@ -152,7 +146,8 @@ const handleKeydown = async (event) => {
     navigateHistory('down')
   } else if (event.key === 'Tab') {
     event.preventDefault()
-    // Basic tab completion could be added here
+    const completed = getTabCompletion(currentInput.value)
+    currentInput.value = completed
   } else if (event.ctrlKey && event.key === 'l') {
     // Ctrl+L to clear screen
     event.preventDefault()
@@ -208,7 +203,11 @@ watch(currentCommand, (newValue) => {
 
 .terminal-input {
   flex: 1;
-  margin-left: 0;
+  margin-left: 8px;
+}
+
+.terminal-input-focused {
+  caret-color: #ffffff;
 }
 
 .suggestion-line {
