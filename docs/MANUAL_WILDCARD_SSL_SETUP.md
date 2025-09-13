@@ -33,11 +33,12 @@ The previous SSL configuration had several critical issues:
 │  Manual Certificate #1: *.markcheli.com                        │
 │  ├── www.markcheli.com (public website)                        │
 │  ├── flask.markcheli.com (public API)                          │
-│  └── home.markcheli.com (if public)                            │
+│  ├── jupyter.markcheli.com (public JupyterHub)                 │
+│  └── ops.markcheli.com (whoami service)                        │
 │                                                                 │
 │  Manual Certificate #2: *.ops.markcheli.com                    │
 │  ├── traefik-local.ops.markcheli.com (LAN-only)               │
-│  ├── jupyter.ops.markcheli.com (LAN-only)                     │
+│  ├── portainer-local.ops.markcheli.com (LAN-only)            │
 │  ├── opensearch-local.ops.markcheli.com (LAN-only)            │
 │  ├── logs-local.ops.markcheli.com (LAN-only)                  │
 │  └── www-dev.ops.markcheli.com (LAN-only)                     │
@@ -169,23 +170,42 @@ After obtaining both certificates:
 
 ### Certificate Renewal
 
-Wildcard certificates are valid for 90 days. Set up renewal:
+Wildcard certificates are valid for 90 days. **IMPORTANT**: Current certificates expire approximately 90 days after initial setup.
 
-**Create Renewal Script:**
-```bash
-./scripts/setup_manual_wildcard_ssl.sh --renew
-```
+**Manual Renewal Process (Required every 90 days):**
+1. **Run renewal command for first wildcard:**
+   ```bash
+   sudo certbot certonly --manual --preferred-challenges dns \
+     --email mpcheli7@gmail.com \
+     --server https://acme-v02.api.letsencrypt.org/directory \
+     --agree-tos \
+     -d '*.markcheli.com' -d 'markcheli.com'
+   ```
 
-**Schedule Renewal (add to crontab):**
-```bash
-# Renew certificates 30 days before expiration
-0 2 1 */2 * /home/mcheli/repos/83rr-poweredge/scripts/renew_wildcard_ssl.sh
-```
+2. **Run renewal command for second wildcard:**
+   ```bash
+   sudo certbot certonly --manual --preferred-challenges dns \
+     --email mpcheli7@gmail.com \
+     --server https://acme-v02.api.letsencrypt.org/directory \
+     --agree-tos \
+     -d '*.ops.markcheli.com'
+   ```
 
-**Manual Renewal Process:**
-1. Run renewal script: `./scripts/renew_wildcard_ssl.sh`
-2. Follow DNS verification prompts
-3. Script automatically updates Traefik certificates
+3. **Complete DNS verification for each certificate** (as described in Step 3 above)
+
+4. **Install updated certificates:**
+   ```bash
+   ./scripts/setup_manual_wildcard_ssl.sh --install
+   ```
+
+5. **Deploy services with new certificates:**
+   ```bash
+   ./scripts/setup_manual_wildcard_ssl.sh --deploy
+   ```
+
+**Set Calendar Reminder:**
+- Create calendar reminder 30 days before expiration
+- Allow 1-2 hours for renewal process including DNS propagation
 
 ## Service Mapping
 
