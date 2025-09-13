@@ -103,6 +103,14 @@ This project uses **manual wildcard SSL certificates** from Let's Encrypt to avo
 - Include connection timeouts and keep-alive settings
 - Support sequential deployment to respect session limits
 
+### Troubleshooting
+
+**Traefik Routing Issues**: If services are healthy but not accessible via HTTPS:
+- Ensure `traefik.docker.network=traefik_default` label is present on all services
+- Verify middleware references use `@docker` suffix (e.g., `secure-headers@docker`)
+- Check that services are connected to the `traefik_default` network
+- Use `scripts/test_service_availability.py` to verify all endpoints
+
 ## Security
 
 - All secrets managed via environment variables
