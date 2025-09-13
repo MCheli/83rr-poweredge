@@ -290,7 +290,6 @@ class InfrastructureHealthTest:
 
         print("\n🏠 Testing Web Services (LAN-only)")
         print("=" * 50)
-        print("Note: LAN services may fail if not on local network")
 
         for name, config in self.lan_services.items():
             self.test_web_service(name, config, timeout=5)  # Shorter timeout for LAN services

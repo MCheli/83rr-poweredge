@@ -8,6 +8,13 @@ This document provides a prioritized todo list for future Claude sessions to imp
 
 ## 🚨 CRITICAL FIXES (High Priority)
 
+### SSL Certificate Renewal (DEADLINE: 90 days from setup)
+- **Action**: Manual wildcard SSL certificate renewal required every 90 days
+- **Process**: Follow instructions in `docs/MANUAL_WILDCARD_SSL_SETUP.md`
+- **Time Required**: 1-2 hours including DNS propagation
+- **Calendar Reminder**: Set reminder 30 days before expiration
+- **Certificates**: `*.markcheli.com` and `*.ops.markcheli.com`
+
 ### Infrastructure Monitoring Enhancement
 - **Action**: Deploy Prometheus for comprehensive metrics collection
 - **Goal**: Replace basic health checks with proper monitoring dashboard
