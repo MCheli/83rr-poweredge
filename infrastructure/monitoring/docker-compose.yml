@@ -1,0 +1,189 @@
+services:
+  # Prometheus - Time series database for metrics
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    restart: unless-stopped
+    user: "0"  # Run as root to fix permission issues
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'  # Keep metrics for 30 days
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=https://prometheus-local.ops.markcheli.com'
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - prometheus_config:/etc/prometheus
+    networks:
+      - monitoring_net
+      - traefik_default
+    depends_on:
+      - prometheus-config
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus-local.ops.markcheli.com`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.middlewares=lan-only@docker"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # Grafana - Visualization and dashboards
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    user: "0"  # Run as root to fix permission issues
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana-local.ops.markcheli.com
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - grafana_config:/etc/grafana/provisioning
+    networks:
+      - monitoring_net
+      - traefik_default
+    depends_on:
+      - prometheus
+      - grafana-config
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.grafana.rule=Host(`grafana-local.ops.markcheli.com`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.middlewares=lan-only@docker"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # cAdvisor - Container metrics collector
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /cgroup:/cgroup:ro
+    networks:
+      - monitoring_net
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.cadvisor.rule=Host(`cadvisor-local.ops.markcheli.com`)"
+      - "traefik.http.routers.cadvisor.entrypoints=websecure"
+      - "traefik.http.routers.cadvisor.tls=true"
+      - "traefik.http.routers.cadvisor.middlewares=lan-only@docker"
+      - "traefik.http.services.cadvisor.loadbalancer.server.port=8080"
+
+  # Node Exporter - Host system metrics
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - monitoring_net
+    labels:
+      - "traefik.enable=false"  # Internal only
+
+  # Config containers to set up configurations
+  prometheus-config:
+    image: busybox
+    container_name: prometheus-config
+    volumes:
+      - prometheus_config:/config
+    command: |
+      sh -c "
+      cat > /config/prometheus.yml << 'EOF'
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+
+        - job_name: 'cadvisor'
+          static_configs:
+            - targets: ['cadvisor:8080']
+          scrape_interval: 5s
+
+        - job_name: 'node-exporter'
+          static_configs:
+            - targets: ['node-exporter:9100']
+          scrape_interval: 5s
+      EOF
+      echo 'Prometheus config created'
+      sleep 5
+      "
+
+  grafana-config:
+    image: busybox
+    container_name: grafana-config
+    volumes:
+      - grafana_config:/config
+    command: |
+      sh -c "
+      # Create datasources directory and prometheus datasource
+      mkdir -p /config/datasources
+      cat > /config/datasources/prometheus.yml << 'EOF'
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+      EOF
+
+      # Create dashboards directory and provider
+      mkdir -p /config/dashboards
+      cat > /config/dashboards/dashboard-provider.yml << 'EOF'
+      apiVersion: 1
+      providers:
+        - name: 'Docker Monitoring'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 10
+          allowUiUpdates: true
+          options:
+            path: /etc/grafana/provisioning/dashboards
+      EOF
+
+      echo 'Grafana config created'
+      sleep 5
+      "
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  prometheus_config:
+  grafana_config:
+
+networks:
+  monitoring_net:
+    driver: bridge
+  traefik_default:
+    external: true

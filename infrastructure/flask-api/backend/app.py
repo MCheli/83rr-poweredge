@@ -119,6 +119,11 @@ def get_profile():
                 {'name': 'Portainer', 'url': 'https://portainer-local.ops.markcheli.com', 'description': 'Container Management (LAN)'},
                 {'name': 'Traefik', 'url': 'https://traefik-local.ops.markcheli.com', 'description': 'Reverse Proxy Dashboard (LAN)'},
                 {'name': 'OpenSearch', 'url': 'https://logs-local.ops.markcheli.com', 'description': 'Log Analytics (LAN)'}
+            ],
+            'monitoring': [
+                {'name': 'Grafana', 'url': 'https://grafana-local.ops.markcheli.com', 'description': 'System Dashboards & Metrics (LAN)'},
+                {'name': 'Prometheus', 'url': 'https://prometheus-local.ops.markcheli.com', 'description': 'Metrics Database (LAN)'},
+                {'name': 'cAdvisor', 'url': 'https://cadvisor-local.ops.markcheli.com', 'description': 'Container Monitoring (LAN)'}
             ]
         },
         'timestamp': datetime.utcnow().isoformat()
