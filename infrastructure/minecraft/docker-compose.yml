@@ -4,18 +4,18 @@ services:
     container_name: minecraft-server
     restart: unless-stopped
     environment:
-      - EULA=true
-      - VERSION=LATEST
-      - TYPE=VANILLA
-      - MEMORY=2G
-      - SERVER_NAME=Mark Cheli's Minecraft Server
-      - MOTD=Welcome to Mark Cheli's Minecraft Server! Password: MarkCheli
-      - DIFFICULTY=normal
-      - MODE=survival
-      - MAX_PLAYERS=20
-      - OVERRIDE_SERVER_PROPERTIES=true
-      - ONLINE_MODE=true
-      - SERVER_PASSWORD=MarkCheli
+      EULA: "true"
+      VERSION: "LATEST"
+      TYPE: "VANILLA"
+      MEMORY: "2G"
+      SERVER_NAME: "Mark Cheli's Minecraft Server"
+      MOTD: "Welcome to Mark Cheli's Minecraft Server! Password: MarkCheli"
+      DIFFICULTY: "normal"
+      MODE: "survival"
+      MAX_PLAYERS: "20"
+      OVERRIDE_SERVER_PROPERTIES: "true"
+      ONLINE_MODE: "true"
+      SERVER_PASSWORD: "MarkCheli"
     volumes:
       - minecraft_data:/data
     networks:

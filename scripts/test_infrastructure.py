@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 # Add scripts directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from infrastructure_dns import InfrastructureDNS
+from dns_manager import SquarespaceDNSManager as InfrastructureDNS
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -149,13 +149,12 @@ class InfrastructureHealthTest:
         print("\n🔍 Testing DNS Resolution")
         print("=" * 50)
 
-        missing_records = self.dns.audit_all_services()
+        dns_ok = self.dns.audit_current_dns()
 
-        if not missing_records:
-            self.log_test("DNS Resolution", "PASS", "All DNS records configured correctly")
+        if dns_ok:
+            self.log_test("DNS Resolution", "PASS", "DNS audit completed")
         else:
-            missing = [f"{r['service']}: {r['subdomain'] or 'root'}.{self.dns.dns.domain}" for r in missing_records]
-            self.log_test("DNS Resolution", "FAIL", f"Missing DNS records: {', '.join(missing)}")
+            self.log_test("DNS Resolution", "FAIL", "DNS audit failed")
 
     def test_container_health(self):
         """Test Docker container status on server"""

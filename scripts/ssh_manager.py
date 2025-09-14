@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """
-SSH Connection Manager for respecting MaxSessions limits.
-Provides connection pooling and session management.
+SSH Troubleshooting Manager
+
+⚠️  EMERGENCY USE ONLY - For troubleshooting when Portainer API is unavailable
+⚠️  Primary deployment should ALWAYS use infrastructure_manager.py --registry
+
+This manager provides SSH connectivity for emergency server troubleshooting:
+- Server connectivity testing
+- Emergency container inspection
+- Service status checking
+- Log retrieval for debugging
+
+IMPORTANT: SSH deployment is deprecated. Use registry-based deployment instead.
 """
 
 import subprocess
