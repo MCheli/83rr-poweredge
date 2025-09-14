@@ -7,7 +7,7 @@ This document provides Claude Code with comprehensive instructions for managing 
 **PRIMARY: All infrastructure uses registry-based deployment via Portainer API (NO SSH required)**
 **FALLBACK: SSH available for emergency troubleshooting ONLY**
 
-### Core Management Scripts (7 total - streamlined)
+### Core Management Scripts (8 total - streamlined)
 
 1. **`scripts/infrastructure_manager.py`** - MASTER infrastructure controller
    - Deploy entire infrastructure with `--registry` flag
@@ -36,12 +36,17 @@ This document provides Claude Code with comprehensive instructions for managing 
 5. **`scripts/test_infrastructure.py`** - Comprehensive health testing
    - Must pass before any commits
    - Tests all services, DNS, containers, and functionality
+   - Includes Minecraft server connectivity testing
 
-6. **`scripts/dns_manager.py`** - DNS and SSL certificate management
+6. **`scripts/quick_service_test.py`** - Fast service health checks
+   - Quick validation of critical services
+   - Lightweight alternative to full test suite
+
+7. **`scripts/dns_manager.py`** - DNS and SSL certificate management
    - Domain configuration and SSL automation
    - Certificate lifecycle management
 
-7. **`scripts/ssh_manager.py`** - EMERGENCY troubleshooting ONLY
+8. **`scripts/ssh_manager.py`** - EMERGENCY troubleshooting ONLY
    - ⚠️  Use ONLY when Portainer API is unavailable
    - Server connectivity testing and emergency operations
 

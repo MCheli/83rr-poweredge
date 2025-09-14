@@ -50,7 +50,7 @@ class RegistryBuilder:
                     'website-dev': {
                         'context': './frontend',
                         'dockerfile': './frontend/Dockerfile',
-                        'target': 'builder',  # Development build
+                        'target': None,  # Same as prod for now
                         'image_name': 'personal-website-dev'  # Clean name: personal-website-dev
                     }
                 }
