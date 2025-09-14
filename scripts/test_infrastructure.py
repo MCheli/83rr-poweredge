@@ -108,7 +108,8 @@ class InfrastructureHealthTest:
             'mark-cheli-flask-api': {'status': 'running', 'health': 'healthy'},
             'mark-cheli-flask-api-dev': {'status': 'running', 'health': 'healthy'},
             'mark-cheli-website': {'status': 'running', 'health': 'healthy'},
-            'mark-cheli-website-dev': {'status': 'running', 'health': 'healthy'}
+            'mark-cheli-website-dev': {'status': 'running', 'health': 'healthy'},
+            'minecraft-server': {'status': 'running', 'health': 'healthy'}
         }
 
         self.results = []
@@ -300,6 +301,29 @@ class InfrastructureHealthTest:
         for name, config in self.lan_services.items():
             self.test_web_service(name, config, timeout=5)  # Shorter timeout for LAN services
 
+    def test_minecraft_connectivity(self):
+        """Test Minecraft server TCP connectivity"""
+        print("\n🎮 Testing Minecraft Server")
+        print("=" * 50)
+
+        import socket
+
+        # Test minecraft server port connectivity
+        minecraft_host = "minecraft.markcheli.com"
+        minecraft_port = 25565
+
+        try:
+            # Create socket connection with timeout
+            sock = socket.create_connection((minecraft_host, minecraft_port), timeout=10)
+            sock.close()
+            self.log_test("Minecraft Port 25565", "PASS", f"TCP connection to {minecraft_host}:{minecraft_port} successful")
+        except socket.timeout:
+            self.log_test("Minecraft Port 25565", "FAIL", f"TCP connection to {minecraft_host}:{minecraft_port} timed out")
+        except socket.error as e:
+            self.log_test("Minecraft Port 25565", "FAIL", f"TCP connection to {minecraft_host}:{minecraft_port} failed: {e}")
+        except Exception as e:
+            self.log_test("Minecraft Port 25565", "FAIL", f"Unexpected error testing minecraft connectivity: {e}")
+
     def test_backup_integrity(self):
         """Test backup directory and recent backups"""
         print("\n💾 Testing Backup Integrity")
@@ -365,6 +389,7 @@ class InfrastructureHealthTest:
         self.test_container_health()
         self.test_opensearch_functionality()
         self.test_web_services()
+        self.test_minecraft_connectivity()
         self.test_backup_integrity()
         self.test_git_status()
 

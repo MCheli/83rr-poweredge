@@ -40,7 +40,7 @@ services:
     container_name: mark-cheli-website-dev
     restart: unless-stopped
     environment:
-    - NODE_ENV=development
+    - NODE_ENV=production
     - NUXT_PUBLIC_API_BASE=/api
     - API_URL=https://flask-dev.ops.markcheli.com
     networks:
@@ -69,7 +69,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-    image: ghcr.io/mcheli/personal-website-dev:latest
+    image: ghcr.io/mcheli/personal-website:latest
 networks:
   traefik_default:
     external: true
