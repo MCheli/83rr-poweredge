@@ -148,6 +148,7 @@ The system deploys stacks in dependency order:
 4. **personal-website** - Web services
 5. **flask-api** - API services
 6. **minecraft** - Game services
+7. **monitoring** - System and container monitoring (Prometheus/Grafana)
 
 ### Environment Variables
 Each stack automatically loads `.env` files from its infrastructure directory:
@@ -258,6 +259,11 @@ python scripts/infrastructure_manager.py migrate-to-portainer
 - https://logs-local.ops.markcheli.com - OpenSearch dashboards
 - https://www-dev.ops.markcheli.com - Development website
 - https://flask-dev.ops.markcheli.com - Development Flask API
+
+### Monitoring Services:
+- https://grafana-local.ops.markcheli.com - Grafana dashboards (admin/admin123)
+- https://prometheus-local.ops.markcheli.com - Prometheus metrics database
+- https://cadvisor-local.ops.markcheli.com - Container resource monitoring
 
 ## 🔑 Environment Configuration
 
@@ -400,6 +406,79 @@ This project uses **manual wildcard SSL certificates** from Let's Encrypt:
 3. Update certificates on server
 4. Restart Traefik: `python scripts/portainer_stack_manager.py update traefik`
 
+## 📊 System Monitoring with Prometheus/Grafana
+
+### Overview
+The monitoring stack provides comprehensive system and container metrics:
+
+**Components:**
+- **Prometheus** - Time-series metrics database with 30-day retention
+- **Grafana** - Visualization dashboards and alerting
+- **cAdvisor** - Container resource metrics collector (by Google)
+- **Node Exporter** - Host system metrics collector
+
+**Key Metrics Monitored:**
+- CPU usage per container and total system
+- Memory usage per container and total system
+- Network I/O per container
+- Disk I/O and usage
+- Container restart counts and health status
+
+### Deployment and Management
+
+```bash
+# Deploy monitoring stack
+python scripts/portainer_stack_manager.py deploy monitoring infrastructure/monitoring/docker-compose.yml
+
+# Health check monitoring services
+python scripts/portainer_stack_manager.py health monitoring
+
+# Update monitoring configuration
+python scripts/portainer_stack_manager.py update monitoring infrastructure/monitoring/docker-compose.yml
+```
+
+### Access and Configuration
+
+**Grafana Dashboard:**
+- URL: https://grafana-local.ops.markcheli.com
+- Login: admin / admin123
+- Pre-configured Prometheus datasource
+- Import dashboard IDs: 193, 1860, 14282 for Docker monitoring
+
+**Prometheus Queries:**
+- URL: https://prometheus-local.ops.markcheli.com
+- Container CPU: `rate(container_cpu_usage_seconds_total{name!=""}[1m]) / scalar(count(count(node_cpu_seconds_total) by (cpu))) * 100`
+- Container Memory: `container_memory_usage_bytes{name!=""} / 1024 / 1024 / 1024`
+- System CPU: `100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`
+
+**cAdvisor Interface:**
+- URL: https://cadvisor-local.ops.markcheli.com
+- Real-time container metrics and drill-down views
+
+### Custom Dashboard Setup
+
+The monitoring stack includes a custom dashboard configuration at:
+`infrastructure/monitoring/grafana-dashboard-*.json`
+
+**Key Dashboard Features:**
+- Container CPU usage (% of total system capacity)
+- Container memory usage (MB and % of total)
+- System overview with color-coded thresholds
+- Network traffic per container
+- Historical data with 30-second refresh
+
+### Troubleshooting
+
+**Common Issues:**
+- **Permission errors**: Containers run as root (`user: "0"`) to access volumes
+- **>100% CPU readings**: Normal on multi-core systems (shows CPU cores used)
+- **404 errors**: Check Traefik routing and container health
+
+**DNS Requirements:**
+- grafana-local.ops.markcheli.com → 192.168.1.179
+- prometheus-local.ops.markcheli.com → 192.168.1.179
+- cadvisor-local.ops.markcheli.com → 192.168.1.179
+
 ## 📁 File Structure
 
 ```
@@ -409,7 +488,8 @@ infrastructure/
 ├── opensearch/docker-compose.yml   # Logging stack
 ├── personal-website/docker-compose.yml
 ├── flask-api/docker-compose.yml
-└── minecraft/docker-compose.yml
+├── minecraft/docker-compose.yml
+└── monitoring/docker-compose.yml   # Prometheus/Grafana monitoring
 
 scripts/
 ├── infrastructure_manager.py       # MASTER controller (with registry support)
@@ -419,17 +499,19 @@ scripts/
 ├── test_infrastructure.py          # Comprehensive testing
 ├── dns_manager.py                 # DNS and SSL management
 ├── quick_service_test.py           # Quick service availability testing
-└── ssh_manager.py                 # EMERGENCY troubleshooting only
+├── ssh_manager.py                 # EMERGENCY troubleshooting only
+└── one-time/                      # One-time setup scripts (disk migration, etc.)
 ```
 
 ## 🎯 Success Criteria
 
 Infrastructure is considered healthy when:
-1. All 6 stacks show in `portainer_stack_manager.py list`
+1. All 7 stacks show in `portainer_stack_manager.py list` (including monitoring)
 2. `infrastructure_manager.py health-check-all` passes
 3. `test_infrastructure.py` passes (53+ of 56 tests)
 4. **ALL** services return proper HTTP responses (200, or appropriate redirects - NO 4XX errors)
 5. Minecraft server responds on port 25565
+6. Monitoring services accessible and collecting metrics
 
 ### 🚨 HTTP Error Response Guidelines:
 - **HTTP 200**: Service is working correctly ✅
