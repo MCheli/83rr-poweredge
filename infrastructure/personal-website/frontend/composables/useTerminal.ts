@@ -163,6 +163,12 @@ https://traefik-local.ops.markcheli.com   Traefik reverse proxy dashboard
 https://portainer-local.ops.markcheli.com Docker container management
 https://logs-local.ops.markcheli.com      OpenSearch Dashboards log aggregation
 
+System Monitoring (LAN-only):
+
+https://grafana-local.ops.markcheli.com   Grafana system dashboards & metrics
+https://prometheus-local.ops.markcheli.com Prometheus metrics database
+https://cadvisor-local.ops.markcheli.com  cAdvisor container monitoring
+
 Type a service name to open it, or 'linkedin' to connect professionally.
 Connect to Minecraft: minecraft.markcheli.com:25565`
     }
