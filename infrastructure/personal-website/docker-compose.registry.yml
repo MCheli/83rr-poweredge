@@ -1,0 +1,75 @@
+services:
+  website:
+    container_name: mark-cheli-website
+    restart: unless-stopped
+    environment:
+    - NODE_ENV=production
+    - NUXT_PUBLIC_API_BASE=/api
+    - API_URL=https://flask.markcheli.com
+    networks:
+    - traefik_default
+    labels:
+    - traefik.enable=true
+    - traefik.docker.network=traefik_default
+    - traefik.http.routers.website-http.rule=Host(`www.markcheli.com`)
+    - traefik.http.routers.website-http.entrypoints=web
+    - traefik.http.routers.website-http.middlewares=redirect-to-https@docker
+    - traefik.http.routers.website.rule=Host(`www.markcheli.com`)
+    - traefik.http.routers.website.entrypoints=websecure
+    - traefik.http.routers.website.tls=true
+    - traefik.http.routers.website.middlewares=secure-headers@docker
+    - traefik.http.services.website.loadbalancer.server.port=3000
+    - traefik.http.routers.website-api.rule=Host(`www.markcheli.com`) && PathPrefix(`/api`)
+    - traefik.http.routers.website-api.entrypoints=websecure
+    - traefik.http.routers.website-api.tls=true
+    - traefik.http.routers.website-api.middlewares=api-stripprefix,secure-headers@docker
+    - traefik.http.routers.website-api.service=flask-api@docker
+    - traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:3000/
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    image: ghcr.io/mcheli/personal-website:latest
+  website-dev:
+    container_name: mark-cheli-website-dev
+    restart: unless-stopped
+    environment:
+    - NODE_ENV=development
+    - NUXT_PUBLIC_API_BASE=/api
+    - API_URL=https://flask-dev.ops.markcheli.com
+    networks:
+    - traefik_default
+    labels:
+    - traefik.enable=true
+    - traefik.docker.network=traefik_default
+    - traefik.http.routers.website-dev.rule=Host(`www-dev.ops.markcheli.com`)
+    - traefik.http.routers.website-dev.entrypoints=websecure
+    - traefik.http.routers.website-dev.tls=true
+    - traefik.http.routers.website-dev.middlewares=lan-only,secure-headers
+    - traefik.http.services.website-dev.loadbalancer.server.port=3000
+    - traefik.http.routers.website-dev-api.rule=Host(`www-dev.ops.markcheli.com`)
+      && PathPrefix(`/api`)
+    - traefik.http.routers.website-dev-api.entrypoints=websecure
+    - traefik.http.routers.website-dev-api.tls=true
+    - traefik.http.routers.website-dev-api.middlewares=api-stripprefix,lan-only,secure-headers
+    - traefik.http.routers.website-dev-api.service=flask-api-dev@docker
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:3000/
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    image: ghcr.io/mcheli/personal-website-dev:latest
+networks:
+  traefik_default:
+    external: true

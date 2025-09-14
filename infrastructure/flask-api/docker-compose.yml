@@ -53,7 +53,7 @@ services:
       - "traefik.http.routers.flask-api-dev.rule=Host(`flask-dev.ops.markcheli.com`)"
       - "traefik.http.routers.flask-api-dev.entrypoints=websecure"
       - "traefik.http.routers.flask-api-dev.tls=true"
-      - "traefik.http.routers.flask-api-dev.middlewares=lan-only,secure-headers"
+      - "traefik.http.routers.flask-api-dev.middlewares=lan-only@docker,secure-headers@docker"
       - "traefik.http.services.flask-api-dev.loadbalancer.server.port=5000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]

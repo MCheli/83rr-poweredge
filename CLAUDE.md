@@ -1,6 +1,51 @@
-# Claude Code Instructions
+# Claude Code Infrastructure Management Guide
 
-## Python Environment Setup
+This document provides Claude Code with comprehensive instructions for managing the 83RR PowerEdge homelab infrastructure.
+
+## 🎯 CRITICAL: Registry-Based Infrastructure Management
+
+**PRIMARY: All infrastructure uses registry-based deployment via Portainer API (NO SSH required)**
+**FALLBACK: SSH available for emergency troubleshooting ONLY**
+
+### Core Management Scripts (7 total - streamlined)
+
+1. **`scripts/infrastructure_manager.py`** - MASTER infrastructure controller
+   - Deploy entire infrastructure with `--registry` flag
+   - Health monitoring and validation
+   - Container image building and pushing
+   - Registry authentication management
+   - Migration and cleanup operations
+
+2. **`scripts/portainer_stack_manager.py`** - UNIFIED Portainer API management
+   - All CRUD operations for individual stacks
+   - Direct Portainer API integration
+   - Proper environment variable handling
+
+3. **`scripts/registry_builder.py`** - Container registry deployment system
+   - Build images locally with Docker build contexts
+   - Push to GitHub Container Registry (ghcr.io)
+   - Generate registry-based compose files
+   - Multi-platform build support
+
+4. **`scripts/github_registry_auth.py`** - ROBUST authentication management
+   - Multiple authentication methods (GITHUB_TOKEN, PAT, credentials file)
+   - Automatic credential validation and refresh
+   - Server-side authentication setup
+   - Security best practices implementation
+
+5. **`scripts/test_infrastructure.py`** - Comprehensive health testing
+   - Must pass before any commits
+   - Tests all services, DNS, containers, and functionality
+
+6. **`scripts/dns_manager.py`** - DNS and SSL certificate management
+   - Domain configuration and SSL automation
+   - Certificate lifecycle management
+
+7. **`scripts/ssh_manager.py`** - EMERGENCY troubleshooting ONLY
+   - ⚠️  Use ONLY when Portainer API is unavailable
+   - Server connectivity testing and emergency operations
+
+## 🐍 CRITICAL: Python Environment Setup
 
 **IMPORTANT**: Always use the local virtual environment for Python development.
 
@@ -22,180 +67,291 @@ Always activate the virtual environment before running any Python scripts:
 source venv/bin/activate && python script_name.py
 ```
 
-## Project Structure
+**All script examples in this document assume the virtual environment is activated.**
 
-- `scripts/deploy.sh` - Main deployment script (Python, despite .sh extension)
-- `scripts/` - Utility scripts for server management
-- `infrastructure/` - Local copies of docker-compose configurations from Portainer
-- `requirements.txt` - Python dependencies
-- `.env` - Environment configuration (contains API keys and URLs)
-- `venv/` - Local Python virtual environment (do not commit to git)
+## 📋 Standard Operating Procedures
 
-## Script Management Policy
+### Deploying Individual Stacks
 
-**IMPORTANT**: When Claude creates utility scripts that successfully interact with the server/APIs:
-
-1. **DO NOT DELETE** successful scripts after use
-2. **SAVE** them in the `scripts/` directory with descriptive names
-3. **DOCUMENT** them in this file under "Available Scripts"
-4. **ADD** usage examples and descriptions
-
-This builds a library of useful tools for future sessions and tasks.
-
-## Available Scripts
-
-### Connectivity Testing
 ```bash
-# Test SSH and Portainer API connectivity
-source venv/bin/activate && python scripts/test_connectivity.py
+# Smart deploy (create or update automatically)
+python scripts/portainer_stack_manager.py deploy <stack_name> <compose_file>
+
+# Examples:
+python scripts/portainer_stack_manager.py deploy minecraft infrastructure/minecraft/docker-compose.yml
+python scripts/portainer_stack_manager.py deploy flask-api infrastructure/flask-api/docker-compose.yml
+
+# Create new stack only
+python scripts/portainer_stack_manager.py create minecraft infrastructure/minecraft/docker-compose.yml
+
+# Update existing stack only
+python scripts/portainer_stack_manager.py update minecraft infrastructure/minecraft/docker-compose.yml
 ```
 
-### Container Management
+### Managing Complete Infrastructure
+
 ```bash
-# List all running containers and their status
-source venv/bin/activate && python scripts/get_containers.py
+# 🚀 PREFERRED: Registry-based deployment (NO SSH required)
+python scripts/infrastructure_manager.py deploy-all --registry --clean
+
+# Registry authentication management
+python scripts/infrastructure_manager.py test-registry-auth        # Test authentication
+python scripts/infrastructure_manager.py setup-registry-auth      # Setup server authentication
+
+# Build and push container images
+python scripts/infrastructure_manager.py build-images              # Build images
+python scripts/infrastructure_manager.py push-images               # Push to registry
+python scripts/infrastructure_manager.py build-and-push           # Combined build+push
+
+# Health monitoring
+python scripts/infrastructure_manager.py health-check-all          # Health check all stacks
+python scripts/infrastructure_manager.py run-tests                 # Comprehensive tests
+
+# LEGACY: Deploy without registry (hybrid SSH + API - deprecated)
+python scripts/infrastructure_manager.py deploy-all --clean
+
+# Migration and cleanup
+python scripts/infrastructure_manager.py migrate-to-portainer      # Migrate to Portainer
 ```
 
-### Stack Management
+### Monitoring and Troubleshooting
+
 ```bash
 # List all Portainer stacks
-source venv/bin/activate && python scripts/list_stacks.py
+python scripts/portainer_stack_manager.py list
 
-# Pull all stack configurations from Portainer to local infrastructure/ directory
-source venv/bin/activate && python scripts/pull_stack_configs.py
+# Check specific stack status
+python scripts/portainer_stack_manager.py status minecraft
 
-# Deploy updated stack configuration to Portainer (API method)
-source venv/bin/activate && python scripts/deploy_stack.py <stack_name> <compose_file_path>
+# Health check specific stack
+python scripts/portainer_stack_manager.py health minecraft
 
-# Deploy updated stack configuration via SSH (copies .env file automatically)
-source venv/bin/activate && python scripts/deploy_via_ssh.py <stack_name> <compose_file_path>
+# Test registry authentication
+python scripts/github_registry_auth.py test
 
-# Deploy all services with SSL verification and health checks
-source venv/bin/activate && python scripts/deploy_all_services.py
+# Quick service testing
+python scripts/quick_service_test.py
 ```
 
-### Infrastructure Health Testing
-```bash
-# CRITICAL SERVICE AVAILABILITY TEST
-# MANDATORY: Must pass 100% before ANY git commit
-source venv/bin/activate && python scripts/test_service_availability.py
+## 🏗️ Infrastructure Architecture
 
-# Comprehensive infrastructure test (for detailed diagnostics)
+### Stack Deployment Order
+The system deploys stacks in dependency order:
+1. **traefik** - Reverse proxy (must be first)
+2. **jupyter** - Data science environment
+3. **opensearch** - Logging infrastructure
+4. **personal-website** - Web services
+5. **flask-api** - API services
+6. **minecraft** - Game services
+
+### Environment Variables
+Each stack automatically loads `.env` files from its infrastructure directory:
+- `infrastructure/minecraft/.env`
+- `infrastructure/flask-api/.env`
+- etc.
+
+### Portainer Integration
+All stacks are managed through Portainer API ensuring:
+- Proper visibility in Portainer UI
+- Centralized management
+- Environment variable persistence
+- Update/rollback capabilities
+
+## 🚨 Critical Rules for Claude Code
+
+### NEVER Do These:
+1. **NEVER** use `ssh ... docker compose` commands directly
+2. **NEVER** deploy stacks via SSH that bypass Portainer
+3. **NEVER** commit without running `test_infrastructure.py` first
+4. **NEVER** use SSH deployment as primary method
+5. **NEVER** ignore or dismiss 4XX HTTP errors as "expected" or "normal"
+6. **NEVER** accept authentication failures as acceptable behavior
+
+### ALWAYS Do These:
+1. **ALWAYS** use `--registry` flag for deployments when possible
+2. **ALWAYS** use `portainer_stack_manager.py` for stack operations
+3. **ALWAYS** run health checks after deployments
+4. **ALWAYS** verify all stacks show up in `list` command
+5. **ALWAYS** run full tests before commits
+6. **ALWAYS** prefer registry-based deployment over SSH fallbacks
+7. **ALWAYS** investigate and fix 4XX HTTP errors - they indicate real problems
+8. **ALWAYS** ensure all services return proper HTTP 200 responses or appropriate redirects
+
+### Pre-Commit Checklist:
+```bash
+# 1. Test all infrastructure
 source venv/bin/activate && python scripts/test_infrastructure.py
 
-# Test suite includes:
-# - Service availability with expected HTTP status codes
-# - DNS resolution for all services
-# - Docker container health and status
-# - OpenSearch cluster health and log ingestion
-# - SSL certificate validation
-# - Content verification for critical endpoints
+# 2. Verify all stacks are Portainer-managed
+python scripts/portainer_stack_manager.py list
+
+# 3. Health check all stacks
+python scripts/infrastructure_manager.py health-check-all
+
+# 4. Verify all services return proper HTTP responses (NO 4XX errors allowed)
+python scripts/quick_service_test.py
+
+# 5. If ANY 4XX errors found, investigate and fix before proceeding
 ```
 
-### DNS Management (Squarespace Domains)
+### 🔍 4XX Error Investigation Workflow:
+When 4XX errors are found:
+
+1. **HTTP 401 (Unauthorized)**:
+   - Check authentication configuration
+   - Verify credentials and tokens
+   - Review middleware configuration
+
+2. **HTTP 403 (Forbidden)**:
+   - Check authorization rules
+   - Verify user permissions
+   - Review access control configuration
+
+3. **HTTP 404 (Not Found)**:
+   - Verify service is running and healthy
+   - Check routing configuration in Traefik
+   - Verify DNS resolution
+   - Check container port mappings
+   - Review service discovery configuration
+
+## 🔧 Common Operations
+
+### Fix "Stack not in Portainer" Issues:
 ```bash
-# IMPORTANT: Squarespace does not offer a public DNS API
-# These scripts provide guided manual DNS management
-
-# Audit all infrastructure DNS records
-source venv/bin/activate && python scripts/infrastructure_dns.py audit
-
-# Setup DNS for a specific service (provides manual instructions)
-source venv/bin/activate && python scripts/infrastructure_dns.py setup <service_name>
-
-# Verify deployment after DNS changes
-source venv/bin/activate && python scripts/infrastructure_dns.py verify <service_name>
-
-# Generate deployment checklist for service
-source venv/bin/activate && python scripts/infrastructure_dns.py checklist <service_name>
-
-# Manual DNS record management
-source venv/bin/activate && python scripts/dns_manager.py add <subdomain> [ip]
-source venv/bin/activate && python scripts/dns_manager.py check <subdomain>
-source venv/bin/activate && python scripts/dns_manager.py wait <subdomain> <expected_ip>
-source venv/bin/activate && python scripts/dns_manager.py test <subdomain>
+# Migrate SSH-deployed stacks to Portainer
+python scripts/infrastructure_manager.py migrate-to-portainer
 ```
 
-### SSL Certificate Management
+### Deploy New Service:
+1. Create `infrastructure/<service>/docker-compose.yml`
+2. Create `infrastructure/<service>/.env` (if needed)
+3. Deploy: `python scripts/portainer_stack_manager.py deploy <service> infrastructure/<service>/docker-compose.yml`
+4. Test: `python scripts/portainer_stack_manager.py health <service>`
+
+### Update Existing Service:
+1. Modify `infrastructure/<service>/docker-compose.yml`
+2. Update: `python scripts/portainer_stack_manager.py update <service> infrastructure/<service>/docker-compose.yml`
+3. Test: `python scripts/portainer_stack_manager.py health <service>`
+
+### Troubleshoot Service Issues:
+1. Check status: `python scripts/portainer_stack_manager.py status <service>`
+2. Health check: `python scripts/portainer_stack_manager.py health <service>`
+3. View all stacks: `python scripts/portainer_stack_manager.py list`
+4. Full test suite: `python scripts/test_infrastructure.py`
+
+## 📊 Service Endpoints
+
+### Public Services (HTTPS with SSL):
+- https://www.markcheli.com - Personal website
+- https://flask.markcheli.com - Flask API
+- https://jupyter.markcheli.com - JupyterHub
+- minecraft.markcheli.com:25565 - Minecraft server
+
+### LAN-Only Services:
+- https://portainer-local.ops.markcheli.com - Portainer
+- https://traefik-local.ops.markcheli.com - Traefik dashboard
+- https://logs-local.ops.markcheli.com - OpenSearch dashboards
+- https://www-dev.ops.markcheli.com - Development website
+- https://flask-dev.ops.markcheli.com - Development Flask API
+
+## 🔑 Environment Configuration
+
+Required variables in `.env`:
 ```bash
-# Setup manual wildcard SSL certificates (one-time setup)
-source venv/bin/activate && bash scripts/setup_manual_wildcard_ssl.sh
+PORTAINER_URL=https://portainer-local.ops.markcheli.com
+PORTAINER_API_KEY=your_api_key_here
+PORTAINER_ENDPOINT_ID=3
+SSH_HOST=192.168.1.179
+SSH_USER=mcheli
 
-# IMPORTANT: Manual certificate renewal every 90 days
-# 1. Run setup script again when certificates are near expiration
-# 2. Follow DNS verification prompts for both wildcard domains
-# 3. Restart Traefik after certificate renewal: scripts/deploy_via_ssh.py traefik infrastructure/traefik/docker-compose.yml
+# GitHub Container Registry Authentication (for registry-based deployments)
+GITHUB_TOKEN=your_github_token_here          # Preferred for CI/CD
+GITHUB_USERNAME=your_github_username         # GitHub username
+# OR use personal access token:
+GITHUB_PAT=your_personal_access_token        # Alternative to GITHUB_TOKEN
 ```
 
-### SSH Session Management
+## 🔐 GitHub Container Registry Authentication
+
+### Robust Authentication System
+The system uses `scripts/github_registry_auth.py` for secure, reliable authentication following GitHub best practices:
+
+#### Authentication Methods (in preference order):
+1. **GITHUB_TOKEN** (recommended for CI/CD environments)
+2. **Personal Access Token** (`GITHUB_PAT` or `CR_PAT`)
+3. **Credentials File** (`~/.github_registry_credentials`)
+4. **Interactive Setup** (with guided instructions)
+
+#### Authentication Commands:
 ```bash
-# CRITICAL: Server limit of 2 concurrent SSH sessions
+# Test current authentication status
+python scripts/github_registry_auth.py test
 
-# All deployment scripts automatically manage SSH sessions:
-# - Connection timeouts (30 seconds)
-# - Keep-alive settings (10 second intervals)
-# - Proper session cleanup after completion
+# Setup/refresh authentication
+python scripts/github_registry_auth.py authenticate
 
-# Never run multiple deployment scripts simultaneously
-# Wait for completion before starting next deployment
+# Setup server-side authentication via SSH
+python scripts/github_registry_auth.py setup-server
+
+# Force refresh authentication
+python scripts/github_registry_auth.py authenticate --force
 ```
 
-### Traefik Routing Troubleshooting
+#### Integrated Authentication (via infrastructure_manager.py):
 ```bash
-# CRITICAL: Service availability test must pass before commits
-source venv/bin/activate && python scripts/test_service_availability.py
+# Test authentication
+python scripts/infrastructure_manager.py test-registry-auth
 
-# Common Traefik routing issues and fixes:
-# 1. Missing network specification
-#    - Add: traefik.docker.network=traefik_default
-# 2. Incorrect middleware references
-#    - Use: secure-headers@docker (not secure-headers)
-# 3. Services not connected to traefik_default network
-#    - Verify: docker inspect <container> | grep traefik_default
-# 4. SSL certificate issues
-#    - Check: curl -I https://domain.com
-#    - Verify wildcard cert covers domain
-
-# Diagnostic commands:
-source venv/bin/activate && python scripts/test_infrastructure.py
-docker logs traefik --tail 20
-docker exec traefik wget -qO- http://service:port/health
+# Setup server authentication
+python scripts/infrastructure_manager.py setup-registry-auth
 ```
 
-## Environment Variables Required
+### Authentication Setup Guide
 
-The following environment variables must be set in `.env`:
-- `PORTAINER_URL` - Portainer instance URL
-- `PORTAINER_API_KEY` - API key for Portainer authentication
-- `SSH_HOST` - Target server hostname
-- `SSH_USER` - SSH username
-- `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID (default: 3)
+#### Method 1: Environment Variables (Recommended)
+```bash
+export GITHUB_TOKEN=<your_github_token>
+export GITHUB_USERNAME=<your_github_username>
+```
 
-### DNS Configuration Variables (for reference):
-- `PUBLIC_IP` - Server's public IP address (173.48.98.211)
-- `LOCAL_IP` - Server's local network IP (192.168.1.179)
-- `DOMAIN` - Base domain name (ops.markcheli.com)
+#### Method 2: Credentials File
+```bash
+echo '{"username": "<username>", "token": "<token>"}' > ~/.github_registry_credentials
+chmod 600 ~/.github_registry_credentials
+```
 
-## DNS Management Workflow
+#### GitHub Token Requirements:
+- **Scopes needed**: `write:packages`, `read:packages`
+- **Create at**: https://github.com/settings/tokens
+- **Token type**: Personal Access Token (classic)
 
-### **Important Limitation**: Squarespace DNS API
-Squarespace does not provide a public API for DNS record management. All DNS changes must be made manually through the Squarespace dashboard. The scripts provided offer guided assistance and validation.
+### Security Features:
+- ✅ Uses `--password-stdin` for secure token input
+- ✅ Automatic credential validation and refresh
+- ✅ Multiple authentication fallbacks
+- ✅ Server-side authentication setup
+- ✅ Clear troubleshooting guidance
 
-### **Service Deployment with DNS**
+## 🌐 DNS Management Workflow
+
+### **CRITICAL LIMITATION**: Squarespace DNS API
+Squarespace does not provide a public API for DNS record management. All DNS changes must be made **manually** through the Squarespace dashboard. The scripts provided offer guided assistance and validation only.
+
+### Service Deployment with DNS
 When deploying a new service that requires DNS:
 
-1. **Deploy the service/container**
-2. **Request DNS setup**: `python scripts/infrastructure_dns.py setup <service_name>`
+1. **Deploy the service/container first**
+2. **Request DNS setup**: `python scripts/dns_manager.py setup <service_name>`
 3. **Manually add DNS record** in Squarespace dashboard using provided instructions
 4. **Wait for propagation**: 5-15 minutes
-5. **Verify deployment**: `python scripts/infrastructure_dns.py verify <service_name>`
+5. **Verify deployment**: `python scripts/dns_manager.py verify <service_name>`
 
-### **DNS Record Types by Service Category**
+### DNS Record Types by Service Category
 - **Public Services** (internet-accessible): Point to `173.48.98.211`
-  - `jupyter.markcheli.com` - JupyterHub (moved from ops subdomain)
+  - `jupyter.markcheli.com` - JupyterHub
   - `www.markcheli.com` - Personal website
   - `flask.markcheli.com` - Flask API
-  - `ops.markcheli.com` - Base domain (whoami)
+  - `ops.markcheli.com` - Base domain
 
 - **Local Services** (LAN-only): Point to `192.168.1.179`
   - `traefik-local.ops.markcheli.com` - Traefik dashboard
@@ -203,7 +359,7 @@ When deploying a new service that requires DNS:
   - `logs-local.ops.markcheli.com` - OpenSearch Dashboards
   - `opensearch-local.ops.markcheli.com` - OpenSearch API
 
-### **Manual DNS Steps in Squarespace**
+### Manual DNS Steps in Squarespace
 1. Login to Squarespace account
 2. Go to Settings → Domains
 3. Click on "ops.markcheli.com"
@@ -213,7 +369,7 @@ When deploying a new service that requires DNS:
 7. Enter Host (subdomain) and Points to (IP)
 8. Save and wait for propagation
 
-### **DNS Troubleshooting Commands**
+### DNS Troubleshooting Commands
 ```bash
 # Check if DNS record exists
 dig jupyter.ops.markcheli.com A +short
@@ -226,89 +382,175 @@ dig @1.1.1.1 jupyter.ops.markcheli.com A +short
 curl -I https://jupyter.ops.markcheli.com
 ```
 
-## Git Usage and Security
+### SSL Certificate Management
+This project uses **manual wildcard SSL certificates** from Let's Encrypt:
 
-### Security Requirements
-**CRITICAL**: Never commit secrets or sensitive information to git.
+- ✅ **Wildcard Coverage**: `*.markcheli.com` and `*.ops.markcheli.com`
+- 🔄 **Manual Renewal**: Every 90 days via `scripts/dns_manager.py`
+- 📋 **DNS Verification**: Required for certificate renewal
 
-- All environment files (`.env`, `stack.env`) are in `.gitignore`
-- API keys, passwords, and tokens must only exist in environment files
-- Review all changes before committing to ensure no secrets are included
-- Use `git diff --cached` to review staged changes before committing
+**Certificate Renewal Process:**
+1. Run: `python scripts/dns_manager.py renew-ssl`
+2. Follow DNS verification prompts for both wildcard domains
+3. Update certificates on server
+4. Restart Traefik: `python scripts/portainer_stack_manager.py update traefik`
 
-### Git Workflow with Claude
+## 📁 File Structure
 
-**MANDATORY Pre-commit Service Availability Check:**
-```bash
-# CRITICAL: Must pass 100% before committing
-source venv/bin/activate && python scripts/test_service_availability.py
+```
+infrastructure/
+├── traefik/docker-compose.yml      # Reverse proxy
+├── jupyter/docker-compose.yml      # JupyterHub
+├── opensearch/docker-compose.yml   # Logging stack
+├── personal-website/docker-compose.yml
+├── flask-api/docker-compose.yml
+└── minecraft/docker-compose.yml
 
-# Only proceed with commit if all services are available
-# Any failing service indicates broken infrastructure
+scripts/
+├── infrastructure_manager.py       # MASTER controller (with registry support)
+├── portainer_stack_manager.py      # UNIFIED Portainer API management
+├── registry_builder.py            # Container registry deployment system
+├── github_registry_auth.py         # Robust authentication management
+├── test_infrastructure.py          # Comprehensive testing
+├── dns_manager.py                 # DNS and SSL management
+├── quick_service_test.py           # Quick service availability testing
+└── ssh_manager.py                 # EMERGENCY troubleshooting only
 ```
 
-**Pre-commit Security Check:**
-```bash
-# Always check what will be committed
-git status
-git diff --cached
+## 🎯 Success Criteria
 
-# Scan for potential secrets (if tools available)
-rg -i "api[_-]?key|secret|password|token" --type-not=log .
+Infrastructure is considered healthy when:
+1. All 6 stacks show in `portainer_stack_manager.py list`
+2. `infrastructure_manager.py health-check-all` passes
+3. `test_infrastructure.py` passes (53+ of 56 tests)
+4. **ALL** services return proper HTTP responses (200, or appropriate redirects - NO 4XX errors)
+5. Minecraft server responds on port 25565
+
+### 🚨 HTTP Error Response Guidelines:
+- **HTTP 200**: Service is working correctly ✅
+- **HTTP 301/302**: Proper redirects (e.g., HTTP → HTTPS) ✅
+- **HTTP 401**: MUST be investigated - indicates authentication problems ❌
+- **HTTP 403**: MUST be investigated - indicates authorization problems ❌
+- **HTTP 404**: MUST be investigated - indicates missing resources or routing issues ❌
+- **HTTP 5XX**: MUST be investigated - indicates server errors ❌
+
+**4XX errors are NEVER acceptable and indicate real problems that must be fixed.**
+
+## 🚀 Quick Reference Commands
+
+```bash
+# 🎯 PREFERRED: Registry-based deployment (NO SSH)
+python scripts/infrastructure_manager.py deploy-all --registry --clean
+
+# Authentication management
+python scripts/infrastructure_manager.py test-registry-auth
+python scripts/infrastructure_manager.py setup-registry-auth
+
+# Build and push images for registry deployment
+python scripts/infrastructure_manager.py build-images
+python scripts/infrastructure_manager.py push-images
+python scripts/infrastructure_manager.py build-and-push
+
+# Health check
+python scripts/infrastructure_manager.py health-check-all
+
+# Individual stack deploy
+python scripts/portainer_stack_manager.py deploy minecraft infrastructure/minecraft/docker-compose.yml
+
+# Test everything
+python scripts/test_infrastructure.py
+
+# List all stacks
+python scripts/portainer_stack_manager.py list
+
+# Registry builder (standalone)
+python scripts/registry_builder.py build-and-push personal-website
+python scripts/registry_builder.py deploy personal-website
+python scripts/github_registry_auth.py test
 ```
 
-**Safe Commit Process:**
-```bash
-# Stage files (Claude will do this automatically)
-git add .
+## 🐳 Registry-Based Deployment Architecture
 
-# Claude will create commits with this format:
-# - Descriptive commit message explaining changes
-# - Includes file/function references where appropriate
-# - Ends with Claude signature for traceability
+### Overview
+The registry-based approach eliminates SSH dependencies by:
+1. **Building** images locally using Docker build contexts
+2. **Pushing** to GitHub Container Registry (ghcr.io/mcheli/*)
+3. **Deploying** via pure Portainer API using registry images
+
+### Stack Types
+- **Registry Stacks** (build-based): personal-website, flask-api, jupyter
+- **Direct Stacks** (no building): traefik, opensearch, minecraft
+
+### Registry Compose Files
+Build-based stacks have two compose files:
+- `docker-compose.yml` - Original with build contexts (SSH deployment)
+- `docker-compose.registry.yml` - Registry images (Portainer API only)
+
+### Deployment Workflow
+
+#### One-time Setup (on machine with Docker):
+```bash
+# Setup authentication (multiple methods available)
+python scripts/github_registry_auth.py test
+
+# Build all images
+python scripts/infrastructure_manager.py build-images
+
+# Push to registry
+python scripts/infrastructure_manager.py push-images
+
+# OR combine build and push
+python scripts/infrastructure_manager.py build-and-push
+
+# Setup server-side authentication
+python scripts/infrastructure_manager.py setup-registry-auth
 ```
 
-**Commit Message Format:**
-Claude follows this commit message format:
-- Clear, descriptive summary (50 chars or less)
-- Detailed explanation of changes and reasoning
-- References to specific files/functions modified
-- Signed with Claude attribution
-
-### Recovery and Rollback
-
-**View Recent Changes:**
+#### Ongoing Deployment (from anywhere):
 ```bash
-# View recent commits
-git log --oneline -10
-
-# See changes in specific commit
-git show <commit-hash>
-
-# Compare with previous version
-git diff HEAD~1
+# Deploy using registry images (NO SSH required)
+python scripts/infrastructure_manager.py deploy-all --registry --clean
 ```
 
-**Rollback Changes:**
-```bash
-# Undo last commit (keep changes)
-git reset --soft HEAD~1
+### Benefits
+✅ **Zero SSH dependencies** for deployment
+✅ **All stacks managed** through Portainer UI
+✅ **Faster deployments** (pre-built images)
+✅ **Better security** (no SSH keys required)
+✅ **Consistent deployment** method across all stacks
 
-# Undo last commit (discard changes)
-git reset --hard HEAD~1
+Remember: **Registry-based deployment is the preferred method. SSH is for emergency troubleshooting only.**
 
-# Revert specific files
-git checkout -- <file-path>
+## 🚨 Critical Error Handling Guidelines
 
-# Create revert commit
-git revert <commit-hash>
-```
+### HTTP Status Code Standards
+Claude Code must adhere to strict HTTP status code standards:
 
-### Ignore Patterns
+**✅ ACCEPTABLE responses:**
+- **200 OK**: Service functioning correctly
+- **301/302 Redirect**: Proper redirects (HTTP→HTTPS, etc.)
 
-The `.gitignore` includes these security patterns:
-- Environment files: `.env`, `stack.env`, `*.env.*`
-- Secrets directories: `secrets/`, `**/secrets/`
-- Certificates: `*.key`, `*.pem`, `*.p12`, `*.keystore`
-- Virtual environments: `venv/`
-- Logs and backups: `logs/`, `backups/`, `*.log`
+**❌ UNACCEPTABLE responses (must be investigated and fixed):**
+- **401 Unauthorized**: Authentication configuration problems
+- **403 Forbidden**: Authorization/permission problems
+- **404 Not Found**: Missing resources, broken routing, or container issues
+- **500+ Server Errors**: Backend service failures
+
+### Mandatory Investigation Process
+When any 4XX/5XX error is encountered:
+
+1. **Do NOT dismiss or ignore the error**
+2. **Do NOT claim it's "expected" or "normal"**
+3. **IMMEDIATELY investigate root cause**
+4. **Check container health and logs**
+5. **Verify routing configuration**
+6. **Fix the underlying issue**
+7. **Re-test to confirm resolution**
+
+### Service-Specific Expectations
+- **Public services** (*.markcheli.com): Must return HTTP 200 or proper redirects
+- **LAN services** (*.ops.markcheli.com): Must return HTTP 200 or proper redirects
+- **Authentication required services**: Should redirect to login, NOT return 404
+- **Protected dashboards**: Should prompt for auth, NOT return 401 errors
+
+**Every service must be fully functional. No exceptions.**

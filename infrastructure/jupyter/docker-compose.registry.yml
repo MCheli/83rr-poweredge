@@ -1,0 +1,196 @@
+version: "3.8"
+
+services:
+  # Custom single-user notebook image
+  singleuser:
+    image: ghcr.io/mcheli/jupyter-jupyterhub:latest
+    command: "true"  # This container just builds the image
+    profiles:
+      - build
+
+  # Public-facing proxy (Configurable HTTP Proxy)
+  chp:
+    image: quay.io/jupyterhub/configurable-http-proxy:5
+    container_name: jupyterhub-proxy
+    command:
+      - --ip=0.0.0.0
+      - --port=8000
+      - --api-ip=0.0.0.0
+      - --api-port=8001
+      - --default-target=http://jupyterhub:8081
+      - --error-target=http://jupyterhub:8081/hub/error
+    environment:
+      - CONFIGPROXY_AUTH_TOKEN=${CONFIGPROXY_AUTH_TOKEN}
+    networks:
+      - jupyterhub-net
+      - traefik_default
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jupyter.rule=Host(`${JUPYTER_DOMAIN}`)"
+      - "traefik.http.routers.jupyter.entrypoints=websecure"
+      - "traefik.http.routers.jupyter.tls=true"
+      - "traefik.http.routers.jupyter.service=jupyter"
+      - "traefik.http.services.jupyter.loadbalancer.server.port=8000"
+      - "traefik.http.routers.jupyter.middlewares=secure-headers@docker"
+      - "traefik.docker.network=traefik_default"
+
+  # JupyterHub with enhanced data science environment
+  jupyterhub:
+    image: jupyterhub/jupyterhub:4.1.6
+    container_name: jupyterhub
+    depends_on:
+      - chp
+      - hub-db
+    environment:
+      - CONFIGPROXY_AUTH_TOKEN=${CONFIGPROXY_AUTH_TOKEN}
+      - JUPYTER_PASSWORD=${JUPYTER_PASSWORD}
+      - ADMIN_USER=${JUPYTER_ADMIN_USER}
+      - SINGLEUSER_IMAGE=ghcr.io/mcheli/jupyter-jupyterhub:latest
+      - TZ=${TZ:-America/New_York}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -e
+
+        # Enhanced jupyterhub_config.py for DataLore/DeepNote features
+        mkdir -p /srv/jupyterhub
+        printf '%s\n' \
+        "import os" \
+        "from dockerspawner import DockerSpawner" \
+        "" \
+        "c = get_config()" \
+        "" \
+        "# --- Hub ↔ Proxy networking ---" \
+        "c.JupyterHub.bind_url = 'http://:8081'" \
+        "c.JupyterHub.hub_bind_url = 'http://:8081'" \
+        "c.JupyterHub.hub_connect_url = 'http://jupyterhub:8081'" \
+        "c.ConfigurableHTTPProxy.should_start = False" \
+        "c.ConfigurableHTTPProxy.api_url = 'http://chp:8001'" \
+        "c.ConfigurableHTTPProxy.auth_token = os.environ['CONFIGPROXY_AUTH_TOKEN']" \
+        "" \
+        "# --- Hub DB: Postgres ---" \
+        "pw = os.environ.get('POSTGRES_PASSWORD', '')" \
+        "c.JupyterHub.db_url = os.environ.get('JUPYTERHUB_DB_URL', f'postgresql://jhub:{pw}@hub-db:5432/jhub')" \
+        "" \
+        "# --- Spawner: each user is a container on same network ---" \
+        "c.JupyterHub.spawner_class = DockerSpawner" \
+        "c.DockerSpawner.use_internal_ip = True" \
+        "c.DockerSpawner.network_name = 'jupyterhub-net'" \
+        "c.DockerSpawner.remove = True" \
+        "" \
+        "# Use custom pre-built image with all packages and extensions" \
+        "c.DockerSpawner.image = os.environ.get('SINGLEUSER_IMAGE', 'ghcr.io/mcheli/jupyter-jupyterhub:latest')" \
+        "" \
+        "# Resource limits and user environment" \
+        "c.DockerSpawner.mem_limit = '4G'" \
+        "c.DockerSpawner.cpu_limit = 2.0" \
+        "c.DockerSpawner.volumes = {" \
+        "    'jupyterhub-user-{username}': '/home/jovyan'," \
+        "    'jupyterhub-shared': {'bind': '/home/jovyan/shared', 'mode': 'rw'}" \
+        "}" \
+        "c.DockerSpawner.notebook_dir = '/home/jovyan'" \
+        "c.Spawner.default_url = '/lab'" \
+        "" \
+        "# Enhanced environment variables" \
+        'c.Spawner.environment = {' \
+        '    "TZ": os.environ.get("TZ", "America/New_York"),' \
+        '    "JUPYTERHUB_SINGLEUSER_APP": "jupyter_server.serverapp.ServerApp",' \
+        '    "JUPYTER_ENABLE_LAB": "yes",' \
+        '    "CHOWN_HOME": "yes",' \
+        '    "CHOWN_HOME_OPTS": "-R",' \
+        '    "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),' \
+        '    "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")' \
+        '}' \
+        "" \
+        "# Extended timeouts for package installation" \
+        "c.Spawner.http_timeout = 600" \
+        "c.Spawner.start_timeout = 600" \
+        "" \
+        "# --- Auth: FirstUse Authenticator (users set password on first login) ---" \
+        "c.JupyterHub.authenticator_class = 'jupyterhub.auth.DummyAuthenticator'" \
+        "c.DummyAuthenticator.password = os.environ['JUPYTER_PASSWORD']" \
+        "admin_user = os.environ.get('ADMIN_USER')" \
+        "if admin_user:" \
+        "    c.Authenticator.admin_users = {admin_user}" \
+        "" \
+        "# --- Enhanced idle culler with conservative settings ---" \
+        "c.JupyterHub.services = [" \
+        "    {" \
+        "        'name': 'idle-culler'," \
+        "        'admin': True," \
+        "        'command': [" \
+        "            'python3', '-m', 'jupyterhub_idle_culler'," \
+        "            '--timeout=7200'," \
+        "            '--cull-every=600'," \
+        "            '--concurrency=10'," \
+        "            '--max-age=0'" \
+        "        ]," \
+        "    }" \
+        "]" \
+        "" \
+        "# Service permissions" \
+        "c.JupyterHub.load_roles = [" \
+        "    {" \
+        "        'name': 'idle-culler-role'," \
+        "        'scopes': ['list:users', 'read:users:activity', 'servers', 'delete:servers']," \
+        "        'services': ['idle-culler']," \
+        "    }" \
+        "]" \
+        > /srv/jupyterhub/jupyterhub_config.py
+
+        # Enhanced hub-side dependencies
+        pip install --no-cache-dir \
+          'dockerspawner>=13.0.0' \
+          'jupyterlab>=4.0.0' \
+          'notebook' \
+          'jupyterlab-link-share' \
+          'docker' \
+          'jupyterhub-idle-culler' \
+          'psycopg2-binary' \
+          'oauthenticator'
+
+        exec jupyterhub -f /srv/jupyterhub/jupyterhub_config.py
+    volumes:
+      - jupyterhub_data:/srv/jupyterhub
+      - jupyterhub-shared:/srv/shared
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - jupyterhub-net
+    restart: unless-stopped
+
+  # PostgreSQL for JupyterHub state with optimized settings
+  hub-db:
+    image: postgres:16-alpine
+    container_name: jupyterhub-db
+    environment:
+      - POSTGRES_DB=jhub
+      - POSTGRES_USER=jhub
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - hub_db_data:/var/lib/postgresql/data
+    networks:
+      - jupyterhub-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jhub -d jhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  jupyterhub_data:
+  jupyterhub-shared:
+  hub_db_data:
+
+networks:
+  jupyterhub-net:
+    name: jupyterhub-net
+    driver: bridge
+  traefik_default:
+    external: true
