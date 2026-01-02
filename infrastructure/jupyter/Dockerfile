@@ -108,9 +108,8 @@ USER ${NB_UID}
 # Set default working directory
 WORKDIR /home/jovyan
 
-# Configure collaborative editing by default
+# Configure standalone JupyterLab with collaborative editing
 ENV JUPYTER_ENABLE_LAB=yes
-ENV JUPYTERHUB_SINGLEUSER_APP=jupyter_server.serverapp.ServerApp
 
-# Default command with collaboration enabled
-CMD ["start-singleuser.sh", "--ServerApp.collaborative=True", "--ServerApp.allow_origin=*"]
+# Default command for standalone JupyterLab (not JupyterHub singleuser)
+CMD ["start-notebook.sh", "--ServerApp.token=''", "--ServerApp.password=''", "--ServerApp.allow_origin=*"]

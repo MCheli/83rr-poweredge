@@ -83,10 +83,12 @@ services:
     container_name: jupyter
     restart: unless-stopped
     environment:
-      - JUPYTERHUB_CRYPT_KEY=your-secret-key
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_DATA_DIR=/tmp/.jupyter
+      - JUPYTER_RUNTIME_DIR=/tmp/.jupyter/runtime
+      - JUPYTER_CONFIG_DIR=/tmp/.jupyter/config
     volumes:
-      - jupyter_data:/srv/jupyterhub
-      - ./infrastructure/jupyter/jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
+      - jupyter_data_local:/home/jovyan/work
     networks:
       - infrastructure
 
