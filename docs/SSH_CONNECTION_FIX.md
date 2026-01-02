@@ -1,5 +1,7 @@
 # SSH Connection Management Fix
 
+> **⚠️ HISTORICAL DOCUMENT**: This document is kept for historical reference only. SSH-based deployment is no longer used in the current infrastructure (replaced by native Docker Compose). The MaxSessions=2 limit resolution documented here is preserved for reference.
+
 ## Problem Identified
 
 The server has a **MaxSessions=2** SSH limit, but the original `deploy_via_ssh.py` script was creating **up to 8 simultaneous SSH/SCP connections**:

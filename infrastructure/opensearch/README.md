@@ -56,14 +56,15 @@ Logs are stored in daily indices: `logs-homelab-YYYY.MM.dd`
 
 ```bash
 # Deploy the stack
-source venv/bin/activate
-python scripts/deploy_via_ssh.py opensearch infrastructure/opensearch/docker-compose.yml
+cd ~/83rr-poweredge
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d opensearch opensearch-dashboards
 
 # Check status
-ssh 83rr-poweredge "docker ps --filter name=opensearch"
+docker ps --filter name=opensearch
 
 # View logs
-ssh 83rr-poweredge "docker logs -f logstash"
+docker compose logs -f opensearch
+docker compose logs -f opensearch-dashboards
 ```
 
 ## Troubleshooting
