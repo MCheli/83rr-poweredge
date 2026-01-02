@@ -13,6 +13,8 @@ services:
       dockerfile: Dockerfile
     container_name: nginx
     restart: unless-stopped
+    environment:
+      - INFRASTRUCTURE_ENV=${INFRASTRUCTURE_ENV:-production}
     ports:
       - "80:80"
       - "443:443"
@@ -21,10 +23,10 @@ services:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
       - ./infrastructure/nginx/logs:/var/log/nginx
-    depends_on:
-      - personal-website
-      - flask-api
-      - jupyter
+    # depends_on:
+    #   - personal-website
+    #   - flask-api
+    #   - jupyter
     networks:
       - infrastructure
 
@@ -55,7 +57,7 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   flask-api:
     build:
-      context: ./infrastructure/flask-api
+      context: ./infrastructure/flask-api/backend
       dockerfile: Dockerfile
     container_name: flask-api
     restart: unless-stopped
@@ -92,7 +94,7 @@ services:
   # OpenSearch (Logging Infrastructure)
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch:
-    image: opensearchproject/opensearch:2.11.1
+    image: opensearchproject/opensearch:latest
     container_name: opensearch
     restart: unless-stopped
     environment:
@@ -119,7 +121,7 @@ services:
   # OpenSearch Dashboards (Logging UI)
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.1
+    image: opensearchproject/opensearch-dashboards:latest
     container_name: opensearch-dashboards
     restart: unless-stopped
     environment:

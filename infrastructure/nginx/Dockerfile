@@ -12,12 +12,12 @@ RUN mkdir -p /etc/nginx/certs /etc/nginx/dev-certs /etc/nginx/templates
 # Copy all configuration files
 COPY conf.d/ /etc/nginx/conf.d/
 
-# Copy certificates (if they exist)
-COPY certs/ /etc/nginx/certs/ 2>/dev/null || true
-COPY dev-certs/ /etc/nginx/dev-certs/ 2>/dev/null || true
+# Copy production certificates
+COPY certs/ /etc/nginx/certs/
 
-# Set permissions
-RUN chmod -R 644 /etc/nginx/certs/ /etc/nginx/dev-certs/ 2>/dev/null || true
+# Set certificate permissions
+RUN chmod -R 644 /etc/nginx/certs/*.crt 2>/dev/null || true && \
+    chmod -R 600 /etc/nginx/certs/*.key 2>/dev/null || true
 
 # Create entrypoint script
 RUN cat > /docker-entrypoint.sh << 'EOF'
@@ -25,22 +25,6 @@ RUN cat > /docker-entrypoint.sh << 'EOF'
 set -e
 
 echo "🔧 Configuring NGINX for environment: ${INFRASTRUCTURE_ENV:-development}"
-
-# Determine which configuration to use
-if [ "${INFRASTRUCTURE_ENV:-development}" = "production" ]; then
-    echo "📋 Using production configuration with domain routing"
-    # Ensure production config exists
-    if [ ! -f /etc/nginx/conf.d/production.conf ]; then
-        echo "❌ Production config missing!"
-        exit 1
-    fi
-    # Remove development config to avoid conflicts
-    rm -f /etc/nginx/conf.d/default.conf
-else
-    echo "📋 Using development configuration with localhost routing"
-    # Remove production config to avoid conflicts
-    rm -f /etc/nginx/conf.d/production.conf
-fi
 
 # Test NGINX configuration
 echo "🧪 Testing NGINX configuration..."
