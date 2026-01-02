@@ -392,6 +392,60 @@ class InfrastructureManager:
             print(f"❌ Registry authentication test failed: {str(e)}")
             return False
 
+    def search_logs(self, command_args):
+        """Search container logs using OpenSearch diagnostic tool"""
+        print("🔍 Searching Container Logs")
+        print("=" * 80)
+
+        try:
+            # Use the SSH-based diagnostic script for log searching
+            cmd = ['python', 'scripts/opensearch_diagnostic_ssh.py'] + command_args
+            result = subprocess.run(
+                cmd,
+                cwd=Path(__file__).parent.parent,
+                capture_output=True,
+                text=True
+            )
+
+            print(result.stdout)
+            if result.stderr:
+                print("Errors:", result.stderr)
+
+            return result.returncode == 0
+
+        except Exception as e:
+            print(f"❌ Log search failed: {str(e)}")
+            return False
+
+    def logs_health_check(self):
+        """Check OpenSearch cluster health for logging infrastructure"""
+        print("🏥 Checking Logging Infrastructure Health")
+        print("=" * 80)
+
+        try:
+            # Check OpenSearch cluster health
+            result = subprocess.run([
+                'python', 'scripts/opensearch_diagnostic_ssh.py', 'health'
+            ], cwd=Path(__file__).parent.parent, capture_output=True, text=True)
+
+            print(result.stdout)
+            if result.stderr:
+                print("Errors:", result.stderr)
+
+            # Check indices
+            print("\n📊 Log Indices Status:")
+            indices_result = subprocess.run([
+                'python', 'scripts/opensearch_diagnostic_ssh.py', 'indices'
+            ], cwd=Path(__file__).parent.parent, capture_output=True, text=True)
+
+            print(indices_result.stdout)
+
+            return result.returncode == 0
+
+        except Exception as e:
+            print(f"❌ Logs health check failed: {str(e)}")
+            return False
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python infrastructure_manager.py <command> [options]")
@@ -406,11 +460,17 @@ def main():
         print("  run-tests                          - Run comprehensive test suite")
         print("  migrate-to-portainer               - Complete migration to Portainer management")
         print("  cleanup-ssh                        - Clean up SSH-deployed stacks")
+        print("  logs-health                        - Check OpenSearch logging infrastructure health")
+        print("  logs [command] [options]           - Search container logs via OpenSearch")
         print("\nOptions:")
         print("  --clean      Clean up SSH-deployed stacks before deployment")
         print("  --registry   Use registry-based deployment (no SSH required)")
         print("\nExamples:")
         print("  python infrastructure_manager.py deploy-all --registry --clean")
+        print("  python infrastructure_manager.py logs recent --hours 2")
+        print("  python infrastructure_manager.py logs container opensearch")
+        print("  python infrastructure_manager.py logs errors --hours 24")
+        print("  python infrastructure_manager.py logs search 'failed OR error'")
         print("  python infrastructure_manager.py build-and-push personal-website")
         print("  python infrastructure_manager.py setup-registry-auth")
         print("  python infrastructure_manager.py health-check-all")
@@ -456,6 +516,14 @@ def main():
         elif command == 'cleanup-ssh':
             manager.cleanup_ssh_deployed_stacks()
             success = True
+
+        elif command == 'logs-health':
+            success = manager.logs_health_check()
+
+        elif command == 'logs':
+            # Pass remaining arguments to log search
+            log_args = sys.argv[2:] if len(sys.argv) > 2 else ['recent']
+            success = manager.search_logs(log_args)
 
         else:
             print(f"❌ Unknown command: {command}")
