@@ -12,10 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     default-libmysqlclient-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Switch back to notebook user
-USER ${NB_UID}
-
-# Install core collaboration packages
+# Install core collaboration packages (as root to avoid permission issues)
 RUN pip install --no-cache-dir \
     ypy-websocket==0.12.4 \
     jupyter-collaboration==4.1.1
@@ -77,18 +74,19 @@ RUN pip install --no-cache-dir \
     polars \
     "dask[complete]"
 
-# Install AI integration packages (use more recent compatible versions)
-RUN pip install --no-cache-dir \
-    "jupyter-ai[all]" \
-    openai \
-    anthropic \
-    langchain \
-    langchain-openai \
-    langchain-anthropic
+# AI integration packages removed to avoid dependency conflicts
+# Uncomment if needed in the future:
+# RUN pip install --no-cache-dir \
+#     jupyter-ai==2.31.7 \
+#     openai \
+#     anthropic \
+#     langchain \
+#     langchain-openai \
+#     langchain-anthropic
 
 # Enable server extensions
-RUN jupyter server extension enable jupyterlab_git && \
-    jupyter server extension enable jupyter_ai
+RUN jupyter server extension enable jupyterlab_git
+# RUN jupyter server extension enable jupyter_ai
 
 # Build JupyterLab with all extensions
 RUN jupyter lab build --dev-build=False --minimize=False
@@ -103,6 +101,9 @@ RUN mkdir -p /home/jovyan/shared && \
     fix-permissions /home/jovyan/shared && \
     fix-permissions /home/jovyan/sql-configs && \
     fix-permissions /home/jovyan/SQL-Demo-Template.ipynb
+
+# Switch back to notebook user for runtime
+USER ${NB_UID}
 
 # Set default working directory
 WORKDIR /home/jovyan

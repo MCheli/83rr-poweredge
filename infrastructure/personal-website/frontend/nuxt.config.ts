@@ -4,6 +4,12 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/tailwindcss'
   ],
+  tailwindcss: {
+    configPath: '~/tailwind.config.js',
+    cssPath: '~/assets/css/terminal.css',
+    exposeConfig: false,
+    viewer: false
+  },
   css: ['~/assets/css/terminal.css'],
   app: {
     head: {

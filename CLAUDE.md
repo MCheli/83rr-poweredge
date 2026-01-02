@@ -2,59 +2,27 @@
 
 This document provides Claude Code with comprehensive instructions for managing the 83RR PowerEdge homelab infrastructure.
 
-## 🎯 CRITICAL: Registry-Based Infrastructure Management
+## 🎯 Current Architecture (Phase 6 - January 2026)
 
-**PRIMARY: All infrastructure uses registry-based deployment via Portainer API (NO SSH required)**
-**FALLBACK: SSH available for emergency troubleshooting ONLY**
+**Deployment Method**: Native Docker Compose
+**Reverse Proxy**: NGINX
+**SSL Certificates**: Cloudflare Origin Certificates (15-year validity)
+**DNS Provider**: Cloudflare
+**Container Runtime**: Docker on Ubuntu 22.04 LTS
 
-### Core Management Scripts (8 total - streamlined)
+### Core Principles
+- **Native Docker Compose**: All services deployed via `docker compose` commands
+- **Direct Management**: No SSH or API intermediaries required
+- **Long-lived Certificates**: Cloudflare Origin Certificates valid until 2040
+- **Minimal Complexity**: Straightforward deployment without orchestration layers
 
-1. **`scripts/infrastructure_manager.py`** - MASTER infrastructure controller
-   - Deploy entire infrastructure with `--registry` flag
-   - Health monitoring and validation
-   - Container image building and pushing
-   - Registry authentication management
-   - Migration and cleanup operations
+---
 
-2. **`scripts/portainer_stack_manager.py`** - UNIFIED Portainer API management
-   - All CRUD operations for individual stacks
-   - Direct Portainer API integration
-   - Proper environment variable handling
-
-3. **`scripts/registry_builder.py`** - Container registry deployment system
-   - Build images locally with Docker build contexts
-   - Push to GitHub Container Registry (ghcr.io)
-   - Generate registry-based compose files
-   - Multi-platform build support
-
-4. **`scripts/github_registry_auth.py`** - ROBUST authentication management
-   - Multiple authentication methods (GITHUB_TOKEN, PAT, credentials file)
-   - Automatic credential validation and refresh
-   - Server-side authentication setup
-   - Security best practices implementation
-
-5. **`scripts/test_infrastructure.py`** - Comprehensive health testing
-   - Must pass before any commits
-   - Tests all services, DNS, containers, and functionality
-   - Includes Minecraft server connectivity testing
-
-6. **`scripts/quick_service_test.py`** - Fast service health checks
-   - Quick validation of critical services
-   - Lightweight alternative to full test suite
-
-7. **`scripts/dns_manager.py`** - DNS and SSL certificate management
-   - Domain configuration and SSL automation
-   - Certificate lifecycle management
-
-8. **`scripts/ssh_manager.py`** - EMERGENCY troubleshooting ONLY
-   - ⚠️  Use ONLY when Portainer API is unavailable
-   - Server connectivity testing and emergency operations
-
-## 🐍 CRITICAL: Python Environment Setup
+## 🐍 Python Environment Setup
 
 **IMPORTANT**: Always use the local virtual environment for Python development.
 
-### Setup Commands:
+### Setup Commands
 ```bash
 # Create virtual environment (if not exists)
 python3 -m venv venv
@@ -66,7 +34,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Running Python Scripts:
+### Running Python Scripts
 Always activate the virtual environment before running any Python scripts:
 ```bash
 source venv/bin/activate && python script_name.py
@@ -74,675 +42,543 @@ source venv/bin/activate && python script_name.py
 
 **All script examples in this document assume the virtual environment is activated.**
 
+---
+
 ## 📋 Standard Operating Procedures
 
-### Deploying Individual Stacks
-
+### Deploy All Services
 ```bash
-# Smart deploy (create or update automatically)
-python scripts/portainer_stack_manager.py deploy <stack_name> <compose_file>
+# Navigate to project directory
+cd ~/83rr-poweredge
 
-# Examples:
-python scripts/portainer_stack_manager.py deploy minecraft infrastructure/minecraft/docker-compose.yml
-python scripts/portainer_stack_manager.py deploy flask-api infrastructure/flask-api/docker-compose.yml
+# Deploy all services (production configuration)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# Create new stack only
-python scripts/portainer_stack_manager.py create minecraft infrastructure/minecraft/docker-compose.yml
+# Deploy specific service
+docker compose up -d <service_name>
 
-# Update existing stack only
-python scripts/portainer_stack_manager.py update minecraft infrastructure/minecraft/docker-compose.yml
+# Check deployment status
+docker ps
 ```
 
-### Managing Complete Infrastructure
-
+### Update Existing Service
 ```bash
-# 🚀 PREFERRED: Registry-based deployment (NO SSH required)
-python scripts/infrastructure_manager.py deploy-all --registry --clean
+# Pull latest changes
+git pull
 
-# Registry authentication management
-python scripts/infrastructure_manager.py test-registry-auth        # Test authentication
-python scripts/infrastructure_manager.py setup-registry-auth      # Setup server authentication
+# Rebuild specific service (if code changed)
+docker compose build <service_name>
 
-# Build and push container images
-python scripts/infrastructure_manager.py build-images              # Build images
-python scripts/infrastructure_manager.py push-images               # Push to registry
-python scripts/infrastructure_manager.py build-and-push           # Combined build+push
+# Restart service with new configuration
+docker compose up -d <service_name>
 
-# Health monitoring
-python scripts/infrastructure_manager.py health-check-all          # Health check all stacks
-python scripts/infrastructure_manager.py run-tests                 # Comprehensive tests
-
-# LEGACY: Deploy without registry (hybrid SSH + API - deprecated)
-python scripts/infrastructure_manager.py deploy-all --clean
-
-# Migration and cleanup
-python scripts/infrastructure_manager.py migrate-to-portainer      # Migrate to Portainer
+# Verify service is healthy
+docker ps | grep <service_name>
 ```
 
-### Container Log Analysis and Diagnostics
-
+### View Logs
 ```bash
-# Logging infrastructure health
-python scripts/infrastructure_manager.py logs-health               # Check OpenSearch cluster health
+# View logs for specific service
+docker compose logs -f <service_name>
 
-# Recent logs from all containers
-python scripts/infrastructure_manager.py logs recent               # Last hour
-python scripts/infrastructure_manager.py logs recent --hours 24    # Last 24 hours
+# View logs for all services
+docker compose logs -f
 
-# Container-specific logs
-python scripts/infrastructure_manager.py logs container opensearch  # OpenSearch logs
-python scripts/infrastructure_manager.py logs container traefik    # Traefik logs
-python scripts/infrastructure_manager.py logs container minecraft   # Minecraft logs
+# View last 100 lines
+docker compose logs --tail 100 <service_name>
 
-# Error detection and troubleshooting
-python scripts/infrastructure_manager.py logs errors               # All error logs
-python scripts/infrastructure_manager.py logs errors --hours 6     # Last 6 hours of errors
-
-# Custom log searches
-python scripts/infrastructure_manager.py logs search "failed"      # Search for "failed"
-python scripts/infrastructure_manager.py logs search "error OR exception" # Boolean search
-
-# Direct diagnostic tool usage
-python scripts/opensearch_diagnostic_ssh.py health                 # Cluster health
-python scripts/opensearch_diagnostic_ssh.py indices               # List log indices
-python scripts/opensearch_diagnostic_ssh.py test-log              # Add test log entry
-python scripts/opensearch_diagnostic_ssh.py recent --lines 100    # 100 recent logs
+# Search logs for errors
+docker compose logs <service_name> | grep -i error
 ```
 
-### Monitoring and Troubleshooting
-
+### Stop/Restart Services
 ```bash
-# List all Portainer stacks
-python scripts/portainer_stack_manager.py list
+# Stop specific service
+docker compose stop <service_name>
 
-# Check specific stack status
-python scripts/portainer_stack_manager.py status minecraft
+# Restart specific service
+docker compose restart <service_name>
 
-# Health check specific stack
-python scripts/portainer_stack_manager.py health minecraft
+# Stop all services
+docker compose down
 
-# Test registry authentication
-python scripts/github_registry_auth.py test
-
-# Quick service testing
-python scripts/quick_service_test.py
+# Stop all services and remove volumes (⚠️  DANGER: deletes data)
+docker compose down -v
 ```
+
+---
 
 ## 🏗️ Infrastructure Architecture
 
-### Stack Deployment Order
-The system deploys stacks in dependency order:
-1. **traefik** - Reverse proxy (must be first)
-2. **jupyter** - Data science environment
-3. **opensearch** - Logging infrastructure
-4. **personal-website** - Web services
-5. **flask-api** - API services
-6. **minecraft** - Game services
-7. **monitoring** - System and container monitoring (Prometheus/Grafana)
+### Active Services (8/10 running)
+1. **nginx** - Reverse proxy and SSL termination
+2. **personal-website** - Nuxt.js personal portfolio
+3. **flask-api** - Python Flask REST API
+4. **minecraft** - Minecraft Java Edition server
+5. **opensearch** - Log aggregation and search
+6. **grafana** - Metrics visualization dashboards
+7. **prometheus** - Metrics collection and storage
+8. **cadvisor** - Container resource monitoring
+
+### Pending Services
+9. **jupyter** - JupyterLab data science environment (configuration needed)
+10. **opensearch-dashboards** - OpenSearch visualization (optional)
+
+### Service Dependencies
+- **nginx** must start first (other services proxy through it)
+- **prometheus** should start before **grafana** (datasource dependency)
+- All other services are independent
 
 ### Environment Variables
-Each stack automatically loads `.env` files from its infrastructure directory:
-- `infrastructure/minecraft/.env`
-- `infrastructure/flask-api/.env`
-- etc.
+Each service can use `.env` files from its infrastructure directory:
+- `infrastructure/minecraft/.env` - Minecraft server configuration
+- `infrastructure/flask-api/.env` - Flask API secrets
+- Root `.env` - Cloudflare credentials and global settings
 
-### Portainer Integration
-All stacks are managed through Portainer API ensuring:
-- Proper visibility in Portainer UI
-- Centralized management
-- Environment variable persistence
-- Update/rollback capabilities
-
-## 🚨 Critical Rules for Claude Code
-
-### NEVER Do These:
-1. **NEVER** use `ssh ... docker compose` commands directly
-2. **NEVER** deploy stacks via SSH that bypass Portainer
-3. **NEVER** commit without running `test_infrastructure.py` first
-4. **NEVER** use SSH deployment as primary method
-5. **NEVER** ignore or dismiss 4XX HTTP errors as "expected" or "normal"
-6. **NEVER** accept authentication failures as acceptable behavior
-
-### ALWAYS Do These:
-1. **ALWAYS** use `--registry` flag for deployments when possible
-2. **ALWAYS** use `portainer_stack_manager.py` for stack operations
-3. **ALWAYS** run health checks after deployments
-4. **ALWAYS** verify all stacks show up in `list` command
-5. **ALWAYS** run full tests before commits
-6. **ALWAYS** prefer registry-based deployment over SSH fallbacks
-7. **ALWAYS** investigate and fix 4XX HTTP errors - they indicate real problems
-8. **ALWAYS** ensure all services return proper HTTP 200 responses or appropriate redirects
-
-### Pre-Commit Checklist:
-```bash
-# 1. Test all infrastructure
-source venv/bin/activate && python scripts/test_infrastructure.py
-
-# 2. Verify all stacks are Portainer-managed
-python scripts/portainer_stack_manager.py list
-
-# 3. Health check all stacks
-python scripts/infrastructure_manager.py health-check-all
-
-# 4. Verify all services return proper HTTP responses (NO 4XX errors allowed)
-python scripts/quick_service_test.py
-
-# 5. If ANY 4XX errors found, investigate and fix before proceeding
-```
-
-### 🔍 4XX Error Investigation Workflow:
-When 4XX errors are found:
-
-1. **HTTP 401 (Unauthorized)**:
-   - Check authentication configuration
-   - Verify credentials and tokens
-   - Review middleware configuration
-
-2. **HTTP 403 (Forbidden)**:
-   - Check authorization rules
-   - Verify user permissions
-   - Review access control configuration
-
-3. **HTTP 404 (Not Found)**:
-   - Verify service is running and healthy
-   - Check routing configuration in Traefik
-   - Verify DNS resolution
-   - Check container port mappings
-   - Review service discovery configuration
-
-## 🔧 Common Operations
-
-### Fix "Stack not in Portainer" Issues:
-```bash
-# Migrate SSH-deployed stacks to Portainer
-python scripts/infrastructure_manager.py migrate-to-portainer
-```
-
-### Deploy New Service:
-1. Create `infrastructure/<service>/docker-compose.yml`
-2. Create `infrastructure/<service>/.env` (if needed)
-3. Deploy: `python scripts/portainer_stack_manager.py deploy <service> infrastructure/<service>/docker-compose.yml`
-4. Test: `python scripts/portainer_stack_manager.py health <service>`
-
-### Update Existing Service:
-1. Modify `infrastructure/<service>/docker-compose.yml`
-2. Update: `python scripts/portainer_stack_manager.py update <service> infrastructure/<service>/docker-compose.yml`
-3. Test: `python scripts/portainer_stack_manager.py health <service>`
-
-### Troubleshoot Service Issues:
-1. Check status: `python scripts/portainer_stack_manager.py status <service>`
-2. Health check: `python scripts/portainer_stack_manager.py health <service>`
-3. View all stacks: `python scripts/portainer_stack_manager.py list`
-4. Full test suite: `python scripts/test_infrastructure.py`
+---
 
 ## 📊 Service Endpoints
 
-### Public Services (HTTPS with SSL):
-- https://www.markcheli.com - Personal website
-- https://flask.markcheli.com - Flask API
-- https://jupyter.markcheli.com - JupyterHub
-- minecraft.markcheli.com:25565 - Minecraft server
+### Public Services (HTTPS via Cloudflare)
+- **https://www.markcheli.com** - Personal website
+- **https://flask.markcheli.com** - Flask API
+- **https://jupyter.markcheli.com** - JupyterHub (pending configuration)
+- **minecraft.markcheli.com:25565** - Minecraft server
 
-### LAN-Only Services:
-- https://portainer-local.ops.markcheli.com - Portainer
-- https://traefik-local.ops.markcheli.com - Traefik dashboard
-- https://logs-local.ops.markcheli.com - OpenSearch dashboards
-- https://www-dev.ops.markcheli.com - Development website
-- https://flask-dev.ops.markcheli.com - Development Flask API
+### LAN-Only Services (HTTPS with self-signed certs)
+- **https://grafana-local.ops.markcheli.com** - Grafana dashboards (admin/admin123)
+- **https://prometheus-local.ops.markcheli.com** - Prometheus metrics
+- **https://cadvisor-local.ops.markcheli.com** - Container monitoring
+- **https://logs-local.ops.markcheli.com** - OpenSearch Dashboards
 
-### Monitoring Services:
-- https://grafana-local.ops.markcheli.com - Grafana dashboards (admin/admin123)
-- https://prometheus-local.ops.markcheli.com - Prometheus metrics database
-- https://cadvisor-local.ops.markcheli.com - Container resource monitoring
+### NGINX Routing
+All HTTPS traffic is handled by NGINX:
+- **Public routes**: Defined in `infrastructure/nginx/conf.d/production.conf`
+- **LAN routes**: Defined in `infrastructure/nginx/conf.d/local.conf`
+- **SSL certificates**: Located in `infrastructure/nginx/certs/`
+
+---
+
+## 🔐 SSL Certificate Management
+
+### Cloudflare Origin Certificates
+This infrastructure uses **Cloudflare Origin Certificates** (not Let's Encrypt):
+
+**Benefits**:
+- ✅ **15-year validity** (expires 2040) - no 90-day renewals
+- ✅ **Automatic HTTPS** - Cloudflare handles public SSL
+- ✅ **Origin protection** - Certificates only work through Cloudflare proxy
+
+**Certificate Files**:
+```
+infrastructure/nginx/certs/
+├── wildcard-markcheli.crt       # Certificate for *.markcheli.com
+├── wildcard-markcheli.key       # Private key for *.markcheli.com
+├── wildcard-ops-markcheli.crt   # Certificate for *.ops.markcheli.com
+└── wildcard-ops-markcheli.key   # Private key for *.ops.markcheli.com
+```
+
+### Certificate Renewal (Every 15 Years)
+```bash
+# When certificates approach expiration (2039-2040):
+source venv/bin/activate
+python scripts/cloudflare_ssl_manager.py create-wildcards
+
+# Update NGINX certificates
+cp new-certs/*.crt infrastructure/nginx/certs/
+cp new-certs/*.key infrastructure/nginx/certs/
+
+# Reload NGINX
+docker compose exec nginx nginx -s reload
+```
+
+### Cloudflare SSL Mode
+**Required Setting**: "Full (Strict)" mode in Cloudflare dashboard
+- Ensures end-to-end encryption
+- Validates origin certificates
+- Prevents SSL errors
+
+---
+
+## 🌐 DNS Management with Cloudflare
+
+### DNS Configuration
+All DNS records are managed in **Cloudflare Dashboard** (not via API/scripts):
+
+**Public Services** (proxied through Cloudflare):
+- `www.markcheli.com` → A record → `173.48.98.211` (public IP)
+- `flask.markcheli.com` → A record → `173.48.98.211`
+- `jupyter.markcheli.com` → A record → `173.48.98.211`
+- `minecraft.markcheli.com` → A record → `173.48.98.211`
+
+**LAN Services** (DNS-only, not proxied):
+- `*.ops.markcheli.com` → A record → `192.168.1.179` (LAN IP)
+- Used for internal services like Grafana, Prometheus, etc.
+
+### DNS Management Scripts
+```bash
+# View current DNS records
+python scripts/cloudflare_dns_manager.py list
+
+# Add new DNS record
+python scripts/cloudflare_dns_manager.py add <subdomain> <ip_address>
+
+# Delete DNS record
+python scripts/cloudflare_dns_manager.py delete <subdomain>
+```
+
+### DNS Troubleshooting
+```bash
+# Check DNS resolution
+dig www.markcheli.com +short
+
+# Check from specific DNS server
+dig @1.1.1.1 www.markcheli.com +short
+
+# Verify SSL certificate
+openssl s_client -connect www.markcheli.com:443 -servername www.markcheli.com
+```
+
+---
+
+## 📊 Monitoring with Prometheus & Grafana
+
+### Access Monitoring Dashboards
+**Grafana**: https://grafana-local.ops.markcheli.com
+- **Login**: admin / admin123
+- **Pre-configured datasource**: Prometheus
+- **Recommended dashboards**: 193, 1860, 14282 (Docker monitoring)
+
+**Prometheus**: https://prometheus-local.ops.markcheli.com
+- Query interface for metrics
+- 30-day retention policy
+
+**cAdvisor**: https://cadvisor-local.ops.markcheli.com
+- Real-time container resource monitoring
+- Per-container CPU/memory/network stats
+
+### Key Metrics Monitored
+- **CPU usage** per container and total system
+- **Memory usage** per container and total system
+- **Network I/O** per container
+- **Disk I/O** and usage
+- **Container health** and restart counts
+
+### Useful Prometheus Queries
+```promql
+# Container CPU usage (% of total system)
+rate(container_cpu_usage_seconds_total{name!=""}[1m]) / scalar(count(count(node_cpu_seconds_total) by (cpu))) * 100
+
+# Container memory usage (GB)
+container_memory_usage_bytes{name!=""} / 1024 / 1024 / 1024
+
+# System CPU usage (%)
+100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+```
+
+---
+
+## 🔧 Common Operations
+
+### Add New Service
+1. **Create service directory**:
+   ```bash
+   mkdir -p infrastructure/<service>
+   ```
+
+2. **Create docker-compose.yml**:
+   ```yaml
+   services:
+     <service>:
+       image: <image>
+       container_name: <service>
+       networks:
+         - app-network
+       # ... other config
+   ```
+
+3. **Add to main docker-compose.yml** (optional) or deploy standalone:
+   ```bash
+   docker compose -f infrastructure/<service>/docker-compose.yml up -d
+   ```
+
+4. **Add NGINX routing** (if web service):
+   - Edit `infrastructure/nginx/conf.d/production.conf` or `local.conf`
+   - Add upstream and server block
+   - Reload NGINX: `docker compose exec nginx nginx -s reload`
+
+5. **Add DNS record** in Cloudflare dashboard
+
+### Update Service Configuration
+1. **Edit configuration files** (docker-compose.yml, .env, etc.)
+2. **Recreate service**:
+   ```bash
+   docker compose up -d <service>
+   ```
+3. **Verify**:
+   ```bash
+   docker ps | grep <service>
+   docker compose logs <service>
+   ```
+
+### Troubleshoot Service Issues
+```bash
+# Check container status
+docker ps -a | grep <service>
+
+# View recent logs
+docker compose logs --tail 50 <service>
+
+# Check container resource usage
+docker stats <service>
+
+# Inspect container details
+docker inspect <service>
+
+# Get shell access to container
+docker exec -it <service> /bin/bash  # or /bin/sh
+
+# Restart problematic service
+docker compose restart <service>
+```
+
+### NGINX Configuration Changes
+```bash
+# Test NGINX configuration
+docker compose exec nginx nginx -t
+
+# Reload NGINX (without downtime)
+docker compose exec nginx nginx -s reload
+
+# View NGINX error logs
+docker compose logs nginx
+
+# Check NGINX routing
+docker compose exec nginx cat /etc/nginx/conf.d/production.conf
+```
+
+---
+
+## 🚨 Critical Rules for Claude Code
+
+### NEVER Do These
+1. **NEVER** commit without running tests
+2. **NEVER** ignore or dismiss 4XX/5XX HTTP errors as "expected"
+3. **NEVER** delete Docker volumes without verified backups
+4. **NEVER** modify production configs without testing locally first
+5. **NEVER** assume services are working - always verify
+
+### ALWAYS Do These
+1. **ALWAYS** use `docker compose` commands for deployment
+2. **ALWAYS** test configuration changes with `nginx -t` before reloading
+3. **ALWAYS** check logs after deployment changes
+4. **ALWAYS** verify services return HTTP 200 or proper redirects
+5. **ALWAYS** run health checks after changes
+6. **ALWAYS** investigate 4XX/5XX errors immediately
+7. **ALWAYS** create backups before destructive operations
+
+### Pre-Commit Checklist
+```bash
+# 1. Verify all services are running
+docker ps
+
+# 2. Test service health
+curl -I https://www.markcheli.com
+curl -I https://flask.markcheli.com
+curl http://localhost:9090/-/healthy  # Prometheus
+
+# 3. Check for errors in logs
+docker compose logs --tail 100 | grep -i error
+
+# 4. Verify NGINX config is valid
+docker compose exec nginx nginx -t
+
+# 5. Run infrastructure tests (if available)
+python scripts/test_infrastructure.py
+```
+
+---
+
+## 🚨 HTTP Status Code Standards
+
+### Acceptable Responses
+- **HTTP 200**: Service functioning correctly ✅
+- **HTTP 301/302**: Proper redirects (HTTP→HTTPS) ✅
+
+### Unacceptable Responses (Must Investigate)
+- **HTTP 401**: Authentication problems ❌
+- **HTTP 403**: Authorization problems ❌
+- **HTTP 404**: Missing resources or routing issues ❌
+- **HTTP 500+**: Server errors ❌
+
+### Investigation Process
+When encountering 4XX/5XX errors:
+
+1. **Do NOT dismiss the error**
+2. **Check container health**: `docker ps`
+3. **View container logs**: `docker compose logs <service>`
+4. **Verify NGINX routing**: Check conf.d files
+5. **Test internal connectivity**: `docker exec nginx curl http://<service>:<port>`
+6. **Fix the underlying issue**
+7. **Re-test to confirm resolution**
+
+---
+
+## 🚨 Surgical Change Protocol
+
+### Change Classification
+
+**🟢 LEVEL 1: Configuration File Changes (90% of requests)**
+- **Examples**: Add NGINX route, update environment variable
+- **Method**: Edit file, reload service
+- **Tools**: Direct file editing, `docker compose exec`
+- **Time**: 1-3 minutes
+
+**🟡 LEVEL 2: Container Updates (8% of requests)**
+- **Examples**: Update single service, change image version
+- **Method**: `docker compose up -d <service>`
+- **Time**: 5-10 minutes
+
+**🔴 LEVEL 3: Infrastructure Changes (2% of requests)**
+- **Examples**: Add new service, major version upgrades
+- **Method**: Full testing, staged rollout
+- **Requires**: User approval + backup plan
+- **Time**: 15+ minutes
+
+### Minimal Change Principle
+
+**For simple config changes (NGINX routing, env vars)**:
+```bash
+# ✅ CORRECT: Edit and reload
+vim infrastructure/nginx/conf.d/production.conf
+docker compose exec nginx nginx -t
+docker compose exec nginx nginx -s reload
+# Test: curl -I https://new-service.markcheli.com
+```
+
+**❌ WRONG: Rebuild everything**:
+```bash
+# DON'T DO THIS for simple changes
+docker compose down
+docker compose up -d --build
+```
+
+### Pre-Change Checklist
+1. **Identify change level** (1, 2, or 3)
+2. **Save current state** (git commit or backup)
+3. **Plan rollback** (know how to undo)
+4. **Make minimal change** (only what's needed)
+5. **Test immediately** (verify change works)
+
+---
+
+## 📁 File Structure
+
+```
+~/83rr-poweredge/
+├── docker-compose.yml              # Base service definitions
+├── docker-compose.prod.yml         # Production overrides
+├── docker-compose.override.yml     # Local development overrides
+├── .env                           # Environment variables
+├── CLAUDE.md                      # This document
+├── README.md                      # Project overview
+├── DEPLOYMENT_STATUS.md           # Current deployment state
+│
+├── infrastructure/
+│   ├── nginx/                     # NGINX reverse proxy
+│   │   ├── conf.d/
+│   │   │   ├── production.conf    # Public service routing
+│   │   │   └── local.conf         # LAN service routing
+│   │   └── certs/                 # SSL certificates
+│   │       ├── wildcard-markcheli.crt
+│   │       ├── wildcard-markcheli.key
+│   │       ├── wildcard-ops-markcheli.crt
+│   │       └── wildcard-ops-markcheli.key
+│   │
+│   ├── personal-website/          # Nuxt.js website
+│   ├── flask-api/                 # Python Flask API
+│   ├── jupyter/                   # JupyterLab
+│   ├── minecraft/                 # Minecraft server
+│   ├── opensearch/                # Log aggregation
+│   └── monitoring/                # Prometheus/Grafana
+│
+└── scripts/
+    ├── cloudflare_ssl_manager.py  # SSL certificate management
+    ├── cloudflare_dns_manager.py  # DNS record management
+    ├── test_infrastructure.py     # Health checks
+    └── quick_service_test.py      # Fast endpoint testing
+```
+
+---
+
+## 🎯 Success Criteria
+
+Infrastructure is considered healthy when:
+1. ✅ All 8 services show as "Up" in `docker ps`
+2. ✅ All public services return HTTP 200 or proper redirects
+3. ✅ NGINX config passes validation: `nginx -t`
+4. ✅ Monitoring dashboards are accessible (Grafana, Prometheus)
+5. ✅ Minecraft server responds on port 25565
+6. ✅ No error messages in recent logs (`docker compose logs`)
+
+---
+
+## 🚀 Quick Reference Commands
+
+```bash
+# Deploy everything
+cd ~/83rr-poweredge
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Check status
+docker ps
+
+# View logs
+docker compose logs -f <service>
+
+# Restart service
+docker compose restart <service>
+
+# Reload NGINX config
+docker compose exec nginx nginx -s reload
+
+# Test NGINX config
+docker compose exec nginx nginx -t
+
+# Health check
+curl -I https://www.markcheli.com
+curl http://localhost:9090/-/healthy  # Prometheus
+
+# Clean up unused resources
+docker system prune -a --volumes  # ⚠️  DANGER: removes unused data
+```
+
+---
 
 ## 🔑 Environment Configuration
 
 Required variables in `.env`:
 ```bash
-PORTAINER_URL=https://portainer-local.ops.markcheli.com
-PORTAINER_API_KEY=your_api_key_here
-PORTAINER_ENDPOINT_ID=3
-SSH_HOST=192.168.1.179
-SSH_USER=mcheli
+# Cloudflare (for DNS and SSL management)
+CLOUDFLARE_API_TOKEN=your_token_here
+CLOUDFLARE_ZONE_ID=your_zone_id_here
+CLOUDFLARE_EMAIL=your_email@example.com
 
-# GitHub Container Registry Authentication (for registry-based deployments)
-GITHUB_TOKEN=your_github_token_here          # Preferred for CI/CD
-GITHUB_USERNAME=your_github_username         # GitHub username
-# OR use personal access token:
-GITHUB_PAT=your_personal_access_token        # Alternative to GITHUB_TOKEN
+# Optional: Service-specific configurations
+# See infrastructure/<service>/.env files for service-specific vars
 ```
 
-## 🔐 GitHub Container Registry Authentication
+---
 
-### Robust Authentication System
-The system uses `scripts/github_registry_auth.py` for secure, reliable authentication following GitHub best practices:
+## 📖 Additional Documentation
 
-#### Authentication Methods (in preference order):
-1. **GITHUB_TOKEN** (recommended for CI/CD environments)
-2. **Personal Access Token** (`GITHUB_PAT` or `CR_PAT`)
-3. **Credentials File** (`~/.github_registry_credentials`)
-4. **Interactive Setup** (with guided instructions)
+- **DEPLOYMENT_STATUS.md** - Current service status and deployment notes
+- **CLEANUP_PLAN.md** - Repository cleanup and modernization plan
+- **infrastructure/nginx/README.md** - NGINX configuration guide
+- **infrastructure/monitoring/README.md** - Monitoring setup guide
 
-#### Authentication Commands:
-```bash
-# Test current authentication status
-python scripts/github_registry_auth.py test
+---
 
-# Setup/refresh authentication
-python scripts/github_registry_auth.py authenticate
-
-# Setup server-side authentication via SSH
-python scripts/github_registry_auth.py setup-server
-
-# Force refresh authentication
-python scripts/github_registry_auth.py authenticate --force
-```
-
-#### Integrated Authentication (via infrastructure_manager.py):
-```bash
-# Test authentication
-python scripts/infrastructure_manager.py test-registry-auth
-
-# Setup server authentication
-python scripts/infrastructure_manager.py setup-registry-auth
-```
-
-### Authentication Setup Guide
-
-#### Method 1: Environment Variables (Recommended)
-```bash
-export GITHUB_TOKEN=<your_github_token>
-export GITHUB_USERNAME=<your_github_username>
-```
-
-#### Method 2: Credentials File
-```bash
-echo '{"username": "<username>", "token": "<token>"}' > ~/.github_registry_credentials
-chmod 600 ~/.github_registry_credentials
-```
-
-#### GitHub Token Requirements:
-- **Scopes needed**: `write:packages`, `read:packages`
-- **Create at**: https://github.com/settings/tokens
-- **Token type**: Personal Access Token (classic)
-
-### Security Features:
-- ✅ Uses `--password-stdin` for secure token input
-- ✅ Automatic credential validation and refresh
-- ✅ Multiple authentication fallbacks
-- ✅ Server-side authentication setup
-- ✅ Clear troubleshooting guidance
-
-## 🌐 DNS Management Workflow
-
-### **CRITICAL LIMITATION**: Squarespace DNS API
-Squarespace does not provide a public API for DNS record management. All DNS changes must be made **manually** through the Squarespace dashboard. The scripts provided offer guided assistance and validation only.
-
-### Service Deployment with DNS
-When deploying a new service that requires DNS:
-
-1. **Deploy the service/container first**
-2. **Request DNS setup**: `python scripts/dns_manager.py setup <service_name>`
-3. **Manually add DNS record** in Squarespace dashboard using provided instructions
-4. **Wait for propagation**: 5-15 minutes
-5. **Verify deployment**: `python scripts/dns_manager.py verify <service_name>`
-
-### DNS Record Types by Service Category
-- **Public Services** (internet-accessible): Point to `173.48.98.211`
-  - `jupyter.markcheli.com` - JupyterHub
-  - `www.markcheli.com` - Personal website
-  - `flask.markcheli.com` - Flask API
-  - `ops.markcheli.com` - Base domain
-
-- **Local Services** (LAN-only): Point to `192.168.1.179`
-  - `traefik-local.ops.markcheli.com` - Traefik dashboard
-  - `portainer-local.ops.markcheli.com` - Portainer management
-  - `logs-local.ops.markcheli.com` - OpenSearch Dashboards
-  - `opensearch-local.ops.markcheli.com` - OpenSearch API
-
-### Manual DNS Steps in Squarespace
-1. Login to Squarespace account
-2. Go to Settings → Domains
-3. Click on "ops.markcheli.com"
-4. Click "DNS" in left sidebar
-5. Scroll to "Custom Records"
-6. Click "Add Record" → "A Record"
-7. Enter Host (subdomain) and Points to (IP)
-8. Save and wait for propagation
-
-### DNS Troubleshooting Commands
-```bash
-# Check if DNS record exists
-dig jupyter.ops.markcheli.com A +short
-
-# Check DNS propagation from multiple servers
-dig @8.8.8.8 jupyter.ops.markcheli.com A +short
-dig @1.1.1.1 jupyter.ops.markcheli.com A +short
-
-# Test service connectivity after DNS resolves
-curl -I https://jupyter.ops.markcheli.com
-```
-
-### SSL Certificate Management
-This project uses **manual wildcard SSL certificates** from Let's Encrypt:
-
-- ✅ **Wildcard Coverage**: `*.markcheli.com` and `*.ops.markcheli.com`
-- 🔄 **Manual Renewal**: Every 90 days via `scripts/dns_manager.py`
-- 📋 **DNS Verification**: Required for certificate renewal
-
-**Certificate Renewal Process:**
-1. Run: `python scripts/dns_manager.py renew-ssl`
-2. Follow DNS verification prompts for both wildcard domains
-3. Update certificates on server
-4. Restart Traefik: `python scripts/portainer_stack_manager.py update traefik`
-
-## 📊 System Monitoring with Prometheus/Grafana
-
-### Overview
-The monitoring stack provides comprehensive system and container metrics:
-
-**Components:**
-- **Prometheus** - Time-series metrics database with 30-day retention
-- **Grafana** - Visualization dashboards and alerting
-- **cAdvisor** - Container resource metrics collector (by Google)
-- **Node Exporter** - Host system metrics collector
-
-**Key Metrics Monitored:**
-- CPU usage per container and total system
-- Memory usage per container and total system
-- Network I/O per container
-- Disk I/O and usage
-- Container restart counts and health status
-
-### Deployment and Management
-
-```bash
-# Deploy monitoring stack
-python scripts/portainer_stack_manager.py deploy monitoring infrastructure/monitoring/docker-compose.yml
-
-# Health check monitoring services
-python scripts/portainer_stack_manager.py health monitoring
-
-# Update monitoring configuration
-python scripts/portainer_stack_manager.py update monitoring infrastructure/monitoring/docker-compose.yml
-```
-
-### Access and Configuration
-
-**Grafana Dashboard:**
-- URL: https://grafana-local.ops.markcheli.com
-- Login: admin / admin123
-- Pre-configured Prometheus datasource
-- Import dashboard IDs: 193, 1860, 14282 for Docker monitoring
-
-**Prometheus Queries:**
-- URL: https://prometheus-local.ops.markcheli.com
-- Container CPU: `rate(container_cpu_usage_seconds_total{name!=""}[1m]) / scalar(count(count(node_cpu_seconds_total) by (cpu))) * 100`
-- Container Memory: `container_memory_usage_bytes{name!=""} / 1024 / 1024 / 1024`
-- System CPU: `100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`
-
-**cAdvisor Interface:**
-- URL: https://cadvisor-local.ops.markcheli.com
-- Real-time container metrics and drill-down views
-
-### Custom Dashboard Setup
-
-The monitoring stack includes a custom dashboard configuration at:
-`infrastructure/monitoring/grafana-dashboard-*.json`
-
-**Key Dashboard Features:**
-- Container CPU usage (% of total system capacity)
-- Container memory usage (MB and % of total)
-- System overview with color-coded thresholds
-- Network traffic per container
-- Historical data with 30-second refresh
-
-### Troubleshooting
-
-**Common Issues:**
-- **Permission errors**: Containers run as root (`user: "0"`) to access volumes
-- **>100% CPU readings**: Normal on multi-core systems (shows CPU cores used)
-- **404 errors**: Check Traefik routing and container health
-
-**DNS Requirements:**
-- grafana-local.ops.markcheli.com → 192.168.1.179
-- prometheus-local.ops.markcheli.com → 192.168.1.179
-- cadvisor-local.ops.markcheli.com → 192.168.1.179
-
-## 📁 File Structure
-
-```
-infrastructure/
-├── traefik/docker-compose.yml      # Reverse proxy
-├── jupyter/docker-compose.yml      # JupyterHub
-├── opensearch/docker-compose.yml   # Logging stack
-├── personal-website/docker-compose.yml
-├── flask-api/docker-compose.yml
-├── minecraft/docker-compose.yml
-└── monitoring/docker-compose.yml   # Prometheus/Grafana monitoring
-
-scripts/
-├── infrastructure_manager.py       # MASTER controller (with registry support)
-├── portainer_stack_manager.py      # UNIFIED Portainer API management
-├── registry_builder.py            # Container registry deployment system
-├── github_registry_auth.py         # Robust authentication management
-├── test_infrastructure.py          # Comprehensive testing
-├── dns_manager.py                 # DNS and SSL management
-├── quick_service_test.py           # Quick service availability testing
-├── ssh_manager.py                 # EMERGENCY troubleshooting only
-└── one-time/                      # One-time setup scripts (disk migration, etc.)
-```
-
-## 🎯 Success Criteria
-
-Infrastructure is considered healthy when:
-1. All 7 stacks show in `portainer_stack_manager.py list` (including monitoring)
-2. `infrastructure_manager.py health-check-all` passes
-3. `test_infrastructure.py` passes (53+ of 56 tests)
-4. **ALL** services return proper HTTP responses (200, or appropriate redirects - NO 4XX errors)
-5. Minecraft server responds on port 25565
-6. Monitoring services accessible and collecting metrics
-
-### 🚨 HTTP Error Response Guidelines:
-- **HTTP 200**: Service is working correctly ✅
-- **HTTP 301/302**: Proper redirects (e.g., HTTP → HTTPS) ✅
-- **HTTP 401**: MUST be investigated - indicates authentication problems ❌
-- **HTTP 403**: MUST be investigated - indicates authorization problems ❌
-- **HTTP 404**: MUST be investigated - indicates missing resources or routing issues ❌
-- **HTTP 5XX**: MUST be investigated - indicates server errors ❌
-
-**4XX errors are NEVER acceptable and indicate real problems that must be fixed.**
-
-## 🚀 Quick Reference Commands
-
-```bash
-# 🎯 PREFERRED: Registry-based deployment (NO SSH)
-python scripts/infrastructure_manager.py deploy-all --registry --clean
-
-# Authentication management
-python scripts/infrastructure_manager.py test-registry-auth
-python scripts/infrastructure_manager.py setup-registry-auth
-
-# Build and push images for registry deployment
-python scripts/infrastructure_manager.py build-images
-python scripts/infrastructure_manager.py push-images
-python scripts/infrastructure_manager.py build-and-push
-
-# Health check
-python scripts/infrastructure_manager.py health-check-all
-
-# Individual stack deploy
-python scripts/portainer_stack_manager.py deploy minecraft infrastructure/minecraft/docker-compose.yml
-
-# Test everything
-python scripts/test_infrastructure.py
-
-# List all stacks
-python scripts/portainer_stack_manager.py list
-
-# Registry builder (standalone)
-python scripts/registry_builder.py build-and-push personal-website
-python scripts/registry_builder.py deploy personal-website
-python scripts/github_registry_auth.py test
-```
-
-## 🐳 Registry-Based Deployment Architecture
-
-### Overview
-The registry-based approach eliminates SSH dependencies by:
-1. **Building** images locally using Docker build contexts
-2. **Pushing** to GitHub Container Registry (ghcr.io/mcheli/*)
-3. **Deploying** via pure Portainer API using registry images
-
-### Stack Types
-- **Registry Stacks** (build-based): personal-website, flask-api, jupyter
-- **Direct Stacks** (no building): traefik, opensearch, minecraft
-
-### Registry Compose Files
-Build-based stacks have two compose files:
-- `docker-compose.yml` - Original with build contexts (SSH deployment)
-- `docker-compose.registry.yml` - Registry images (Portainer API only)
-
-### Deployment Workflow
-
-#### One-time Setup (on machine with Docker):
-```bash
-# Setup authentication (multiple methods available)
-python scripts/github_registry_auth.py test
-
-# Build all images
-python scripts/infrastructure_manager.py build-images
-
-# Push to registry
-python scripts/infrastructure_manager.py push-images
-
-# OR combine build and push
-python scripts/infrastructure_manager.py build-and-push
-
-# Setup server-side authentication
-python scripts/infrastructure_manager.py setup-registry-auth
-```
-
-#### Ongoing Deployment (from anywhere):
-```bash
-# Deploy using registry images (NO SSH required)
-python scripts/infrastructure_manager.py deploy-all --registry --clean
-```
-
-### Benefits
-✅ **Zero SSH dependencies** for deployment
-✅ **All stacks managed** through Portainer UI
-✅ **Faster deployments** (pre-built images)
-✅ **Better security** (no SSH keys required)
-✅ **Consistent deployment** method across all stacks
-
-Remember: **Registry-based deployment is the preferred method. SSH is for emergency troubleshooting only.**
-
-## 🚨 CRITICAL: Surgical Change Protocol
-
-### **RULE #1: MINIMAL VIABLE CHANGES ONLY**
-
-**For Simple Configuration Additions (like reverse proxy routes):**
-
-```bash
-# ✅ CORRECT: Simple file copy for routing additions
-scp infrastructure/traefik/dynamic/service.yml server:/home/mcheli/traefik/dynamic/
-# Wait 30 seconds for Traefik auto-reload
-sleep 30 && curl -I https://service.domain.com
-# ✅ Done. No deployments, no stack changes.
-```
-
-**❌ NEVER DO for simple config changes:**
-- Remove/recreate working stacks
-- Change container versions
-- Rebuild entire infrastructure
-- Use deployment commands for file additions
-
-### **Change Classification & Protocols:**
-
-**🟢 LEVEL 1: Configuration File Changes (90% of requests)**
-- **Examples**: Add reverse proxy route, update environment variable
-- **Method**: Direct file copy/edit, no deployments
-- **Tools**: `scp`, `ssh`, file editing only
-- **Time**: 1-3 minutes
-
-**🟡 LEVEL 2: Container Updates (8% of requests)**
-- **Examples**: Update single service, restart container
-- **Method**: `portainer_stack_manager.py update`
-- **Never**: Remove then recreate
-- **Time**: 5-10 minutes
-
-**🔴 LEVEL 3: Infrastructure Changes (2% of requests)**
-- **Examples**: Add new service, major version upgrades
-- **Method**: Full deployment commands
-- **Requires**: Explicit user approval + backup plan
-- **Time**: 15+ minutes
-
-### **Mandatory Pre-Change Checks:**
-
-1. **Identify Change Level**: Is this Level 1, 2, or 3?
-2. **Save Current State**: Record working configuration
-3. **Plan Rollback**: Know exact revert commands
-4. **Scope Limitation**: Only touch affected components
-5. **User Confirmation**: For Level 2+, confirm scope with user
-
-### **Emergency Rollback Commands:**
-```bash
-# Immediate rollback options:
-git checkout HEAD~1 infrastructure/                    # Revert config changes
-python scripts/portainer_stack_manager.py update <stack> infrastructure/<stack>/docker-compose.yml  # Restore stack
-python scripts/test_infrastructure.py                  # Verify restoration
-```
-
-### **Example: Adding Home Assistant Reverse Proxy**
-```bash
-# ✅ CORRECT (Level 1 - File Change):
-# 1. Copy dynamic config file
-scp infrastructure/traefik/dynamic/homeassistant.yml server:/home/mcheli/traefik/dynamic/
-# 2. Wait for auto-reload
-sleep 30
-# 3. Test
-curl -I https://ha.markcheli.com
-# 4. ✅ Done - 2 minutes total
-
-# ❌ WRONG: Stack recreation, deployments, version changes - 45+ minutes of chaos
-```
-
-### **"Fix Everything" Protocol:**
-When user says "fix everything broken":
-1. **List specific broken items** (don't assume what needs fixing)
-2. **Fix ONE item at a time** (verify before moving to next)
-3. **Use minimal changes** (prefer file edits over deployments)
-4. **Stop when original goal achieved** (don't expand scope)
-
-### HTTP Status Code Standards
-Claude Code must adhere to strict HTTP status code standards:
-
-**✅ ACCEPTABLE responses:**
-- **200 OK**: Service functioning correctly
-- **301/302 Redirect**: Proper redirects (HTTP→HTTPS, etc.)
-
-**❌ UNACCEPTABLE responses (must be investigated and fixed):**
-- **401 Unauthorized**: Authentication configuration problems
-- **403 Forbidden**: Authorization/permission problems
-- **404 Not Found**: Missing resources, broken routing, or container issues
-- **500+ Server Errors**: Backend service failures
-
-### Mandatory Investigation Process
-When any 4XX/5XX error is encountered:
-
-1. **Do NOT dismiss or ignore the error**
-2. **Do NOT claim it's "expected" or "normal"**
-3. **IMMEDIATELY investigate root cause**
-4. **Check container health and logs**
-5. **Verify routing configuration**
-6. **Fix the underlying issue**
-7. **Re-test to confirm resolution**
-
-### Service-Specific Expectations
-- **Public services** (*.markcheli.com): Must return HTTP 200 or proper redirects
-- **LAN services** (*.ops.markcheli.com): Must return HTTP 200 or proper redirects
-- **Authentication required services**: Should redirect to login, NOT return 404
-- **Protected dashboards**: Should prompt for auth, NOT return 401 errors
-
-**Every service must be fully functional. No exceptions.**
+**Last Updated**: January 2, 2026
+**Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
+**Status**: Production-ready, 8/10 services operational
