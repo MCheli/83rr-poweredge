@@ -49,11 +49,12 @@ Communication occurs via:
 
 ## Deployment
 
-Deploy the Flask API stack:
+Deploy the Flask API service:
 
 ```bash
-# Deploy production and development Flask API
-python scripts/deploy_via_ssh.py flask-api infrastructure/flask-api/docker-compose.yml
+# Deploy Flask API services
+cd ~/83rr-poweredge
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d flask-api
 ```
 
 ## Health Checks
@@ -62,19 +63,19 @@ Both services include health checks that verify the `/health` endpoint responds 
 
 ## SSL Certificates
 
-- **Production API**: Uses `*.markcheli.com` wildcard certificate
-- **Development API**: Uses `*.ops.markcheli.com` wildcard certificate
+- **Production API**: Cloudflare Origin Certificate (`*.markcheli.com`)
+- **Development API**: Let's Encrypt wildcard (`*.ops.markcheli.com`)
 
 ## Network Configuration
 
-- Connected to `traefik_default` network for reverse proxy routing
+- Connected to `infrastructure` network for reverse proxy routing
 - No internal network needed since this is a standalone API service
-- Personal website services connect to Flask API via external HTTP requests
+- Personal website services connect to Flask API via HTTP requests through NGINX
 
 ## Dependencies
 
-- Traefik reverse proxy for routing and SSL termination
-- Manual wildcard SSL certificates
+- NGINX reverse proxy for routing and SSL termination
+- Cloudflare Origin Certificates (public) and Let's Encrypt (LAN)
 - OpenWeather API for weather data (optional)
 
 ## Monitoring

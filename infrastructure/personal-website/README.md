@@ -13,7 +13,7 @@ A modern, interactive terminal-style personal website built with Vue3/NuxtJS. Th
 
 ```
 ┌─────────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Vue3/NuxtJS      │    │   External       │    │   Traefik       │
+│   Vue3/NuxtJS      │    │   External       │    │   NGINX         │
 │   Terminal UI       │◄──►│   Flask API      │◄──►│   Reverse Proxy │
 │   Port: 3000        │    │   Stack          │    │   Ports: 80/443 │
 └─────────────────────┘    └──────────────────┘    └─────────────────┘
@@ -21,12 +21,13 @@ A modern, interactive terminal-style personal website built with Vue3/NuxtJS. Th
          └───────────────────────────┼───────────────────────┘
                                      │
                          ┌──────────────────┐
-                         │   Shared Docker  │
+                         │   Docker         │
+                         │   infrastructure │
                          │   Network        │
                          └──────────────────┘
 ```
 
-**Note**: The Flask API runs as a separate Docker stack (`flask-api`) with its own containers, but communicates with the website via the shared `traefik_default` network.
+**Note**: The Flask API runs as a separate Docker service with its own container, but communicates with the website via the shared `infrastructure` network.
 
 ## 🎯 Features
 
@@ -47,10 +48,10 @@ A modern, interactive terminal-style personal website built with Vue3/NuxtJS. Th
 - **Ping Service**: Available via `/api/ping` proxy
 
 ### Infrastructure Features
-- **SSL Certificates**: Automatic Let's Encrypt certificates
+- **SSL Certificates**: Cloudflare Origin Certificates (public) and Let's Encrypt (LAN)
 - **Health Monitoring**: Container health checks and recovery
-- **Load Balancing**: Traefik-managed routing and SSL termination
-- **Development Environment**: Separate dev stack for testing
+- **Reverse Proxy**: NGINX with SSL termination and HTTP/2 support
+- **Development Environment**: Separate dev environment for testing
 - **API Proxy**: Same-origin requests via `/api` path
 
 ## 🛠️ Development Setup

@@ -1,8 +1,10 @@
-# Manual Wildcard SSL Certificate Setup
+# Let's Encrypt SSL Certificates for Local Services
 
 ## Overview
 
-This document describes the implementation of wildcard SSL certificates using **manual certificate acquisition** to resolve Let's Encrypt rate limiting issues. This approach doesn't require DNS provider API access and works with any domain registrar.
+This document describes the implementation of Let's Encrypt wildcard SSL certificates for **LAN-only services** (*.ops.markcheli.com) using Cloudflare DNS-01 challenge with automated renewal.
+
+**Note**: Public services (*.markcheli.com) use Cloudflare Origin Certificates with 15-year validity and do not require Let's Encrypt.
 
 ## Problem Statement
 

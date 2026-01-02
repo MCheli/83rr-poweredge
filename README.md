@@ -1,18 +1,21 @@
 # 83RR PowerEdge Homelab Infrastructure
 
-A comprehensive Docker-based homelab infrastructure management system with automated deployment tools and monitoring.
+A comprehensive Docker-based homelab infrastructure running on Ubuntu Server with NGINX reverse proxy, Cloudflare SSL, and comprehensive monitoring.
 
 ## Project Structure
 
 ```
-├── infrastructure/           # Local copies of stack configurations
-│   ├── jupyter/             # JupyterHub data science environment
-│   ├── traefik/             # Reverse proxy with SSL termination
+├── infrastructure/           # Service configurations
+│   ├── nginx/               # NGINX reverse proxy
+│   ├── jupyter/             # JupyterLab data science environment
 │   ├── opensearch/          # OpenSearch logging stack
-│   ├── personal-website/    # Mark Cheli's personal website (Vue3/NuxtJS + Flask API)
-│   ├── flask-api/           # Separate Flask API backend service
-│   └── minecraft/           # Minecraft Java Edition server
+│   ├── personal-website/    # Nuxt.js personal website
+│   ├── flask-api/           # Flask API backend service
+│   ├── minecraft/           # Minecraft server
+│   └── monitoring/          # Prometheus/Grafana monitoring
 ├── scripts/                 # Management and utility scripts
+├── docker-compose.yml       # Base service definitions
+├── docker-compose.prod.yml  # Production overrides
 ├── .env                     # Environment configuration (secrets)
 ├── requirements.txt         # Python dependencies
 └── venv/                    # Python virtual environment
@@ -30,113 +33,306 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Available Management Scripts
-
+### 2. Deploy Infrastructure
 ```bash
-# CRITICAL: Comprehensive infrastructure health test (run before commits)
-python scripts/test_infrastructure.py
+# Navigate to project directory
+cd ~/83rr-poweredge
 
-# Test connectivity to server and Portainer API
-python scripts/test_connectivity.py
+# Deploy all services
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# List all running containers and their status
-python scripts/get_containers.py
+# Check service status
+docker ps
 
-# List all Portainer stacks
-python scripts/list_stacks.py
+# View logs
+docker compose logs -f
+```
 
-# Pull all stack configurations from Portainer
-python scripts/pull_stack_configs.py
+### 3. Verify Deployment
+```bash
+# Test NGINX health
+curl http://localhost/health
 
-# Deploy individual stack (FIXED: Single SSH session)
-python scripts/deploy_via_ssh.py <stack_name> <compose_file_path>
-
-# Deploy all services (Uses single SSH session per stack)
-python scripts/deploy_all_services.py
+# Test service endpoints
+curl -I https://www.markcheli.com
+curl https://flask.markcheli.com/health
 ```
 
 ## Current Infrastructure
 
-### Active Services
-- **Traefik** - Reverse proxy with SSL termination (ports 80, 443, 25565, 8080, 8443)
-- **Personal Website** - Mark Cheli's interactive terminal-style website with Flask API backend
-  - **Main Site**: https://www.markcheli.com - Vue3/NuxtJS terminal interface
-  - **Flask API**: https://flask.markcheli.com - Python API with weather endpoint
-  - **Dev Site**: https://www-dev.ops.markcheli.com - Development environment (LAN-only)
-- **JupyterHub** - https://jupyter.markcheli.com - Multi-user data science environment with collaboration features
-- **Minecraft Server** - https://minecraft.markcheli.com - Java Edition server (Game: minecraft.markcheli.com:25565)
-- **OpenSearch Stack** - Log aggregation, search and visualization (OpenSearch + Dashboards + Logstash + Filebeat)
-- **Portainer** - Container management interface
-- **Home Assistant** - https://home.markcheli.com - Smart home automation
+### Active Services (10/10 - 100% Operational)
+
+**Public Services:**
+- **Personal Website** - https://www.markcheli.com, https://markcheli.com
+  - Nuxt.js terminal-style interactive website
+  - Communicates with Flask API backend
+- **Flask API** - https://flask.markcheli.com
+  - Python API with weather endpoint and profile data
+  - Health check: `/health`
+- **JupyterLab** - https://jupyter.markcheli.com
+  - Standalone data science environment
+  - Real-time collaboration, SQL integration, AI assistance
+- **Minecraft Server** - minecraft.markcheli.com:25565
+  - Java Edition server (port 25565)
+
+**LAN-Only Services** (*.ops.markcheli.com):
+- **Grafana** - https://grafana-local.ops.markcheli.com
+  - Monitoring dashboards (login: admin/admin123)
+- **Prometheus** - https://prometheus-local.ops.markcheli.com
+  - Metrics database with 30-day retention
+- **cAdvisor** - https://cadvisor-local.ops.markcheli.com
+  - Container resource metrics
+- **OpenSearch Dashboards** - https://logs-local.ops.markcheli.com
+  - Log visualization and search
+- **Flask API Dev** - https://flask-dev.ops.markcheli.com
+  - Development API environment
+
+**Infrastructure:**
+- **NGINX** - Reverse proxy with SSL termination
+  - Ports: 80 (HTTP), 443 (HTTPS), 25565 (Minecraft)
+- **OpenSearch** - Log aggregation and search engine
 
 ### Server Details
 - **Host**: 83rr-poweredge
+- **OS**: Ubuntu Server 24.04.3 LTS
 - **User**: mcheli
-- **Portainer**: https://portainer-local.ops.markcheli.com
-- **Management**: 4 active stacks, 13 healthy containers
+- **Local IP**: 192.168.1.179
+- **Public IP**: 173.48.98.211
+- **Management**: Docker Compose (native)
+
+## Architecture
+
+### Reverse Proxy
+- **NGINX** with Cloudflare Origin Certificates and Let's Encrypt
+- Configuration: `infrastructure/nginx/conf.d/production.conf`
+- SSL Certificates:
+  - Public services: Cloudflare Origin Certificates (15-year validity)
+  - LAN services: Let's Encrypt wildcard (90-day, auto-renewal)
+
+### SSL/TLS Configuration
+- **Public Services** (*.markcheli.com):
+  - Cloudflare Origin Certificates (valid until 2040)
+  - Cloudflare SSL Mode: Full (Strict)
+  - Automatic HTTPS redirects
+- **LAN Services** (*.ops.markcheli.com):
+  - Let's Encrypt wildcard certificates
+  - Auto-renewal via cron (daily at 3:00 AM)
+  - Cloudflare DNS-01 challenge
+
+### Deployment Method
+- **Native Docker Compose** - All services managed via Docker Compose CLI
+- **No SSH Required** - Claude runs directly on server
+- **Environment-Aware** - Base config + production overrides
+- **Local Builds** - Services build from Dockerfiles on server
+
+## Service Management
+
+### Common Commands
+
+```bash
+# Start all services
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Stop all services
+docker compose down
+
+# Restart a specific service
+docker compose restart <service_name>
+
+# Rebuild and restart a service
+docker compose up -d --build <service_name>
+
+# View logs
+docker compose logs -f <service_name>
+
+# Check service status
+docker ps
+docker compose ps
+```
+
+### NGINX Management
+
+```bash
+# Test configuration
+docker compose exec nginx nginx -t
+
+# Reload configuration (no downtime)
+docker compose exec nginx nginx -s reload
+
+# View NGINX logs
+docker compose logs nginx
+```
+
+### SSL Certificate Renewal
+
+**Cloudflare Certificates** (public services):
+- No renewal required until 2040
+
+**Let's Encrypt Certificates** (LAN services):
+- Auto-renewal: Daily cron job at 3:00 AM
+- Manual renewal: `bash scripts/renew-letsencrypt-certs.sh`
+- Check renewal logs: `cat ~/letsencrypt/logs/renewal.log`
 
 ## Configuration Management
 
-All infrastructure configurations are pulled from the live Portainer instance and stored locally in the `infrastructure/` directory. Each stack includes:
+All service configurations are managed in the repository:
 
-- `docker-compose.yml` - Current stack configuration
-- `stack-metadata.json` - Stack details and timestamps
-- Additional configuration files and documentation
+- `docker-compose.yml` - Base service definitions
+- `docker-compose.prod.yml` - Production overrides
+- `infrastructure/*/` - Service-specific configurations
+- `.env` - Environment variables and secrets
+
+### Adding a New Service
+
+1. Edit `docker-compose.yml` to add service definition
+2. Create service configuration in `infrastructure/<service>/`
+3. Add NGINX server block to `infrastructure/nginx/conf.d/production.conf`
+4. Deploy: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d <service>`
+5. Test endpoint and verify health
+6. Commit changes to git
 
 ## Environment Variables
 
 Required variables in `.env`:
-- `PORTAINER_URL` - Portainer instance URL
-- `PORTAINER_API_KEY` - API authentication key
-- `SSH_HOST` - Server hostname
-- `SSH_USER` - SSH username
-- `PORTAINER_ENDPOINT_ID` - Endpoint identifier
+```bash
+# Cloudflare (for Let's Encrypt DNS-01 challenge)
+CLOUDFLARE_API_TOKEN=your_api_token_here
 
-## Development
+# Infrastructure
+INFRASTRUCTURE_ENV=production
 
-See `CLAUDE.md` for detailed development instructions and script management policies.
+# Optional: API keys for services
+OPENWEATHER_API_KEY=your_openweather_key
+```
 
-### SSH Connection Management (FIXED)
+## Monitoring & Health Checks
 
-**Critical Issue Resolved**: The deployment scripts were creating up to 8 simultaneous SSH connections, exceeding the server's MaxSessions=2 limit. This has been completely fixed:
+### Service Health
+- **Grafana Dashboard**: https://grafana-local.ops.markcheli.com
+  - Pre-configured Prometheus datasource
+  - Container metrics and system monitoring
+- **Prometheus**: https://prometheus-local.ops.markcheli.com
+  - 30-day metric retention
+  - Comprehensive service monitoring
+- **cAdvisor**: https://cadvisor-local.ops.markcheli.com
+  - Real-time container resource metrics
 
-- ✅ **Single SSH Session**: All deployments now use exactly 1 SSH connection
-- ✅ **Tar-based Transfer**: Files packaged locally and transferred via stdin
-- ✅ **Atomic Operations**: Transfer, extraction, and deployment in one session
-- ✅ **No More Connection Refused**: Deployment reliability dramatically improved
-
-See `docs/SSH_CONNECTION_FIX.md` for complete technical details.
-
-## SSL Certificate Management
-
-This project uses **manual wildcard SSL certificates** from Let's Encrypt to avoid rate limiting issues:
-
-- **Wildcard Coverage**: `*.markcheli.com` and `*.ops.markcheli.com`
-- **Manual DNS Verification**: Certificates obtained via `certbot` with manual DNS-01 challenges
-- **Traefik Integration**: Certificates loaded via file provider for automatic SSL termination
-- **Renewal**: Manual process every 90 days (see `scripts/setup_manual_wildcard_ssl.sh`)
-
-### SSH Session Management
-
-**CRITICAL**: The server has a limit of **2 concurrent SSH sessions**. All deployment scripts have been **completely rewritten** to:
-- **Single SSH Session**: `deploy_via_ssh.py` now uses only 1 SSH connection for entire deployment
-- **Tar-based Transfer**: Files are packaged locally and transferred via stdin to avoid multiple SCP connections
-- **Atomic Operations**: File transfer, extraction, and deployment happen in one SSH session
-- **Connection Limits Respected**: No more "Connection refused" errors due to MaxSessions limit
-- **Improved Reliability**: Proper connection timeouts and keep-alive settings
-
-### Troubleshooting
-
-**Traefik Routing Issues**: If services are healthy but not accessible via HTTPS:
-- Ensure `traefik.docker.network=traefik_default` label is present on all services
-- Verify middleware references use `@docker` suffix (e.g., `secure-headers@docker`)
-- Check that services are connected to the `traefik_default` network
-- Use `scripts/test_service_availability.py` to verify all endpoints
+### Logging
+- **OpenSearch**: Centralized log storage
+- **OpenSearch Dashboards**: https://logs-local.ops.markcheli.com
+  - Log visualization and search
+  - Daily indices: `logs-homelab-YYYY.MM.dd`
 
 ## Security
 
-- All secrets managed via environment variables
-- Virtual environment isolation for Python dependencies
-- SSH key-based authentication for server access
-- API key authentication for Portainer access
-- Manual wildcard SSL certificates for secure connections
+- **SSL Everywhere**: All services use HTTPS
+- **LAN Restrictions**: Admin interfaces restricted to 192.168.1.0/24
+- **Cloudflare Protection**: Public services proxied through Cloudflare
+- **Container Security**: Non-root users, isolated networks
+- **Automatic Updates**: Security patches via Docker image updates
+
+## Development
+
+See `CLAUDE.md` for detailed development instructions and infrastructure management policies.
+
+### Python Virtual Environment
+
+Always use the virtual environment for Python scripts:
+```bash
+source venv/bin/activate
+python scripts/<script_name>.py
+```
+
+### Git Workflow
+
+```bash
+# Make changes to configuration
+# Test deployment
+docker compose config
+docker compose up -d
+
+# Commit changes
+git add .
+git commit -m "feat: description of change"
+git push
+```
+
+## Troubleshooting
+
+### Service Won't Start
+```bash
+# Check logs
+docker compose logs <service_name>
+
+# Check Docker status
+systemctl status docker
+
+# Verify configuration
+docker compose config
+
+# Check resources
+df -h
+free -h
+```
+
+### NGINX Routing Issues
+```bash
+# Test configuration
+docker compose exec nginx nginx -t
+
+# Check routing logs
+docker compose logs nginx | grep <service>
+
+# Reload configuration
+docker compose exec nginx nginx -s reload
+```
+
+### SSL Certificate Issues
+
+**Public Services:**
+```bash
+# Verify certificates in place
+ls -la infrastructure/nginx/certs/wildcard-markcheli.*
+
+# Check Cloudflare dashboard SSL mode (should be "Full (Strict)")
+```
+
+**LAN Services:**
+```bash
+# Check renewal logs
+cat ~/letsencrypt/logs/renewal.log
+
+# Test manual renewal
+bash scripts/renew-letsencrypt-certs.sh
+
+# Verify certificates
+ls -la infrastructure/nginx/certs/letsencrypt-ops-markcheli.*
+```
+
+### Network Issues
+```bash
+# Check Docker networks
+docker network ls
+docker network inspect infrastructure
+
+# Test connectivity between containers
+docker exec <container1> ping <container2>
+```
+
+## Documentation
+
+- **CLAUDE.md** - Comprehensive infrastructure management guide for Claude Code
+- **DEPLOYMENT_STATUS.md** - Current deployment status and service health
+- **CLOUDFLARE_SSL_SETUP_GUIDE.md** - SSL certificate setup documentation
+- **DOCUMENTATION_REVIEW_REPORT.md** - Documentation audit and update tracking
+
+## Support & Maintenance
+
+- **Health Checks**: All services include Docker health checks
+- **Auto-Restart**: Services restart automatically on failure
+- **Log Rotation**: Configured for all services
+- **Certificate Renewal**: Automatic for Let's Encrypt certificates
+
+---
+
+Built with ❤️ by Mark Cheli | Powered by Docker, NGINX, and Cloudflare

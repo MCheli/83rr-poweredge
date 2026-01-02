@@ -1,139 +1,149 @@
 # Future Development & Maintenance TODOs
 
-*Generated from comprehensive project audit on 2025-09-13*
+*Last Updated: January 2, 2026*
 
-This document provides a prioritized todo list for future Claude sessions to improve the homelab infrastructure management system.
+This document provides a prioritized todo list for future development and improvements to the homelab infrastructure.
 
 ---
 
-## 🚨 CRITICAL FIXES (High Priority)
+## 🚨 CRITICAL MAINTENANCE (High Priority)
 
-### SSL Certificate Renewal (DEADLINE: 90 days from setup)
-- **Action**: Manual wildcard SSL certificate renewal required every 90 days
-- **Process**: Follow instructions in `docs/MANUAL_WILDCARD_SSL_SETUP.md`
-- **Time Required**: 1-2 hours including DNS propagation
-- **Calendar Reminder**: Set reminder 30 days before expiration
-- **Certificates**: `*.markcheli.com` and `*.ops.markcheli.com`
+### Let's Encrypt Certificate Monitoring
+- **Action**: Monitor Let's Encrypt certificate auto-renewal for `*.ops.markcheli.com`
+- **Schedule**: Certificates expire every 90 days
+- **Current Setup**: Auto-renewal via cron (daily at 3:00 AM)
+- **Verification**: `cat ~/letsencrypt/logs/renewal.log`
+- **Manual Renewal**: `bash scripts/renew-letsencrypt-certs.sh`
+- **Calendar Reminder**: Set reminder 30 days before expiration for verification
 
-### Infrastructure Monitoring Enhancement
-- **Action**: Deploy Prometheus for comprehensive metrics collection
-- **Goal**: Replace basic health checks with proper monitoring dashboard
-- **Components**: Prometheus + AlertManager + monitoring dashboards
+### Cloudflare Origin Certificates
+- **Status**: ✅ Valid until 2040 (no action required for 14+ years)
+- **Location**: `infrastructure/nginx/certs/wildcard-markcheli.{crt,key}`
 
 ---
 
 ## 🔧 CODE QUALITY & BEST PRACTICES (Medium-High Priority)
 
-### Error Handling & Logging Improvements
-- **File**: `scripts/deploy_stack.py`, `scripts/deploy_via_ssh.py`
-- **Issue**: Basic error handling, limited debug information
-- **Improvements**:
-  - Add detailed error logging with timestamps
-  - Implement exponential backoff for API retries
-  - Add pre-flight checks (connectivity, auth, disk space)
-  - Create structured logging with log levels
-
-### Python Code Standards
-- **Files**: All Python scripts in `scripts/`
-- **Improvements**:
-  - Add type hints to function signatures
-  - Create proper docstrings (Google/NumPy style)
-  - Add input validation and sanitization
-  - Extract constants to configuration file
-  - Add unit tests for critical functions
+### Testing Framework
+- **Current**: No automated tests for infrastructure
+- **Goal**: Automated testing for NGINX configuration and service health
+- **Actions**:
+  - Create health check test suite for all services
+  - Add NGINX configuration validation tests
+  - Implement integration tests for service communication
+  - Add SSL certificate expiration monitoring
 
 ### Configuration Management
-- **Issue**: Hardcoded values scattered across files
-- **Action**: Create centralized config system
+- **Issue**: Some configuration values scattered across files
+- **Action**: Centralize configuration
 - **Files to create**:
   - `config/services.yaml` - Service definitions and health checks
-  - `config/deployment.yaml` - Deployment settings and timeouts
-  - `scripts/config.py` - Configuration loader and validator
+  - `config/monitoring.yaml` - Monitoring thresholds and alerts
+- **Benefits**: Easier updates, single source of truth
+
+### Documentation Updates
+- **Action**: Keep documentation synchronized with infrastructure changes
+- **Files to maintain**:
+  - CLAUDE.md - Update when deployment methods change
+  - DEPLOYMENT_STATUS.md - Update when services added/removed
+  - README.md - Keep current with architecture changes
 
 ---
 
 ## 🏗️ ARCHITECTURE & INFRASTRUCTURE (Medium Priority)
 
-### Service Health Monitoring
-- **Current**: Manual health checks in deployment scripts
-- **Goal**: Automated monitoring system
+### Service Enhancements
+
+**JupyterHub Multi-User Mode** (Optional):
+- **Current**: Standalone JupyterLab (single user)
+- **Future**: JupyterHub for multi-user support
+- **Impact**: Non-critical, standalone mode is fully functional
+- **Considerations**: Would require authentication setup, user management
+
+**Personal Website Enhancements**:
 - **Actions**:
-  - Create `scripts/health_monitor.py` for continuous health checks
-  - Add Prometheus metrics export for monitoring
-  - Implement automated alerts for service failures
-  - Create health check endpoints dashboard
+  - Add more terminal commands and Easter eggs
+  - Integrate with additional services
+  - Add analytics/visitor tracking (privacy-respecting)
+
+**Minecraft Server Optimization**:
+- **Actions**:
+  - Configure resource limits based on player activity
+  - Add backup automation for world data
+  - Implement automated restart schedule
+  - Add performance monitoring
 
 ### Backup System Enhancement
-- **Current**: Basic compose file backups
-- **Goal**: Comprehensive backup strategy
+- **Current**: Manual Docker volume backups
+- **Goal**: Automated backup strategy
 - **Actions**:
-  - Add database backup automation (PostgreSQL, volumes)
+  - Automate database and volume backups
   - Implement off-site backup sync (rclone to cloud storage)
   - Create backup verification and restoration testing
   - Add retention policies and cleanup automation
+  - Schedule: Daily backups with 30-day retention
 
-### CI/CD Pipeline
-- **Current**: Manual deployment via scripts
-- **Goal**: GitHub Actions workflow
+### Alerting System
+- **Current**: Grafana dashboards for monitoring
+- **Goal**: Proactive alerting for infrastructure issues
 - **Actions**:
-  - Create `.github/workflows/validate.yml` for syntax checking
-  - Add `.github/workflows/deploy.yml` for automated deployment
-  - Implement staging/production environment separation
-  - Add infrastructure-as-code validation
+  - Configure Prometheus Alertmanager
+  - Add webhook integrations (email, Slack, Discord)
+  - Create alert escalation procedures
+  - Document on-call procedures and runbooks
 
 ---
 
-## 📚 DOCUMENTATION & CLAUDE CLARITY (Medium Priority)
+## 📚 DOCUMENTATION (Medium Priority)
 
-### Enhanced Claude Context
-- **Goal**: Make project more Claude-friendly
+### Service-Specific Documentation
+- **Goal**: Comprehensive guides for each service
 - **Actions**:
-  - Create service dependency graph documentation
-  - Add troubleshooting flowcharts and decision trees
-  - Document all environment variables and their purposes
-  - Create quick reference cards for common operations
+  - Document common operations for each service
+  - Create troubleshooting guides
+  - Add configuration examples
+  - Document backup/restore procedures
 
-### API Documentation
+### Architecture Documentation
 - **Files to create**:
-  - `docs/API_REFERENCE.md` - Portainer API usage patterns
-  - `docs/TROUBLESHOOTING.md` - Step-by-step issue resolution
   - `docs/ARCHITECTURE.md` - System design and data flows
   - `docs/RUNBOOKS.md` - Operational procedures
+  - `docs/TROUBLESHOOTING.md` - Step-by-step issue resolution
 
 ### Code Examples & Templates
 - **Goal**: Standardize new service addition
 - **Actions**:
-  - Create `templates/service-template/` directory with sample files
-  - Add `scripts/new_service.py` scaffold generator
-  - Create example configurations for common service types
-  - Document labeling conventions and networking requirements
+  - Create `templates/service-template/` directory
+  - Add example NGINX server blocks
+  - Document labeling conventions
+  - Create docker-compose.yml template
 
 ---
 
 ## 🔐 SECURITY & COMPLIANCE (Medium-Low Priority)
 
-### Secret Management
-- **Current**: Secrets in .env file, API keys visible
-- **Goal**: Proper secret management
-- **Actions**:
-  - Implement Docker Secrets or external secret management
-  - Add secret rotation procedures and documentation
-  - Create audit logging for secret access
-  - Remove hardcoded credentials from scripts
-
 ### Security Hardening
 - **Actions**:
-  - Add security scanning for container images
-  - Implement network segmentation with custom Docker networks
+  - Implement regular security scanning for container images
   - Add fail2ban or similar intrusion detection
-  - Create security audit checklist and procedures
+  - Create security audit checklist
+  - Review and update IP allowlists regularly
+  - Implement secret rotation procedures
+
+### Authentication Improvements
+- **Current**: Basic authentication for some services
+- **Future**: Centralized authentication
+- **Options**:
+  - OAuth2 proxy for all services
+  - Authelia for unified authentication
+  - LDAP integration for user management
 
 ### Compliance & Governance
 - **Actions**:
-  - Add license headers to all Python files
   - Create CHANGELOG.md with semantic versioning
   - Implement pre-commit hooks for code quality
   - Add security.md with vulnerability reporting process
+  - Document data retention policies
 
 ---
 
@@ -141,17 +151,24 @@ This document provides a prioritized todo list for future Claude sessions to imp
 
 ### Container Optimization
 - **Actions**:
-  - Review container resource limits and requests
-  - Optimize Docker image sizes (multi-stage builds)
-  - Add container performance monitoring
-  - Implement log rotation and cleanup automation
+  - Review and optimize Docker image sizes
+  - Implement multi-stage builds where applicable
+  - Add container resource limits and requests
+  - Optimize NGINX caching strategies
 
 ### Network Performance
 - **Actions**:
-  - Optimize Traefik configuration for performance
-  - Add HTTP/2 and HTTP/3 support where possible
-  - Implement caching strategies for static content
-  - Add CDN integration for public services
+  - Implement HTTP/3 support in NGINX
+  - Add caching strategies for static content
+  - Optimize NGINX worker processes and connections
+  - Monitor and tune container network performance
+
+### Monitoring Optimization
+- **Actions**:
+  - Optimize Prometheus metric retention
+  - Add custom metrics for application performance
+  - Create detailed performance dashboards in Grafana
+  - Implement distributed tracing (optional)
 
 ---
 
@@ -159,91 +176,140 @@ This document provides a prioritized todo list for future Claude sessions to imp
 
 ### Automated Testing
 - **Files to create**:
-  - `tests/test_deployment.py` - Deployment script testing
+  - `tests/test_deployment.py` - Docker Compose validation
   - `tests/test_health_checks.py` - Service health validation
   - `tests/test_integration.py` - End-to-end service testing
-  - `tests/fixtures/` - Test data and mock configurations
+  - `tests/test_ssl.py` - SSL certificate validation
 
 ### Validation Framework
 - **Actions**:
-  - Create docker-compose validation scripts
+  - Create NGINX configuration validation scripts
   - Add network connectivity testing
-  - Implement SSL certificate validation automation
-  - Create load testing procedures for services
+  - Implement SSL certificate expiration monitoring
+  - Create load testing procedures for critical services
 
 ---
 
 ## 📊 MONITORING & OBSERVABILITY (Enhancement)
 
-### Metrics & Dashboards
-- **Goal**: Comprehensive system observability
-- **Actions**:
-  - Deploy Prometheus for metrics collection
-  - Create monitoring dashboards for system health
-  - Add application-level metrics to services
-  - Enhance OpenSearch integration for log analysis
+### Advanced Monitoring
+- **Current**: Prometheus + Grafana + cAdvisor
+- **Future Enhancements**:
+  - Add application-level metrics to custom services
+  - Implement distributed tracing (Jaeger/Zipkin)
+  - Enhanced OpenSearch log analysis with ML
+  - Create custom alerting rules
 
-### Alerting System
+### Dashboard Improvements
 - **Actions**:
-  - Configure Alertmanager for Prometheus alerts
-  - Add webhook integrations (Slack, email, PagerDuty)
-  - Create alert escalation procedures
-  - Document on-call procedures and runbooks
+  - Create service-specific Grafana dashboards
+  - Add custom panels for business metrics
+  - Implement log correlation with metrics
+  - Add capacity planning dashboards
 
 ---
 
 ## 🔄 MAINTENANCE & OPERATIONS
 
 ### Regular Maintenance Tasks
-- **Create automation for**:
-  - Docker image updates and security patches
-  - Certificate renewal monitoring and alerts
-  - Log cleanup and archival procedures
-  - Performance baseline monitoring and reporting
+- **Weekly**:
+  - Review service logs for errors
+  - Check disk space usage
+  - Verify backup completion
+  - Review Grafana dashboards for anomalies
+
+- **Monthly**:
+  - Update Docker images for security patches
+  - Review and rotate secrets/credentials
+  - Verify SSL certificate status
+  - Review resource usage trends
+
+- **Quarterly**:
+  - Full infrastructure health audit
+  - Review and update documentation
+  - Performance baseline review
+  - Disaster recovery drill
 
 ### Disaster Recovery
 - **Actions**:
-  - Create full system restoration procedures
-  - Document hardware replacement procedures
-  - Add network configuration backup and restore
-  - Create emergency contact and escalation procedures
+  - Document full system restoration procedures
+  - Create infrastructure-as-code for rapid rebuild
+  - Test backup restoration procedures
+  - Document emergency contact procedures
+  - Create network configuration backup
 
 ---
 
 ## 📅 IMPLEMENTATION PRIORITY
 
-### Phase 1 (Immediate - Next Session)
-1. Deploy monitoring infrastructure (Prometheus)
-2. Enhance OpenSearch dashboards and alerting
-3. Improve error handling in deployment scripts
+### Phase 1 (Next 1-2 Months)
+1. ✅ Complete documentation updates (in progress)
+2. Implement automated backup system
+3. Add health check test suite
+4. Configure Prometheus Alertmanager
 
-### Phase 2 (1-2 weeks)
-1. Create centralized configuration system
-2. Add comprehensive health monitoring
-3. Enhance backup automation
+### Phase 2 (Next 3-6 Months)
+1. Create architecture and runbook documentation
+2. Implement security hardening measures
+3. Add centralized authentication
+4. Optimize container resource usage
 
-### Phase 3 (1 month)
-1. Implement CI/CD pipeline
-2. Add security hardening measures
-3. Create comprehensive documentation
+### Phase 3 (Next 6-12 Months)
+1. Advanced monitoring and tracing
+2. Performance optimization
+3. Disaster recovery testing
+4. JupyterHub multi-user mode (if needed)
 
 ### Phase 4 (Ongoing)
-1. Performance optimization
-2. Advanced monitoring and alerting
-3. Disaster recovery testing
+1. Regular security updates
+2. Documentation maintenance
+3. Performance monitoring
+4. Capacity planning
 
 ---
 
-## 🎯 QUICK WINS FOR NEXT CLAUDE SESSION
+## 🎯 QUICK WINS FOR NEXT SESSION
 
 These items can be completed quickly and provide immediate value:
 
-1. **Deploy monitoring stack** - Add Prometheus for infrastructure monitoring
-2. **Enhance OpenSearch** - Add alerting and better dashboard configuration
-3. **Add error logging** - Enhance deployment scripts with better error messages
-4. **Create service templates** - Standardize new service addition process
-5. **Document health check commands** - Quick reference for service troubleshooting
+1. **Archive completed migration documentation** (1 hour)
+   - Move INFRASTRUCTURE_MODERNIZATION_PLAN.md, NGINX_MIGRATION_CHECKLIST.md to docs/archive/
+
+2. **Create backup automation script** (2-3 hours)
+   - Automated daily backups for critical volumes
+   - Retention policy implementation
+   - Backup verification
+
+3. **Add SSL expiration monitoring** (1 hour)
+   - Script to check Let's Encrypt certificate expiration
+   - Email alerts for certificates expiring soon
+
+4. **Create service health dashboard** (2 hours)
+   - Grafana dashboard showing all service health
+   - HTTP endpoint monitoring
+   - Container status visualization
+
+5. **Document common operations** (2 hours)
+   - Quick reference guide for service management
+   - Common troubleshooting procedures
+   - Emergency procedures documentation
 
 ---
 
-*This document should be updated after each major development session to reflect completed items and newly discovered issues.*
+## ✅ COMPLETED ITEMS
+
+### Phase 6 - Infrastructure Modernization (Completed January 2, 2026)
+- ✅ Migrated from Traefik to NGINX
+- ✅ Implemented Cloudflare Origin Certificates (15-year validity)
+- ✅ Eliminated SSH deployment dependencies
+- ✅ Native Docker Compose architecture
+- ✅ Deployed monitoring stack (Prometheus/Grafana/cAdvisor)
+- ✅ Implemented Let's Encrypt auto-renewal for LAN services
+- ✅ Updated CLAUDE.md to reflect current architecture
+- ✅ All 10 services operational (100%)
+- ✅ Personal Website deployment successful
+- ✅ Cloudflare SSL mode set to "Full (Strict)"
+
+---
+
+*This document should be updated regularly to reflect completed items and newly discovered improvements.*
