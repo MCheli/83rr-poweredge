@@ -1,0 +1,82 @@
+# Production Deployment Configuration
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# All custom services pull from GitHub Container Registry
+
+services:
+  # ═════════════════════════════════════════════════════════════════════════════
+  # NGINX - Production Configuration
+  # ═════════════════════════════════════════════════════════════════════════════
+  nginx:
+    image: ghcr.io/mcheli/nginx:latest
+    ports:
+      - "80:80"       # HTTP (redirects to HTTPS)
+      - "443:443"     # HTTPS with real certificates
+      - "25565:25565" # Minecraft port
+    volumes:
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infrastructure/nginx/certs:/etc/nginx/certs:ro  # Cloudflare Origin Certificates
+      - ./infrastructure/nginx/logs:/var/log/nginx
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Personal Website - Production Image
+  # ═════════════════════════════════════════════════════════════════════════════
+  personal-website:
+    image: ghcr.io/mcheli/personal-website:latest
+    environment:
+      - NODE_ENV=production
+      - NUXT_PUBLIC_API_BASE=/api
+      - API_URL=http://flask-api:5000
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Flask API - Production Image
+  # ═════════════════════════════════════════════════════════════════════════════
+  flask-api:
+    image: ghcr.io/mcheli/flask-api:latest
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # JupyterHub - Production Image
+  # ═════════════════════════════════════════════════════════════════════════════
+  jupyter:
+    image: ghcr.io/mcheli/jupyter:latest
+    environment:
+      - JUPYTERHUB_CRYPT_KEY=${JUPYTERHUB_CRYPT_KEY}
+    volumes:
+      - jupyter_data:/srv/jupyterhub  # Production data volume
+      - ./infrastructure/jupyter/jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Production Services (No Direct Port Exposure)
+  # Access via NGINX reverse proxy only
+  # ═════════════════════════════════════════════════════════════════════════════
+  opensearch:
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data  # Production data volume
+
+  opensearch-dashboards: {}  # No changes from base - accessed via NGINX
+
+  prometheus:
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus  # Production data volume
+
+  grafana:
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana  # Production data volume
+      - ./infrastructure/monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json:ro
+
+  cadvisor: {}  # No changes from base - accessed via NGINX
+
+  minecraft:
+    volumes:
+      - minecraft_data:/data  # Production data volume
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Production Environment Variables
+# Load from .env file in project root on production server
+# ═════════════════════════════════════════════════════════════════════════════

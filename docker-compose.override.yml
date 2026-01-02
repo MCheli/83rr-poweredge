@@ -1,0 +1,115 @@
+# Local Development Override
+# This file is automatically loaded by Docker Compose for local development
+# Services run with local build contexts and localhost ports
+
+services:
+  # ═════════════════════════════════════════════════════════════════════════════
+  # NGINX - Local Development Configuration
+  # ═════════════════════════════════════════════════════════════════════════════
+  nginx:
+    build:
+      context: ./infrastructure/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"     # HTTP on localhost:8080
+      - "8443:443"    # HTTPS on localhost:8443 (self-signed)
+      - "25565:25565" # Minecraft port
+    volumes:
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infrastructure/nginx/dev-certs:/etc/nginx/certs:ro  # Self-signed certs for dev
+      - ./infrastructure/nginx/logs:/var/log/nginx
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Personal Website - Local Build
+  # ═════════════════════════════════════════════════════════════════════════════
+  personal-website:
+    build:
+      context: ./infrastructure/personal-website/frontend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=development
+      - NUXT_PUBLIC_API_BASE=/api
+      - API_URL=http://flask-api:5000
+    ports:
+      - "3000:3000"  # Direct access for development
+    volumes:
+      # Mount source code for hot reloading
+      - ./infrastructure/personal-website/frontend:/app
+      - /app/node_modules  # Anonymous volume for node_modules
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Flask API - Local Build
+  # ═════════════════════════════════════════════════════════════════════════════
+  flask-api:
+    build:
+      context: ./infrastructure/flask-api
+      dockerfile: Dockerfile
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
+    ports:
+      - "5000:5000"  # Direct access for development
+    volumes:
+      # Mount source code for hot reloading
+      - ./infrastructure/flask-api:/app
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # JupyterHub - Local Build
+  # ═════════════════════════════════════════════════════════════════════════════
+  jupyter:
+    build:
+      context: ./infrastructure/jupyter
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"  # Direct access for development
+    environment:
+      - JUPYTERHUB_CRYPT_KEY=local-dev-key-not-secure
+    volumes:
+      - ./infrastructure/jupyter/jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
+      - jupyter_data_local:/srv/jupyterhub  # Separate volume for local data
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Development Services with Direct Port Access
+  # ═════════════════════════════════════════════════════════════════════════════
+  opensearch:
+    ports:
+      - "9200:9200"  # Direct access to OpenSearch API
+      - "9300:9300"  # OpenSearch cluster communication
+    volumes:
+      - opensearch_data_local:/usr/share/opensearch/data  # Separate volume for local data
+
+  opensearch-dashboards:
+    ports:
+      - "5601:5601"  # Direct access to dashboards
+
+  prometheus:
+    ports:
+      - "9090:9090"  # Direct access to Prometheus
+
+  grafana:
+    ports:
+      - "3001:3000"  # Direct access to Grafana (avoid conflict with website)
+
+  cadvisor:
+    ports:
+      - "8081:8080"  # Direct access to cAdvisor
+
+  minecraft:
+    ports:
+      - "25565:25565"  # Direct access to Minecraft server
+    volumes:
+      - minecraft_data_local:/data  # Separate volume for local data
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Local Development Volumes (separate from production)
+# ═════════════════════════════════════════════════════════════════════════════
+volumes:
+  jupyter_data_local:
+  opensearch_data_local:
+  minecraft_data_local:
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Development Environment Variables
+# Load from .env file in project root
+# ═════════════════════════════════════════════════════════════════════════════

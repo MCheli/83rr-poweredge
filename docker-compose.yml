@@ -1,0 +1,222 @@
+# 83RR PowerEdge Infrastructure
+# Base Docker Compose configuration for all services
+# Auto-loads docker-compose.override.yml for local development
+# Use docker-compose.prod.yml for production deployment
+
+services:
+  # ═════════════════════════════════════════════════════════════════════════════
+  # NGINX Reverse Proxy (will replace Traefik)
+  # ═════════════════════════════════════════════════════════════════════════════
+  nginx:
+    build:
+      context: ./infrastructure/nginx
+      dockerfile: Dockerfile
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "25565:25565"  # Minecraft server port
+    volumes:
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
+      - ./infrastructure/nginx/logs:/var/log/nginx
+    depends_on:
+      - personal-website
+      - flask-api
+      - jupyter
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Personal Website (Nuxt.js)
+  # ═════════════════════════════════════════════════════════════════════════════
+  personal-website:
+    build:
+      context: ./infrastructure/personal-website/frontend
+      dockerfile: Dockerfile
+    container_name: personal-website
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NUXT_PUBLIC_API_BASE=/api
+      - API_URL=http://flask-api:5000
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Flask API Service
+  # ═════════════════════════════════════════════════════════════════════════════
+  flask-api:
+    build:
+      context: ./infrastructure/flask-api
+      dockerfile: Dockerfile
+    container_name: flask-api
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # JupyterHub (Data Science Environment)
+  # ═════════════════════════════════════════════════════════════════════════════
+  jupyter:
+    build:
+      context: ./infrastructure/jupyter
+      dockerfile: Dockerfile
+    container_name: jupyter
+    restart: unless-stopped
+    environment:
+      - JUPYTERHUB_CRYPT_KEY=your-secret-key
+    volumes:
+      - jupyter_data:/srv/jupyterhub
+      - ./infrastructure/jupyter/jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # OpenSearch (Logging Infrastructure)
+  # ═════════════════════════════════════════════════════════════════════════════
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    container_name: opensearch
+    restart: unless-stopped
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # OpenSearch Dashboards (Logging UI)
+  # ═════════════════════════════════════════════════════════════════════════════
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.1
+    container_name: opensearch-dashboards
+    restart: unless-stopped
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
+    depends_on:
+      - opensearch
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Minecraft Server
+  # ═════════════════════════════════════════════════════════════════════════════
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft
+    restart: unless-stopped
+    environment:
+      - EULA=TRUE
+      - TYPE=PAPER
+      - VERSION=1.20.4
+      - MEMORY=2G
+      - DIFFICULTY=normal
+      - MOTD="83RR PowerEdge Minecraft Server"
+      - ENABLE_WHITELIST=false
+    volumes:
+      - minecraft_data:/data
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Monitoring: Prometheus (Metrics Database)
+  # ═════════════════════════════════════════════════════════════════════════════
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=30d'
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Monitoring: Grafana (Visualization Dashboards)
+  # ═════════════════════════════════════════════════════════════════════════════
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Monitoring: cAdvisor (Container Metrics)
+  # ═════════════════════════════════════════════════════════════════════════════
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    user: "0"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - infrastructure
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Networks
+# ═════════════════════════════════════════════════════════════════════════════
+networks:
+  infrastructure:
+    driver: bridge
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Volumes
+# ═════════════════════════════════════════════════════════════════════════════
+volumes:
+  jupyter_data:
+  opensearch_data:
+  minecraft_data:
+  prometheus_data:
+  grafana_data:

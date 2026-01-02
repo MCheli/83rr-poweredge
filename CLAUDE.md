@@ -119,6 +119,36 @@ python scripts/infrastructure_manager.py deploy-all --clean
 python scripts/infrastructure_manager.py migrate-to-portainer      # Migrate to Portainer
 ```
 
+### Container Log Analysis and Diagnostics
+
+```bash
+# Logging infrastructure health
+python scripts/infrastructure_manager.py logs-health               # Check OpenSearch cluster health
+
+# Recent logs from all containers
+python scripts/infrastructure_manager.py logs recent               # Last hour
+python scripts/infrastructure_manager.py logs recent --hours 24    # Last 24 hours
+
+# Container-specific logs
+python scripts/infrastructure_manager.py logs container opensearch  # OpenSearch logs
+python scripts/infrastructure_manager.py logs container traefik    # Traefik logs
+python scripts/infrastructure_manager.py logs container minecraft   # Minecraft logs
+
+# Error detection and troubleshooting
+python scripts/infrastructure_manager.py logs errors               # All error logs
+python scripts/infrastructure_manager.py logs errors --hours 6     # Last 6 hours of errors
+
+# Custom log searches
+python scripts/infrastructure_manager.py logs search "failed"      # Search for "failed"
+python scripts/infrastructure_manager.py logs search "error OR exception" # Boolean search
+
+# Direct diagnostic tool usage
+python scripts/opensearch_diagnostic_ssh.py health                 # Cluster health
+python scripts/opensearch_diagnostic_ssh.py indices               # List log indices
+python scripts/opensearch_diagnostic_ssh.py test-log              # Add test log entry
+python scripts/opensearch_diagnostic_ssh.py recent --lines 100    # 100 recent logs
+```
+
 ### Monitoring and Troubleshooting
 
 ```bash
@@ -608,7 +638,82 @@ python scripts/infrastructure_manager.py deploy-all --registry --clean
 
 Remember: **Registry-based deployment is the preferred method. SSH is for emergency troubleshooting only.**
 
-## 🚨 Critical Error Handling Guidelines
+## 🚨 CRITICAL: Surgical Change Protocol
+
+### **RULE #1: MINIMAL VIABLE CHANGES ONLY**
+
+**For Simple Configuration Additions (like reverse proxy routes):**
+
+```bash
+# ✅ CORRECT: Simple file copy for routing additions
+scp infrastructure/traefik/dynamic/service.yml server:/home/mcheli/traefik/dynamic/
+# Wait 30 seconds for Traefik auto-reload
+sleep 30 && curl -I https://service.domain.com
+# ✅ Done. No deployments, no stack changes.
+```
+
+**❌ NEVER DO for simple config changes:**
+- Remove/recreate working stacks
+- Change container versions
+- Rebuild entire infrastructure
+- Use deployment commands for file additions
+
+### **Change Classification & Protocols:**
+
+**🟢 LEVEL 1: Configuration File Changes (90% of requests)**
+- **Examples**: Add reverse proxy route, update environment variable
+- **Method**: Direct file copy/edit, no deployments
+- **Tools**: `scp`, `ssh`, file editing only
+- **Time**: 1-3 minutes
+
+**🟡 LEVEL 2: Container Updates (8% of requests)**
+- **Examples**: Update single service, restart container
+- **Method**: `portainer_stack_manager.py update`
+- **Never**: Remove then recreate
+- **Time**: 5-10 minutes
+
+**🔴 LEVEL 3: Infrastructure Changes (2% of requests)**
+- **Examples**: Add new service, major version upgrades
+- **Method**: Full deployment commands
+- **Requires**: Explicit user approval + backup plan
+- **Time**: 15+ minutes
+
+### **Mandatory Pre-Change Checks:**
+
+1. **Identify Change Level**: Is this Level 1, 2, or 3?
+2. **Save Current State**: Record working configuration
+3. **Plan Rollback**: Know exact revert commands
+4. **Scope Limitation**: Only touch affected components
+5. **User Confirmation**: For Level 2+, confirm scope with user
+
+### **Emergency Rollback Commands:**
+```bash
+# Immediate rollback options:
+git checkout HEAD~1 infrastructure/                    # Revert config changes
+python scripts/portainer_stack_manager.py update <stack> infrastructure/<stack>/docker-compose.yml  # Restore stack
+python scripts/test_infrastructure.py                  # Verify restoration
+```
+
+### **Example: Adding Home Assistant Reverse Proxy**
+```bash
+# ✅ CORRECT (Level 1 - File Change):
+# 1. Copy dynamic config file
+scp infrastructure/traefik/dynamic/homeassistant.yml server:/home/mcheli/traefik/dynamic/
+# 2. Wait for auto-reload
+sleep 30
+# 3. Test
+curl -I https://ha.markcheli.com
+# 4. ✅ Done - 2 minutes total
+
+# ❌ WRONG: Stack recreation, deployments, version changes - 45+ minutes of chaos
+```
+
+### **"Fix Everything" Protocol:**
+When user says "fix everything broken":
+1. **List specific broken items** (don't assume what needs fixing)
+2. **Fix ONE item at a time** (verify before moving to next)
+3. **Use minimal changes** (prefer file edits over deployments)
+4. **Stop when original goal achieved** (don't expand scope)
 
 ### HTTP Status Code Standards
 Claude Code must adhere to strict HTTP status code standards:

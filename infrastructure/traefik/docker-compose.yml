@@ -38,6 +38,11 @@ services:
       - "--api=true"
       # Logs
       - "--log.level=INFO"
+      # Access Logs
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+      - "--accesslog.fields.names.StartUTC=drop"
+      - "--accesslog.fields.headers.defaultmode=keep"
     # ── Labels for dashboard with auth ──────────────────────────────────────
     labels:
       - "traefik.enable=true"
@@ -98,6 +103,7 @@ services:
       - "traefik.http.routers.whoami.tls=true"
       # Attach the security headers middleware defined on Traefik
       - "traefik.http.routers.whoami.middlewares=secure-headers@docker"
+
 
 networks:
   traefik_default:

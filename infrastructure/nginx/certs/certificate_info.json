@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-01-02T20:56:18.966007Z",
+  "certificates": [
+    {
+      "id": "57932496887940500718799605873764947555957152569",
+      "name": "wildcard-markcheli",
+      "hostnames": [
+        "*.markcheli.com",
+        "markcheli.com"
+      ]
+    },
+    {
+      "id": "564973495528215771177954808559044565960719640986",
+      "name": "wildcard-ops-markcheli",
+      "hostnames": [
+        "*.ops.markcheli.com"
+      ]
+    }
+  ],
+  "file_mapping": {
+    "public_cert": "wildcard-markcheli.crt",
+    "public_key": "wildcard-markcheli.key",
+    "lan_cert": "wildcard-ops-markcheli.crt",
+    "lan_key": "wildcard-ops-markcheli.key",
+    "nginx_fullchain": "fullchain.pem",
+    "nginx_privkey": "privkey.pem"
+  }
+}

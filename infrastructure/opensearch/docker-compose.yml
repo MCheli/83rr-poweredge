@@ -1,6 +1,6 @@
 services:
   opensearch:
-    image: opensearchproject/opensearch:2.11.1
+    image: opensearchproject/opensearch:latest
     container_name: opensearch
     restart: unless-stopped
     environment:
@@ -10,7 +10,7 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
       - "DISABLE_INSTALL_DEMO_CONFIG=true"
-      - "DISABLE_SECURITY_PLUGIN=true"  # Disable security for simplicity
+      - "DISABLE_SECURITY_PLUGIN=true"
     ulimits:
       memlock:
         soft: -1
@@ -25,16 +25,14 @@ services:
       - traefik_default
     labels:
       - "traefik.enable=true"
-      # Internal access only (no public exposure)
       - "traefik.http.routers.opensearch.rule=Host(`opensearch-local.ops.markcheli.com`)"
       - "traefik.http.routers.opensearch.entrypoints=websecure"
-      - "traefik.http.routers.opensearch.tls=true"
       - "traefik.http.routers.opensearch.tls=true"
       - "traefik.http.routers.opensearch.middlewares=lan-only@docker"
       - "traefik.http.services.opensearch.loadbalancer.server.port=9200"
 
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.1
+    image: opensearchproject/opensearch-dashboards:latest
     container_name: opensearch-dashboards
     restart: unless-stopped
     environment:
@@ -50,154 +48,106 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_default"
-      # LAN-only dashboard access (infrastructure service)
       - "traefik.http.routers.dashboards.rule=Host(`logs-local.ops.markcheli.com`)"
       - "traefik.http.routers.dashboards.entrypoints=websecure"
       - "traefik.http.routers.dashboards.tls=true"
-      - "traefik.http.routers.dashboards.middlewares=lan-only"
+      - "traefik.http.routers.dashboards.middlewares=lan-only@docker"
       - "traefik.http.services.dashboards.loadbalancer.server.port=5601"
 
-  logstash:
-    image: opensearchproject/logstash-oss-with-opensearch-output-plugin:8.9.0
-    container_name: logstash
-    restart: unless-stopped
-    environment:
-      - "LS_JAVA_OPTS=-Xmx1g -Xms1g"
-    volumes:
-      - logstash_config:/usr/share/logstash/pipeline/
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    depends_on:
-      - opensearch
-      - logstash-config
-    networks:
-      - opensearch_net
-      - traefik_default
-
-  logstash-config:
+  fluent-bit-config:
     image: busybox
-    container_name: logstash-config
+    container_name: fluent-bit-config
     volumes:
-      - logstash_config:/config
+      - fluent_bit_config:/fluent-bit/etc
     command: |
       sh -c "
-      cat > /config/logstash.conf << 'EOF'
-      input {
-        beats {
-          port => 5044
-        }
-        syslog {
-          port => 5514
-          type => \"docker\"
-        }
-      }
+      cat > /fluent-bit/etc/fluent-bit.conf << 'EOF'
+      [SERVICE]
+          Flush         5
+          Log_Level     info
+          Daemon        off
+          Parsers_File  parsers.conf
+          HTTP_Server   On
+          HTTP_Listen   0.0.0.0
+          HTTP_Port     2020
 
-      filter {
-        if [container] {
-          mutate {
-            add_field => { \"service\" => \"%{[container][name]}\" }
-            add_field => { \"image\" => \"%{[container][image][name]}\" }
-          }
-        }
+      [INPUT]
+          Name              tail
+          Path              /var/lib/docker/containers/*/*.log
+          Parser            docker
+          Tag               docker.*
+          Refresh_Interval  5
+          Mem_Buf_Limit     50MB
+          Skip_Long_Lines   On
+          Skip_Empty_Lines  On
+          DB                /fluent-bit/data/tail_docker.db
+          DB.sync           normal
+          docker_mode       On
+          docker_mode_flush 5
 
-        if [message] =~ /^\d{4}-\d{2}-\d{2}/ {
-          grok {
-            match => { \"message\" => \"%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:level} %{GREEDYDATA:log_message}\" }
-          }
-        }
+      [FILTER]
+          Name          record_modifier
+          Match         docker.*
+          Record        level info
 
-        mutate {
-          add_field => { \"environment\" => \"homelab\" }
-          add_field => { \"infrastructure\" => \"83rr-poweredge\" }
-          remove_field => [ \"agent\", \"ecs\", \"host\" ]
-        }
-      }
+      [FILTER]
+          Name          modify
+          Match         docker.*
+          Add           environment homelab
+          Add           infrastructure 83rr-poweredge
 
-      output {
-        opensearch {
-          hosts => [\"opensearch:9200\"]
-          index => \"logs-homelab-%{+YYYY.MM.dd}\"
-        }
-        stdout {
-          codec => rubydebug
-        }
-      }
+      [OUTPUT]
+          Name            opensearch
+          Match           docker.*
+          Host            opensearch
+          Port            9200
+          Index           logs-homelab
+          Type            _doc
+          Time_Key        @timestamp
+          Time_Key_Format %Y-%m-%dT%H:%M:%S.%L
+          Time_Key_Nanos  Off
+          tls             Off
+          Suppress_Type_Name On
       EOF
-      echo 'Logstash config created'
+
+      cat > /fluent-bit/etc/parsers.conf << 'EOF'
+      [PARSER]
+          Name        docker
+          Format      json
+          Time_Key    time
+          Time_Format %Y-%m-%dT%H:%M:%S.%LZ
+          Time_Keep   On
+          Decode_Field_As escaped_utf8 log do_next
+          Decode_Field_As json log
+      EOF
+      echo 'Fluent Bit config created'
       sleep 5
       "
 
-  filebeat-config:
-    image: busybox
-    container_name: filebeat-config
-    volumes:
-      - filebeat_config:/config
-    command: |
-      sh -c "
-      cat > /config/filebeat.yml << 'EOF'
-      filebeat.inputs:
-      - type: container
-        paths:
-          - '/var/lib/docker/containers/*/*.log'
-        processors:
-          - add_docker_metadata:
-              host: \"unix:///var/run/docker.sock\"
-          - decode_json_fields:
-              fields: [\"message\"]
-              target: \"\"
-              overwrite_keys: true
-
-      processors:
-        - add_host_metadata:
-            when.not.contains.tags: forwarded
-        - add_labels:
-            labels:
-              environment: homelab
-              infrastructure: 83rr-poweredge
-
-      output.logstash:
-        hosts: [\"logstash:5044\"]
-
-      logging.level: info
-      logging.to_files: true
-      logging.files:
-        path: /var/log/filebeat
-        name: filebeat
-        keepfiles: 7
-        permissions: 0644
-
-      monitoring:
-        enabled: true
-        elasticsearch:
-          hosts: [\"opensearch:9200\"]
-      EOF
-      echo 'Filebeat config created'
-      sleep 5
-      "
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat:8.9.0
-    container_name: filebeat
+  fluent-bit:
+    image: fluent/fluent-bit:3.1.9
+    container_name: fluent-bit
     restart: unless-stopped
     user: root
     volumes:
-      - filebeat_config:/usr/share/filebeat/
+      - fluent_bit_config:/fluent-bit/etc
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - filebeat_data:/usr/share/filebeat/data
+      - fluent_bit_data:/fluent-bit/data
+    environment:
+      - FLB_LOG_LEVEL=info
+    command: ["/fluent-bit/bin/fluent-bit", "--config", "/fluent-bit/etc/fluent-bit.conf"]
     depends_on:
       - opensearch
-      - logstash
-      - filebeat-config
+      - fluent-bit-config
     networks:
       - opensearch_net
 
 volumes:
   opensearch_data:
   opensearch_dashboards_data:
-  filebeat_data:
-  logstash_config:
-  filebeat_config:
+  fluent_bit_data:
+  fluent_bit_config:
 
 networks:
   opensearch_net:
