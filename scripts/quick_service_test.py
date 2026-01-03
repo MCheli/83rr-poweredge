@@ -22,12 +22,14 @@ def test_endpoints():
         "Flask API": "https://flask.markcheli.com/health",
         "JupyterHub": "https://jupyter.markcheli.com",
 
-        # LAN services
-        "Portainer": "https://portainer-local.ops.markcheli.com",
-        "Traefik": "https://traefik-local.ops.markcheli.com",
-        "OpenSearch": "https://logs-local.ops.markcheli.com",
-        "Dev Website": "https://www-dev.ops.markcheli.com",
-        "Dev Flask API": "https://flask-dev.ops.markcheli.com/health",
+        # LAN services (monitoring)
+        "Grafana": "https://grafana-local.ops.markcheli.com",
+        "Prometheus": "https://prometheus-local.ops.markcheli.com",
+        "cAdvisor": "https://cadvisor-local.ops.markcheli.com",
+
+        # LAN services (logging)
+        "OpenSearch Dashboards": "https://logs-local.ops.markcheli.com",
+        "OpenSearch API": "https://opensearch-local.ops.markcheli.com",
     }
 
     print("🔍 Quick Service Availability Test")
@@ -47,11 +49,12 @@ def test_endpoints():
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5)
-        result = sock.connect_ex(('minecraft.markcheli.com', 25565))
+        # Test on localhost since it's running on this server
+        result = sock.connect_ex(('localhost', 25565))
         if result == 0:
-            print("Minecraft Server      - ✅ ONLINE")
+            print("Minecraft Server      - ✅ ONLINE (Port 25565)")
         else:
-            print("Minecraft Server      - ❌ OFFLINE")
+            print("Minecraft Server      - ❌ OFFLINE (Port 25565)")
         sock.close()
     except Exception as e:
         print(f"Minecraft Server      - ❌ ERROR ({str(e)})")
