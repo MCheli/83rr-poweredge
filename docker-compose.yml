@@ -296,7 +296,7 @@ services:
     environment:
       - EULA=TRUE
       - TYPE=PAPER
-      - VERSION=1.20.4
+      - VERSION=LATEST
       - MEMORY=2G
       - DIFFICULTY=normal
       - MOTD="83RR PowerEdge Minecraft Server"
