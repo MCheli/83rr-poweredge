@@ -21,10 +21,6 @@ import requests
 import urllib3
 from dotenv import load_dotenv
 
-# Add scripts directory to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from dns_manager import SquarespaceDNSManager as InfrastructureDNS
-
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -33,7 +29,6 @@ class InfrastructureHealthTest:
         load_dotenv()
         self.ssh_user = os.getenv('SSH_USER')
         self.ssh_host = os.getenv('SSH_HOST')
-        self.dns = InfrastructureDNS()
 
         # Test configuration
         self.public_services = {
@@ -150,7 +145,26 @@ class InfrastructureHealthTest:
         print("\n🔍 Testing DNS Resolution")
         print("=" * 50)
 
-        dns_ok = self.dns.audit_current_dns()
+        # Basic DNS test without external manager
+        dns_ok = True
+        try:
+            import socket
+            domains = [
+                'www.markcheli.com',
+                'flask.markcheli.com',
+                'jupyter.markcheli.com',
+                'grafana-local.ops.markcheli.com'
+            ]
+            for domain in domains:
+                try:
+                    socket.gethostbyname(domain)
+                    print(f"✅ {domain} resolves")
+                except socket.gaierror:
+                    print(f"❌ {domain} failed to resolve")
+                    dns_ok = False
+        except Exception as e:
+            print(f"❌ DNS test error: {e}")
+            dns_ok = False
 
         if dns_ok:
             self.log_test("DNS Resolution", "PASS", "DNS audit completed")
