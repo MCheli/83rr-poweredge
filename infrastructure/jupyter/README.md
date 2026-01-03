@@ -6,20 +6,20 @@ A comprehensive, Docker-based JupyterHub environment designed to replicate the "
 
 - 🤝 **Real-time Collaboration**: Multiple users can edit notebooks simultaneously
 - 🗄️ **Advanced SQL Integration**: Database connection management UI, pre-configured connections, SQL template dropdowns, and enhanced query tools
-- 📊 **Rich Data Science Stack**: Pre-installed pandas, plotly, scikit-learn, tensorflow, and more
+- 📊 **Rich Data Science Stack**: Pre-installed pandas, plotly, scikit-learn, xgboost, and more
 - 🔍 **Enhanced DataFrame Support**: Data profiling, interactive exploration, and visualization
-- 🤖 **AI Assistance**: Integrated Claude and ChatGPT support for code generation and analysis
-- 🐳 **Containerized Users**: Isolated environments with persistent storage
-- 🔐 **Multi-user Support**: User management with administrative controls
-- 🌐 **Traefik Integration**: SSL termination and reverse proxy support
+- 🤖 **AI Assistance**: Support for OpenAI and Anthropic API keys (optional)
+- 🐳 **Containerized Users**: Isolated environments with persistent storage (4GB RAM, 2 CPU cores per user)
+- 🔐 **Password-Protected Access**: Simple password authentication with admin controls
+- 🌐 **NGINX Reverse Proxy**: SSL termination with Cloudflare Origin Certificates
 
 ## Quick Start
 
 ### 1. Prerequisites
 
 - Docker and Docker Compose installed
-- Traefik reverse proxy running (for SSL/domain access)
-- Domain name pointing to your server (optional, for external access)
+- NGINX reverse proxy running (for SSL/domain access)
+- Domain name pointing to your server: https://jupyter.markcheli.com
 
 ### 2. Initial Setup
 
