@@ -56,7 +56,7 @@ Use 'help <command>' for more information about a specific command.`
      CPU: Intel Xeon (16 cores)
      Memory: 128GB DDR4
      ────────────────────────────────────────
-     Services: 6 running
+     Services: 10/10 running
      Status: Operational
      ────────────────────────────────────────`
     },
@@ -122,7 +122,7 @@ Services:
 
 Infrastructure:
   All services are self-hosted on my homelab infrastructure
-  Built with Docker, Traefik, and modern DevOps practices`
+  Built with Docker, NGINX, and modern DevOps practices`
     }
   }
 
@@ -159,9 +159,8 @@ https://ops.markcheli.com      Whoami test service
 
 Internal Infrastructure (LAN-only):
 
-https://traefik-local.ops.markcheli.com   Traefik reverse proxy dashboard
-https://portainer-local.ops.markcheli.com Docker container management
-https://logs-local.ops.markcheli.com      OpenSearch Dashboards log aggregation
+https://logs-local.ops.markcheli.com        OpenSearch Dashboards log aggregation
+https://opensearch-local.ops.markcheli.com  OpenSearch API and cluster management
 
 System Monitoring (LAN-only):
 
