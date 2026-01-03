@@ -22,8 +22,9 @@ __pycache__/
 /logs/
 *.log
 
-# Backups  
-backups/
+# Backups (ignore all except README)
+backups/*
+!backups/README.md
 
 # IDE
 .vscode/
