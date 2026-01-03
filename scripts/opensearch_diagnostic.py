@@ -45,13 +45,31 @@ class OpenSearchDiagnostic:
             print(f"Error output: {e.stderr}")
             return ""
 
-    def _opensearch_request(self, method: str, path: str, data: str = None) -> Dict:
+    def _opensearch_request(self, method: str, path: str, data: Dict = None) -> Dict:
         """Make request to OpenSearch via docker exec"""
-        curl_cmd = f"docker exec opensearch curl -s -X {method} 'http://localhost:9200{path}'"
         if data:
-            curl_cmd += f" -H 'Content-Type: application/json' -d '{data}'"
+            # Write JSON to temp file to avoid escaping issues
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(data, f)
+                temp_file = f.name
 
-        result = self._run_command(curl_cmd)
+            # Copy temp file into container and use it
+            copy_cmd = f"docker cp {temp_file} opensearch:/tmp/request.json"
+            self._run_command(copy_cmd)
+
+            curl_cmd = f"docker exec opensearch curl -s -X {method} 'http://localhost:9200{path}' -H 'Content-Type: application/json' -d @/tmp/request.json"
+
+            result = self._run_command(curl_cmd)
+
+            # Cleanup
+            import os
+            os.unlink(temp_file)
+            self._run_command("docker exec opensearch rm /tmp/request.json")
+        else:
+            curl_cmd = f"docker exec opensearch curl -s -X {method} 'http://localhost:9200{path}'"
+            result = self._run_command(curl_cmd)
+
         if not result:
             return {}
 
@@ -73,13 +91,14 @@ class OpenSearchDiagnostic:
 
     def search_logs(self, query: Dict, index_pattern: str = "logs-homelab*") -> Dict:
         """Search logs with given query"""
-        query_json = json.dumps(query).replace('"', '\\"')
-        return self._opensearch_request("POST", f"/{index_pattern}/_search", query_json)
+        return self._opensearch_request("POST", f"/{index_pattern}/_search", query)
 
     def add_test_log(self):
         """Add a test log entry to verify ingestion"""
-        timestamp = datetime.utcnow().isoformat() + "Z"
-        today = datetime.utcnow().strftime("%Y.%m.%d")
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        timestamp = now.isoformat()
+        today = now.strftime("%Y.%m.%d")
 
         test_log = {
             "@timestamp": timestamp,
@@ -103,9 +122,8 @@ class OpenSearchDiagnostic:
             "test": True
         }
 
-        log_json = json.dumps(test_log).replace('"', '\\"')
         index_name = f"logs-homelab-{today}"
-        result = self._opensearch_request("POST", f"/{index_name}/_doc", log_json)
+        result = self._opensearch_request("POST", f"/{index_name}/_doc", test_log)
 
         if result.get("result") == "created":
             print(f"✅ Test log entry added to index: {index_name}")
