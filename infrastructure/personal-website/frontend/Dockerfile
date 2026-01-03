@@ -27,6 +27,11 @@ RUN apk add --no-cache curl && \
 # Copy built application
 COPY --from=builder --chown=nuxtjs:nodejs /app/.output /app/.output
 
+# Create symlink for Nuxt SSR static assets
+# Nuxt server looks for static files in server/chunks/public but they're in public
+RUN mkdir -p /app/.output/server/chunks/public && \
+    ln -sf /app/.output/public/_nuxt /app/.output/server/chunks/public/_nuxt
+
 USER nuxtjs
 
 EXPOSE 3000
