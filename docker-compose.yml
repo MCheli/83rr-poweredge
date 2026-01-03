@@ -18,7 +18,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "25565:25565"  # Minecraft server port
+      # Note: Minecraft port 25565 added in prod override (docker-compose.prod.yml)
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
