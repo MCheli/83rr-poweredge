@@ -11,7 +11,6 @@ services:
     ports:
       - "80:80"       # HTTP (redirects to HTTPS)
       - "443:443"     # HTTPS with real certificates
-      - "25565:25565" # Minecraft port
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro  # Cloudflare Origin Certificates
@@ -80,6 +79,8 @@ services:
   cadvisor: {}  # No changes from base - accessed via NGINX
 
   minecraft:
+    ports:
+      - "25565:25565"  # Minecraft server port (direct connection, not proxied)
     volumes:
       - minecraft_data:/data  # Production data volume
 
