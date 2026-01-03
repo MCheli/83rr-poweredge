@@ -32,11 +32,6 @@ class InfrastructureHealthTest:
 
         # Test configuration
         self.public_services = {
-            'whoami': {
-                'url': 'https://ops.markcheli.com',
-                'expected_content': 'Hostname:',
-                'description': 'Whoami service at base domain'
-            },
             'jupyter': {
                 'url': 'https://jupyter.markcheli.com',
                 'expected_content': 'JupyterHub',
@@ -44,8 +39,8 @@ class InfrastructureHealthTest:
             },
             'personal-website': {
                 'url': 'https://www.markcheli.com',
-                'expected_content': 'Mark Cheli Developer Terminal',
-                'description': 'Personal website terminal interface'
+                'expected_content': 'Mark Cheli',
+                'description': 'Personal website'
             },
             'flask-api': {
                 'url': 'https://flask.markcheli.com/health',
@@ -56,28 +51,10 @@ class InfrastructureHealthTest:
 
         # LAN-only services (skip if not on LAN)
         self.lan_services = {
-            'traefik': {
-                'url': 'https://traefik-local.ops.markcheli.com',
-                'expected_content': 'Dashboard',
-                'description': 'Traefik dashboard',
-                'auth_required': True
-            },
-            'portainer': {
-                'url': 'https://portainer-local.ops.markcheli.com',
-                'expected_content': 'Portainer',
-                'description': 'Portainer container management',
-                'auth_required': True
-            },
             'opensearch-dashboards': {
                 'url': 'https://logs-local.ops.markcheli.com',
                 'expected_content': 'OpenSearch',
                 'description': 'OpenSearch Dashboards',
-                'auth_required': False
-            },
-            'website-dev': {
-                'url': 'https://www-dev.ops.markcheli.com',
-                'expected_content': 'Mark Cheli Developer Terminal',
-                'description': 'Development website (LAN-only)',
                 'auth_required': False
             },
             'flask-api-dev': {
@@ -85,26 +62,42 @@ class InfrastructureHealthTest:
                 'expected_content': 'healthy',
                 'description': 'Flask API Development Environment (LAN-only)',
                 'auth_required': False
+            },
+            'grafana': {
+                'url': 'https://grafana-local.ops.markcheli.com',
+                'expected_content': 'Grafana',
+                'description': 'Grafana monitoring dashboard',
+                'auth_required': True
+            },
+            'prometheus': {
+                'url': 'https://prometheus-local.ops.markcheli.com',
+                'expected_content': 'Prometheus',
+                'description': 'Prometheus metrics database',
+                'auth_required': False
+            },
+            'cadvisor': {
+                'url': 'https://cadvisor-local.ops.markcheli.com',
+                'expected_content': 'cAdvisor',
+                'description': 'Container metrics monitoring',
+                'auth_required': False
             }
         }
 
         # Expected containers and their health criteria
         self.expected_containers = {
-            'traefik': {'status': 'running', 'health': None},
-            'whoami': {'status': 'running', 'health': None},
+            'nginx': {'status': 'running', 'health': None},
             'opensearch': {'status': 'running', 'health': None},
             'opensearch-dashboards': {'status': 'running', 'health': None},
-            'logstash': {'status': 'running', 'health': None},
-            'filebeat': {'status': 'running', 'health': None},
             'jupyterhub': {'status': 'running', 'health': None},
             'jupyterhub-proxy': {'status': 'running', 'health': None},
             'jupyterhub-db': {'status': 'running', 'health': 'healthy'},
-            'portainer': {'status': 'running', 'health': None},
             'mark-cheli-flask-api': {'status': 'running', 'health': 'healthy'},
             'mark-cheli-flask-api-dev': {'status': 'running', 'health': 'healthy'},
             'mark-cheli-website': {'status': 'running', 'health': 'healthy'},
-            'mark-cheli-website-dev': {'status': 'running', 'health': 'healthy'},
-            'minecraft-server': {'status': 'running', 'health': 'healthy'}
+            'minecraft-server': {'status': 'running', 'health': 'healthy'},
+            'grafana': {'status': 'running', 'health': None},
+            'prometheus': {'status': 'running', 'health': None},
+            'cadvisor': {'status': 'running', 'health': None}
         }
 
         self.results = []
