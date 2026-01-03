@@ -13,7 +13,7 @@ The infrastructure underwent a major migration from Phase 5 (Traefik + Let's Enc
 
 ---
 
-## Archived Scripts (18 total)
+## Archived Scripts (19 total)
 
 ### Cloudflare SSL Management (Obsolete - Replaced by Static Origin Certs)
 
@@ -115,6 +115,14 @@ The infrastructure underwent a major migration from Phase 5 (Traefik + Let's Enc
     - **Purpose:** Fix index patterns in OpenSearch
     - **Why Archived:** Index patterns fixed, no longer needed
     - **Replacement:** None
+
+### SSH-Based Scripts (Obsolete - Replaced by Local Execution)
+
+19. **opensearch_diagnostic_ssh.py** (16KB)
+    - **Purpose:** OpenSearch diagnostics via SSH
+    - **Why Archived:** SSH no longer needed - scripts run locally on server
+    - **Replacement:** `opensearch_diagnostic.py` (direct Docker commands)
+    - **Archive Date:** January 3, 2026
 
 ---
 

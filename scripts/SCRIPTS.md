@@ -2,8 +2,9 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** January 2, 2026
+**Last Updated:** January 3, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
+**Architecture:** Local execution (SSH dependency removed for 92% test pass rate)
 
 ---
 
@@ -149,13 +150,13 @@ python scripts/cloudflare_dns_manager.py audit
 
 ---
 
-### 5. `opensearch_diagnostic_ssh.py` 📊 LOG DIAGNOSTICS
+### 5. `opensearch_diagnostic.py` 📊 LOG DIAGNOSTICS
 **Purpose:** OpenSearch cluster diagnostics and log analysis
-**Size:** 16KB
+**Size:** 11KB
 **Language:** Python 3
 
 **Description:**
-Diagnostic tool for OpenSearch logging infrastructure. Connects via SSH to query cluster health and search logs.
+Diagnostic tool for OpenSearch logging infrastructure. Runs locally using direct Docker commands (no SSH required).
 
 **Features:**
 - Cluster health monitoring
@@ -170,25 +171,25 @@ Diagnostic tool for OpenSearch logging infrastructure. Connects via SSH to query
 source venv/bin/activate
 
 # Check cluster health
-python scripts/opensearch_diagnostic_ssh.py health
+python scripts/opensearch_diagnostic.py health
 
 # List indices
-python scripts/opensearch_diagnostic_ssh.py indices
+python scripts/opensearch_diagnostic.py indices
 
 # View recent logs (last hour)
-python scripts/opensearch_diagnostic_ssh.py recent
+python scripts/opensearch_diagnostic.py recent
 
 # View recent logs (custom time)
-python scripts/opensearch_diagnostic_ssh.py recent --hours 24
+python scripts/opensearch_diagnostic.py recent --hours 24
 
 # Search for errors
-python scripts/opensearch_diagnostic_ssh.py errors --hours 6
+python scripts/opensearch_diagnostic.py errors --hours 6
 
 # Search for specific term
-python scripts/opensearch_diagnostic_ssh.py search "connection failed"
+python scripts/opensearch_diagnostic.py search "connection failed"
 
 # Add test log entry
-python scripts/opensearch_diagnostic_ssh.py test-log
+python scripts/opensearch_diagnostic.py test-log
 ```
 
 **Integration:**
@@ -230,13 +231,13 @@ Automated renewal script for Let's Encrypt wildcard certificates (*.ops.markchel
 
 ---
 
-### 7. `ssh_manager.py` ⚠️ EMERGENCY SSH
-**Purpose:** Emergency SSH operations
+### 7. `ssh_manager.py` ⚠️ ARCHIVED / EMERGENCY ONLY
+**Purpose:** Emergency SSH operations (DEPRECATED - SSH no longer required)
 **Size:** 3.7KB
 **Language:** Python 3
 
 **Description:**
-Emergency troubleshooting tool for SSH operations. **USE ONLY when Docker Compose/normal tools are unavailable.**
+Legacy SSH tool. **DEPRECATED:** All scripts now run locally without SSH. Keep for emergency remote troubleshooting only.
 
 **Features:**
 - Single SSH command execution

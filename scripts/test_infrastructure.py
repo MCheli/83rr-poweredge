@@ -27,8 +27,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class InfrastructureHealthTest:
     def __init__(self):
         load_dotenv()
-        self.ssh_user = os.getenv('SSH_USER')
-        self.ssh_host = os.getenv('SSH_HOST')
 
         # Test configuration
         self.public_services = {
@@ -91,13 +89,12 @@ class InfrastructureHealthTest:
             'jupyterhub': {'status': 'running', 'health': None},
             'jupyterhub-proxy': {'status': 'running', 'health': None},
             'jupyterhub-db': {'status': 'running', 'health': 'healthy'},
-            'mark-cheli-flask-api': {'status': 'running', 'health': 'healthy'},
-            'mark-cheli-flask-api-dev': {'status': 'running', 'health': 'healthy'},
-            'mark-cheli-website': {'status': 'running', 'health': 'healthy'},
-            'minecraft-server': {'status': 'running', 'health': 'healthy'},
+            'flask-api': {'status': 'running', 'health': None},
+            'personal-website': {'status': 'running', 'health': None},
+            'minecraft': {'status': 'running', 'health': 'healthy'},
             'grafana': {'status': 'running', 'health': None},
             'prometheus': {'status': 'running', 'health': None},
-            'cadvisor': {'status': 'running', 'health': None}
+            'cadvisor': {'status': 'running', 'health': 'healthy'}
         }
 
         self.results = []
@@ -122,11 +119,10 @@ class InfrastructureHealthTest:
             if details:
                 print(f"   Details: {details}")
 
-    def run_ssh_command(self, command):
-        """Execute command on remote server via SSH"""
+    def run_command(self, command):
+        """Execute command locally"""
         try:
-            full_command = f"ssh {self.ssh_user}@{self.ssh_host} '{command}'"
-            result = subprocess.run(full_command, shell=True, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
             return result.returncode == 0, result.stdout, result.stderr
         except subprocess.TimeoutExpired:
             return False, "", "Command timed out"
@@ -165,11 +161,11 @@ class InfrastructureHealthTest:
             self.log_test("DNS Resolution", "FAIL", "DNS audit failed")
 
     def test_container_health(self):
-        """Test Docker container status on server"""
+        """Test Docker container status"""
         print("\n🐳 Testing Container Health")
         print("=" * 50)
 
-        success, output, error = self.run_ssh_command("docker ps --format '{{.Names}},{{.Status}},{{.Image}}'")
+        success, output, error = self.run_command("docker ps --format '{{.Names}},{{.Status}},{{.Image}}'")
 
         if not success:
             self.log_test("Container Health", "FAIL", "Could not connect to server or get container status", error)
@@ -204,7 +200,7 @@ class InfrastructureHealthTest:
         print("=" * 50)
 
         # Test cluster health
-        success, output, error = self.run_ssh_command("docker exec opensearch curl -s http://localhost:9200/_cluster/health")
+        success, output, error = self.run_command("docker exec opensearch curl -s http://localhost:9200/_cluster/health")
         if success:
             try:
                 health_data = json.loads(output)
@@ -218,14 +214,14 @@ class InfrastructureHealthTest:
             self.log_test("OpenSearch Cluster", "FAIL", "Could not check cluster health", error)
 
         # Test log indices exist
-        success, output, error = self.run_ssh_command("docker exec opensearch curl -s 'http://localhost:9200/_cat/indices?h=index' | grep logs-homelab")
+        success, output, error = self.run_command("docker exec opensearch curl -s 'http://localhost:9200/_cat/indices?h=index' | grep logs-homelab")
         if success and output.strip():
             indices_count = len(output.strip().split('\n'))
             self.log_test("OpenSearch Indices", "PASS", f"Found {indices_count} log indices")
 
             # Test recent log ingestion
             today_index = f"logs-homelab-{datetime.now().strftime('%Y.%m.%d')}"
-            success, output, error = self.run_ssh_command(f"docker exec opensearch curl -s 'http://localhost:9200/{today_index}/_count'")
+            success, output, error = self.run_command(f"docker exec opensearch curl -s 'http://localhost:9200/{today_index}/_count'")
             if success:
                 try:
                     count_data = json.loads(output)
