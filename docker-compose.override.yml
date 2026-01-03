@@ -1,6 +1,11 @@
 # Local Development Override
 # This file is automatically loaded by Docker Compose for local development
 # Services run with local build contexts and localhost ports
+#
+# ⚠️  SECURITY NOTE: Some services run as root in development for convenience
+# with volume mounts. This is ONLY acceptable in local development environments.
+# Production deployments use docker-compose.prod.yml which runs all services
+# as non-root users with proper security hardening.
 
 services:
   # ═════════════════════════════════════════════════════════════════════════════
@@ -13,7 +18,7 @@ services:
     ports:
       - "8080:80"     # HTTP on localhost:8080
       - "8443:443"    # HTTPS on localhost:8443 (self-signed)
-      - "25565:25565" # Minecraft port
+      # Note: Minecraft port 25565 exposed directly by minecraft container
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/dev-certs:/etc/nginx/certs:ro  # Self-signed certs for dev
@@ -26,6 +31,9 @@ services:
     build:
       context: ./infrastructure/personal-website/frontend
       dockerfile: Dockerfile
+      target: builder  # Use builder stage with dependencies installed
+    user: root  # DEV ONLY: Required for npm install to write to mounted node_modules volume
+    command: sh -c "npm install --legacy-peer-deps && npm run dev"  # Install deps and run dev mode
     environment:
       - NODE_ENV=development
       - NUXT_PUBLIC_API_BASE=/api
@@ -35,39 +43,36 @@ services:
     volumes:
       # Mount source code for hot reloading
       - ./infrastructure/personal-website/frontend:/app
-      - /app/node_modules  # Anonymous volume for node_modules
+      - personal-website-node-modules:/app/node_modules  # Named volume for node_modules persistence
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Flask API - Local Build
   # ═════════════════════════════════════════════════════════════════════════════
   flask-api:
     build:
-      context: ./infrastructure/flask-api
+      context: ./infrastructure/flask-api/backend
       dockerfile: Dockerfile
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
       - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
     ports:
-      - "5000:5000"  # Direct access for development
+      - "5001:5000"  # Direct access for development (5000 conflicts with macOS AirPlay)
     volumes:
       # Mount source code for hot reloading
-      - ./infrastructure/flask-api:/app
+      - ./infrastructure/flask-api/backend:/app
 
   # ═════════════════════════════════════════════════════════════════════════════
   # JupyterHub - Local Build
   # ═════════════════════════════════════════════════════════════════════════════
-  jupyter:
-    build:
-      context: ./infrastructure/jupyter
-      dockerfile: Dockerfile
+  jupyterhub:
+    # Config is generated inline in main compose file
+    user: root  # DEV ONLY: Required to write config to /srv/jupyterhub volume
     ports:
-      - "8000:8000"  # Direct access for development
-    environment:
-      - JUPYTERHUB_CRYPT_KEY=local-dev-key-not-secure
-    volumes:
-      - ./infrastructure/jupyter/jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
-      - jupyter_data_local:/srv/jupyterhub  # Separate volume for local data
+      - "8000:8000"  # Direct access to proxy for development
+
+  jupyterhub-proxy:
+    # No changes needed - uses default config
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Development Services with Direct Port Access
@@ -105,6 +110,7 @@ services:
 # Local Development Volumes (separate from production)
 # ═════════════════════════════════════════════════════════════════════════════
 volumes:
+  personal-website-node-modules:
   jupyter_data_local:
   opensearch_data_local:
   minecraft_data_local:
