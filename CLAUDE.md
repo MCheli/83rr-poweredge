@@ -375,6 +375,7 @@ docker compose exec nginx cat /etc/nginx/conf.d/production.conf
 5. **ALWAYS** run health checks after changes
 6. **ALWAYS** investigate 4XX/5XX errors immediately
 7. **ALWAYS** create backups before destructive operations
+8. **ALWAYS** update `scripts/SCRIPTS.md` when adding or significantly modifying scripts
 
 ### Pre-Commit Checklist
 ```bash
@@ -502,11 +503,77 @@ docker compose up -d --build
 │   └── monitoring/                # Prometheus/Grafana
 │
 └── scripts/
-    ├── cloudflare_ssl_manager.py  # SSL certificate management
-    ├── cloudflare_dns_manager.py  # DNS record management
-    ├── test_infrastructure.py     # Health checks
-    └── quick_service_test.py      # Fast endpoint testing
+    ├── SCRIPTS.md                        # Script documentation (update this when modifying scripts!)
+    ├── test_infrastructure.py            # ⭐ Main testing script
+    ├── quick_service_test.py            # 🚀 Quick health checks
+    ├── infrastructure_manager.py        # 🏗️ Deployment controller
+    ├── cloudflare_dns_manager.py        # 🌐 DNS management
+    ├── opensearch_diagnostic_ssh.py     # 📊 Log diagnostics
+    ├── renew-letsencrypt-certs.sh       # 🔐 SSL renewal (automated)
+    ├── ssh_manager.py                   # ⚠️ Emergency SSH
+    ├── one-time/                        # One-time setup scripts
+    └── archive/                         # Obsolete/migration scripts
 ```
+
+---
+
+## 📜 Script Management Protocol
+
+**IMPORTANT:** Claude Code must maintain `scripts/SCRIPTS.md` whenever scripts are modified.
+
+### When to Update SCRIPTS.md
+
+Update `scripts/SCRIPTS.md` when:
+1. **Adding a new script** to the `scripts/` directory
+2. **Significantly modifying** an existing script (functionality changes, not just bug fixes)
+3. **Archiving a script** (move to `scripts/archive/`)
+4. **Changing script usage patterns** or command-line interfaces
+
+### What to Update
+
+When updating SCRIPTS.md:
+- Add/modify the relevant script section with:
+  - Purpose and description
+  - File size and language
+  - Usage examples with actual commands
+  - When to use / when not to use
+  - Integration points with other scripts
+- Update the "Last Updated" timestamp
+- Maintain consistent formatting with existing entries
+- Keep emoji indicators (⭐ PRIMARY, 🚀 QUICK, etc.)
+
+### Update Format
+
+```markdown
+### N. `script_name.py` 🔧 PURPOSE TAG
+**Purpose:** Brief one-line description
+**Size:** XXkB
+**Language:** Python 3
+
+**Description:**
+Detailed explanation of what this script does.
+
+**Usage:**
+\`\`\`bash
+source venv/bin/activate
+python scripts/script_name.py [options]
+\`\`\`
+
+**When to Use:**
+- Bullet points
+
+**Referenced in:** CLAUDE.md, README.md, etc.
+```
+
+### Script Categories
+
+- ⭐ PRIMARY - Main infrastructure scripts (testing, deployment)
+- 🚀 QUICK - Fast validation/checks
+- 🏗️ DEPLOYMENT - Infrastructure deployment
+- 🌐 DNS - DNS management
+- 📊 DIAGNOSTICS - Troubleshooting and logs
+- 🔐 SECURITY - SSL/TLS management
+- ⚠️ EMERGENCY - Emergency/fallback tools
 
 ---
 
