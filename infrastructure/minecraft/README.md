@@ -155,8 +155,8 @@ The server requires DNS configuration for `minecraft.markcheli.com`:
    # Test network connectivity
    telnet minecraft.markcheli.com 25565
 
-   # Check Traefik routing
-   docker logs traefik
+   # Check NGINX routing
+   docker logs nginx
    ```
 
 3. **Web interface not accessible**:
@@ -181,4 +181,4 @@ The server requires DNS configuration for `minecraft.markcheli.com`:
 
 ---
 
-Built with ❤️ by Mark Cheli | Powered by Docker and Traefik
+Built with ❤️ by Mark Cheli | Powered by Docker and NGINX

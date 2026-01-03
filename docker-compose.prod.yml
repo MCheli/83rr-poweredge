@@ -37,15 +37,22 @@ services:
       - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # JupyterHub - Production Image
+  # JupyterHub - Production Images
   # ═════════════════════════════════════════════════════════════════════════════
-  jupyter:
-    image: ghcr.io/mcheli/jupyter:latest
+
+  # JupyterHub Proxy - Production
+  jupyterhub-proxy:
+    image: quay.io/jupyterhub/configurable-http-proxy:5
+
+  # JupyterHub Main Server - Production
+  jupyterhub:
+    image: jupyterhub/jupyterhub:4.1.6
     environment:
       - JUPYTERHUB_CRYPT_KEY=${JUPYTERHUB_CRYPT_KEY}
-    volumes:
-      - jupyter_data:/srv/jupyterhub  # Production data volume
-      - ./infrastructure/jupyter/jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
+
+  # JupyterHub Database - Production
+  jupyterhub-db:
+    image: postgres:16-alpine
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Production Services (No Direct Port Exposure)

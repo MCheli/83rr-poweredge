@@ -110,19 +110,17 @@ docker compose down -v
 
 ## 🏗️ Infrastructure Architecture
 
-### Active Services (8/10 running)
+### Active Services (10/10 running)
 1. **nginx** - Reverse proxy and SSL termination
 2. **personal-website** - Nuxt.js personal portfolio
 3. **flask-api** - Python Flask REST API
-4. **minecraft** - Minecraft Java Edition server
-5. **opensearch** - Log aggregation and search
-6. **grafana** - Metrics visualization dashboards
-7. **prometheus** - Metrics collection and storage
-8. **cadvisor** - Container resource monitoring
-
-### Pending Services
-9. **jupyter** - JupyterLab data science environment (configuration needed)
-10. **opensearch-dashboards** - OpenSearch visualization (optional)
+4. **jupyterhub** - Multi-user JupyterLab data science environment (password-protected)
+5. **minecraft** - Minecraft Java Edition server
+6. **opensearch** - Log aggregation and search
+7. **opensearch-dashboards** - OpenSearch visualization
+8. **grafana** - Metrics visualization dashboards
+9. **prometheus** - Metrics collection and storage
+10. **cadvisor** - Container resource monitoring
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -142,14 +140,15 @@ Each service can use `.env` files from its infrastructure directory:
 ### Public Services (HTTPS via Cloudflare)
 - **https://www.markcheli.com** - Personal website
 - **https://flask.markcheli.com** - Flask API
-- **https://jupyter.markcheli.com** - JupyterHub (pending configuration)
+- **https://jupyter.markcheli.com** - JupyterHub (password-protected, multi-user data science environment)
 - **minecraft.markcheli.com:25565** - Minecraft server
 
-### LAN-Only Services (HTTPS with self-signed certs)
+### LAN-Only Services (HTTPS with Let's Encrypt)
 - **https://grafana-local.ops.markcheli.com** - Grafana dashboards (admin/admin123)
 - **https://prometheus-local.ops.markcheli.com** - Prometheus metrics
 - **https://cadvisor-local.ops.markcheli.com** - Container monitoring
 - **https://logs-local.ops.markcheli.com** - OpenSearch Dashboards
+- **https://opensearch-local.ops.markcheli.com** - OpenSearch API
 
 ### NGINX Routing
 All HTTPS traffic is handled by NGINX:
@@ -581,4 +580,4 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 **Last Updated**: January 2, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
-**Status**: Production-ready, 8/10 services operational
+**Status**: Production-ready, 10/10 services operational (100%)

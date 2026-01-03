@@ -174,8 +174,9 @@ All containers include built-in health checks:
 - **Auto-recovery**: Containers restart on failure
 
 ### Service Monitoring
-- **Traefik Dashboard**: https://traefik-local.ops.markcheli.com (LAN-only)
-- **Container Status**: `docker-compose ps`
+- **Grafana Dashboard**: https://grafana-local.ops.markcheli.com (LAN-only)
+- **Prometheus Metrics**: https://prometheus-local.ops.markcheli.com (LAN-only)
+- **Container Status**: `docker compose ps`
 - **Resource Usage**: `docker stats`
 
 ## 🔧 API Reference
@@ -306,8 +307,8 @@ Related:
 
 2. **SSL Certificate Issues**:
    ```bash
-   # Check Traefik logs
-   docker logs traefik
+   # Check NGINX logs
+   docker logs nginx
 
    # Verify DNS resolution
    nslookup www.markcheli.com

@@ -45,7 +45,7 @@ The personal website services communicate with the Flask API:
 
 Communication occurs via:
 1. **Direct API calls**: Website makes HTTP requests to Flask API endpoints
-2. **Proxy routing**: Website proxies `/api/*` requests to Flask API via Traefik
+2. **Proxy routing**: Website proxies `/api/*` requests to Flask API via NGINX reverse proxy
 
 ## Deployment
 
@@ -75,7 +75,7 @@ Both services include health checks that verify the `/health` endpoint responds 
 ## Dependencies
 
 - NGINX reverse proxy for routing and SSL termination
-- Cloudflare Origin Certificates (public) and Let's Encrypt (LAN)
+- Cloudflare Origin Certificates (public services) and Let's Encrypt (LAN services)
 - OpenWeather API for weather data (optional)
 
 ## Monitoring
