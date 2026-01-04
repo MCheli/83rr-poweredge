@@ -400,7 +400,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./infrastructure/monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json:ro
+      - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infrastructure/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
     healthcheck:
@@ -432,6 +433,46 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Monitoring: NGINX Exporter (NGINX Metrics)
+  # ═════════════════════════════════════════════════════════════════════════════
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4
+    container_name: nginx-exporter
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - '--nginx.scrape-uri=http://nginx:80/nginx_status'
+    depends_on:
+      - nginx
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Monitoring: Node Exporter (Host System Metrics)
+  # ═════════════════════════════════════════════════════════════════════════════
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    pid: host
+    volumes:
+      - '/:/host:ro,rslave'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - infrastructure
 

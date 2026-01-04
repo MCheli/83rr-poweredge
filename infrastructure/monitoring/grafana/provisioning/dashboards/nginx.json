@@ -1,0 +1,213 @@
+{
+  "id": null,
+  "uid": "nginx-dashboard",
+  "title": "NGINX",
+  "tags": ["nginx", "proxy", "web"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Connections",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_connections_active", "legendFormat": "Active"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}]}
+        }
+      },
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Connections Reading",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_connections_reading", "legendFormat": "Reading"}],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "none", "graphMode": "area"},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Connections Writing",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_connections_writing", "legendFormat": "Writing"}],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "none", "graphMode": "area"},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Connections Waiting",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_connections_waiting", "legendFormat": "Waiting"}],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "none", "graphMode": "area"},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0}
+    },
+    {
+      "id": 5,
+      "title": "Requests/sec",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(nginx_http_requests_total[1m])", "legendFormat": "req/s"}],
+      "fieldConfig": {"defaults": {"unit": "reqps", "decimals": 2}},
+      "options": {"colorMode": "none", "graphMode": "area"},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0}
+    },
+    {
+      "id": 6,
+      "title": "Total Requests",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_http_requests_total", "legendFormat": "Total"}],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "none", "graphMode": "none"},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0}
+    },
+    {
+      "id": 7,
+      "title": "Connections Over Time",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "nginx_connections_active", "legendFormat": "Active"},
+        {"expr": "nginx_connections_reading", "legendFormat": "Reading"},
+        {"expr": "nginx_connections_writing", "legendFormat": "Writing"},
+        {"expr": "nginx_connections_waiting", "legendFormat": "Waiting"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"tooltip": {"mode": "multi"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    },
+    {
+      "id": 8,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(nginx_http_requests_total[1m])", "legendFormat": "Requests/sec"}],
+      "fieldConfig": {"defaults": {"unit": "reqps", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+    },
+    {
+      "id": 9,
+      "title": "Connections Accepted/Handled",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "rate(nginx_connections_accepted[1m])", "legendFormat": "Accepted/sec"},
+        {"expr": "rate(nginx_connections_handled[1m])", "legendFormat": "Handled/sec"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+    },
+    {
+      "id": 10,
+      "title": "Connection Accept Rate",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "rate(nginx_connections_accepted[5m])", "legendFormat": "5m avg"},
+        {"expr": "rate(nginx_connections_accepted[1h])", "legendFormat": "1h avg"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}
+    },
+    {
+      "id": 11,
+      "title": "NGINX Container CPU",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"nginx\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0}},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 20}
+    },
+    {
+      "id": 12,
+      "title": "NGINX Container Memory",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"nginx\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 20}
+    },
+    {
+      "id": 13,
+      "title": "NGINX Container Network",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "rate(container_network_receive_bytes_total{name=\"nginx\"}[1m])", "legendFormat": "RX"},
+        {"expr": "rate(container_network_transmit_bytes_total{name=\"nginx\"}[1m])", "legendFormat": "TX"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 20}
+    },
+    {
+      "id": 14,
+      "title": "NGINX Status",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_up", "legendFormat": "Status"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}],
+          "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "options": {"colorMode": "background"},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 26}
+    },
+    {
+      "id": 15,
+      "title": "Exporter Up",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "up{job=\"nginx-exporter\"}", "legendFormat": "Exporter"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}],
+          "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "options": {"colorMode": "background"},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 26}
+    },
+    {
+      "id": 16,
+      "title": "Total Connections (Lifetime)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "nginx_connections_accepted", "legendFormat": "Accepted"},
+        {"expr": "nginx_connections_handled", "legendFormat": "Handled"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "none", "graphMode": "none"},
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 26}
+    },
+    {
+      "id": 17,
+      "title": "Dropped Connections",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "nginx_connections_accepted - nginx_connections_handled", "legendFormat": "Dropped"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 10}]}
+        }
+      },
+      "options": {"colorMode": "value"},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 26}
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "30s"
+}
