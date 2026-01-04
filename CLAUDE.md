@@ -113,17 +113,18 @@ docker compose down -v
 ### Active Services
 1. **nginx** - Reverse proxy and SSL termination
 2. **personal-website** - Nuxt.js personal portfolio
-3. **flask-api** - Python Flask REST API
-4. **jupyterhub** - Multi-user JupyterLab data science environment (password-protected)
-5. **minecraft** - Minecraft Java Edition server
-6. **opensearch** - Log aggregation and search
-7. **opensearch-dashboards** - OpenSearch visualization
-8. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
-9. **prometheus** - Metrics collection and storage
-10. **cadvisor** - Container resource monitoring
-11. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
-12. **node-exporter** - Host system metrics (CPU, memory, disk)
-13. **nginx-exporter** - NGINX metrics for Prometheus
+3. **cookbook** - Static recipe website (image from ghcr.io/mcheli/cookbook)
+4. **flask-api** - Python Flask REST API
+5. **jupyterhub** - Multi-user JupyterLab data science environment (password-protected)
+6. **minecraft** - Minecraft Java Edition server
+7. **opensearch** - Log aggregation and search
+8. **opensearch-dashboards** - OpenSearch visualization
+9. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
+10. **prometheus** - Metrics collection and storage
+11. **cadvisor** - Container resource monitoring
+12. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
+13. **node-exporter** - Host system metrics (CPU, memory, disk)
+14. **nginx-exporter** - NGINX metrics for Prometheus
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -142,6 +143,7 @@ Each service can use `.env` files from its infrastructure directory:
 
 ### Public Services (HTTPS via Cloudflare)
 - **https://www.markcheli.com** - Personal website
+- **https://cookbook.markcheli.com** - Recipe cookbook (static site)
 - **https://flask.markcheli.com** - Flask API
 - **https://jupyter.markcheli.com** - JupyterHub (password-protected, multi-user data science environment)
 - **minecraft.markcheli.com:25565** - Minecraft server
