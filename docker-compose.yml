@@ -64,6 +64,24 @@ services:
       start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Cookbook Website (Static Recipe Site)
+  # Image published from: github.com/mcheli/cookbook
+  # ═════════════════════════════════════════════════════════════════════════════
+  cookbook:
+    image: ghcr.io/mcheli/cookbook:latest
+    container_name: cookbook
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Flask API Service
   # ═════════════════════════════════════════════════════════════════════════════
   flask-api:
