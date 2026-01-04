@@ -3,7 +3,7 @@
 
 .PHONY: help up down restart logs status build clean test health \
         nginx-reload nginx-test prometheus-reload grafana-reload \
-        venv deps shell backup
+        venv deps shell backup deploy pull purge-cache
 
 # Default target
 help:
@@ -15,6 +15,9 @@ help:
 	@echo "  make down            - Stop all services"
 	@echo "  make restart         - Restart all services"
 	@echo "  make restart s=NAME  - Restart specific service"
+	@echo "  make deploy s=NAME   - Pull, restart, and purge cache for service"
+	@echo "  make pull s=NAME     - Pull latest image for service"
+	@echo "  make purge-cache s=NAME - Purge Cloudflare cache for service"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build           - Build all services"
@@ -70,6 +73,49 @@ else
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 endif
+
+# Pull latest image for a service
+pull:
+ifndef s
+	@echo "Error: Specify service with s=NAME"
+	@echo "Example: make pull s=cookbook"
+	@exit 1
+endif
+	docker compose pull $(s)
+
+# Purge Cloudflare cache for a service
+purge-cache:
+ifndef s
+	@echo "Error: Specify service with s=NAME"
+	@echo "Example: make purge-cache s=cookbook"
+	@echo "Available: cookbook, personal-website, flask-api, jupyterhub"
+	@exit 1
+endif
+	@. venv/bin/activate && python scripts/cloudflare_cache_purge.py $(s)
+
+# Full deploy: pull image, restart service, purge cache
+deploy:
+ifndef s
+	@echo "Error: Specify service with s=NAME"
+	@echo "Example: make deploy s=cookbook"
+	@exit 1
+endif
+	@echo "=== Deploying $(s) ==="
+	@echo ""
+	@echo "Step 1: Pulling latest image..."
+	docker compose pull $(s)
+	@echo ""
+	@echo "Step 2: Restarting service..."
+	docker compose up -d $(s)
+	@echo ""
+	@echo "Step 3: Purging Cloudflare cache..."
+	@. venv/bin/activate && python scripts/cloudflare_cache_purge.py $(s) || echo "Warning: Cache purge failed (token may need Cache Purge permission)"
+	@echo ""
+	@echo "Step 4: Verifying deployment..."
+	@sleep 2
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep $(s) || true
+	@echo ""
+	@echo "=== Deploy complete ==="
 
 # =============================================================================
 # Building Commands
