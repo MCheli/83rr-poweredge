@@ -456,7 +456,7 @@ cat .env | grep CLOUDFLARE
 
 - **CLAUDE.md** - Complete infrastructure management guide with SOPs
 - **README.md** - Project overview and quick start
-- **DEPLOYMENT_STATUS.md** - Current deployment status
+- **docs/DEPLOYMENT_STATUS.md** - Current deployment status
 - **scripts/one-time/README.md** - One-time setup scripts documentation
 - **scripts/archive/README.md** - Archived scripts documentation
 

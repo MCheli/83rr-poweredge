@@ -486,7 +486,7 @@ docker compose up -d --build
 ├── .env                           # Environment variables
 ├── CLAUDE.md                      # This document
 ├── README.md                      # Project overview
-├── DEPLOYMENT_STATUS.md           # Current deployment state
+├── docs/                          # Documentation files
 │
 ├── infrastructure/
 │   ├── nginx/                     # NGINX reverse proxy
@@ -661,7 +661,7 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ## 📖 Additional Documentation
 
-- **DEPLOYMENT_STATUS.md** - Current service status and deployment notes
+- **docs/DEPLOYMENT_STATUS.md** - Current service status and deployment notes
 - **Makefile** - Run `make help` for available commands
 - **infrastructure/nginx/README.md** - NGINX configuration guide
 - **infrastructure/monitoring/README.md** - Prometheus/Grafana monitoring guide

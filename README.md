@@ -367,7 +367,7 @@ docker exec <container1> ping <container2>
 
 ### Project Documentation
 - **CLAUDE.md** - Comprehensive infrastructure management guide for Claude Code
-- **DEPLOYMENT_STATUS.md** - Current deployment status and service health
+- **docs/DEPLOYMENT_STATUS.md** - Current deployment status and service health
 - **Makefile** - Run `make help` for all available commands
 
 ### Infrastructure Documentation
