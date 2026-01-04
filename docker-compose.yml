@@ -3,9 +3,16 @@
 # Auto-loads docker-compose.override.yml for local development
 # Use docker-compose.prod.yml for production deployment
 
+# Shared logging configuration to prevent disk space issues
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # ═════════════════════════════════════════════════════════════════════════════
-  # NGINX Reverse Proxy (will replace Traefik)
+  # NGINX Reverse Proxy
   # ═════════════════════════════════════════════════════════════════════════════
   nginx:
     build:
@@ -13,6 +20,7 @@ services:
       dockerfile: Dockerfile
     container_name: nginx
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - INFRASTRUCTURE_ENV=${INFRASTRUCTURE_ENV:-production}
     ports:
@@ -22,11 +30,13 @@ services:
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
-      - ./infrastructure/nginx/logs:/var/log/nginx
-    # depends_on:
-    #   - personal-website
-    #   - flask-api
-    #   - jupyter
+      # Note: nginx logs go to stdout/stderr (symlinks in Dockerfile) for Docker log capture
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - infrastructure
 
@@ -39,6 +49,7 @@ services:
       dockerfile: Dockerfile
     container_name: personal-website
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - NODE_ENV=production
       - NUXT_PUBLIC_API_BASE=/api
@@ -61,6 +72,7 @@ services:
       dockerfile: Dockerfile
     container_name: flask-api
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
@@ -82,6 +94,7 @@ services:
     image: quay.io/jupyterhub/configurable-http-proxy:5
     container_name: jupyterhub-proxy
     restart: unless-stopped
+    logging: *default-logging
     command:
       - --ip=0.0.0.0
       - --port=8000
@@ -102,6 +115,7 @@ services:
       dockerfile: Dockerfile
     container_name: jupyterhub
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       - jupyterhub-proxy
       - jupyterhub-db
@@ -229,6 +243,7 @@ services:
     image: postgres:16-alpine
     container_name: jupyterhub-db
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - POSTGRES_DB=jhub
       - POSTGRES_USER=jhub
@@ -246,11 +261,13 @@ services:
 
   # ═════════════════════════════════════════════════════════════════════════════
   # OpenSearch (Logging Infrastructure)
+  # Note: Using 'latest' because data format requires matching version; pin after fresh install
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch:
     image: opensearchproject/opensearch:latest
     container_name: opensearch
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node1
@@ -268,6 +285,12 @@ services:
         hard: 65536
     volumes:
       - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks:
       - infrastructure
 
@@ -278,11 +301,41 @@ services:
     image: opensearchproject/opensearch-dashboards:latest
     container_name: opensearch-dashboards
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - OPENSEARCH_HOSTS=http://opensearch:9200
       - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
     depends_on:
       - opensearch
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q 'available'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Fluent Bit (Log Shipper)
+  # ═════════════════════════════════════════════════════════════════════════════
+  fluent-bit:
+    image: fluent/fluent-bit:3.2
+    container_name: fluent-bit
+    restart: unless-stopped
+    logging: *default-logging
+    user: root
+    volumes:
+      - ./infrastructure/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./infrastructure/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - ./infrastructure/fluent-bit/docker_metadata.lua:/fluent-bit/etc/docker_metadata.lua:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - fluent_bit_data:/var/log
+    depends_on:
+      - opensearch
+    # Note: Fluent Bit distroless image has no shell utilities for health checks
+    # Service health can be verified via: docker logs fluent-bit | grep -i error
     networks:
       - infrastructure
 
@@ -290,9 +343,10 @@ services:
   # Minecraft Server
   # ═════════════════════════════════════════════════════════════════════════════
   minecraft:
-    image: itzg/minecraft-server:latest
+    image: itzg/minecraft-server:java21
     container_name: minecraft
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - EULA=TRUE
       - TYPE=PAPER
@@ -310,9 +364,10 @@ services:
   # Monitoring: Prometheus (Metrics Database)
   # ═════════════════════════════════════════════════════════════════════════════
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     container_name: prometheus
     restart: unless-stopped
+    logging: *default-logging
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -323,6 +378,12 @@ services:
     volumes:
       - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - infrastructure
 
@@ -330,9 +391,10 @@ services:
   # Monitoring: Grafana (Visualization Dashboards)
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.5.2
     container_name: grafana
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -341,6 +403,12 @@ services:
       - ./infrastructure/monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json:ro
     depends_on:
       - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - infrastructure
 
@@ -348,15 +416,22 @@ services:
   # Monitoring: cAdvisor (Container Metrics)
   # ═════════════════════════════════════════════════════════════════════════════
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
     container_name: cadvisor
     restart: unless-stopped
+    logging: *default-logging
     user: "0"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - infrastructure
 
@@ -378,6 +453,7 @@ volumes:
   jupyterhub_shared:
   jupyterhub_db_data:
   opensearch_data:
+  fluent_bit_data:
   minecraft_data:
   prometheus_data:
   grafana_data:

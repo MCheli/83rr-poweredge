@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README*
+
+# Logs (we mount a volume for these)
+logs/
+*.log
+
+# Development files
+.env*
+*.bak
+*.tmp
+*~
+
+# IDE
+.vscode/
+.idea/
