@@ -1,0 +1,228 @@
+{
+  "id": null,
+  "uid": "docker-services",
+  "title": "Docker Services",
+  "tags": ["docker", "services", "containers"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "NGINX - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"nginx\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "NGINX - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"nginx\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 268435456}, {"color": "red", "value": 536870912}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 3, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Personal Website - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"personal-website\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 6, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Personal Website - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"personal-website\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 536870912}, {"color": "red", "value": 1073741824}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 9, "y": 0}
+    },
+    {
+      "id": 5,
+      "title": "Flask API - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"flask-api\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 12, "y": 0}
+    },
+    {
+      "id": 6,
+      "title": "Flask API - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"flask-api\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 268435456}, {"color": "red", "value": 536870912}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 15, "y": 0}
+    },
+    {
+      "id": 7,
+      "title": "Minecraft - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"minecraft\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 18, "y": 0}
+    },
+    {
+      "id": 8,
+      "title": "Minecraft - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"minecraft\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 2147483648}, {"color": "red", "value": 4294967296}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 21, "y": 0}
+    },
+    {
+      "id": 9,
+      "title": "OpenSearch - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"opensearch\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 0, "y": 3}
+    },
+    {
+      "id": 10,
+      "title": "OpenSearch - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"opensearch\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1073741824}, {"color": "red", "value": 2147483648}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 3, "y": 3}
+    },
+    {
+      "id": 11,
+      "title": "Prometheus - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"prometheus\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 6, "y": 3}
+    },
+    {
+      "id": 12,
+      "title": "Prometheus - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"prometheus\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 536870912}, {"color": "red", "value": 1073741824}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 9, "y": 3}
+    },
+    {
+      "id": 13,
+      "title": "Grafana - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"grafana\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 12, "y": 3}
+    },
+    {
+      "id": 14,
+      "title": "Grafana - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"grafana\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 268435456}, {"color": "red", "value": 536870912}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 15, "y": 3}
+    },
+    {
+      "id": 15,
+      "title": "JupyterHub - CPU",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name=\"jupyterhub\"}[1m]) * 100", "legendFormat": "CPU %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 80}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 18, "y": 3}
+    },
+    {
+      "id": 16,
+      "title": "JupyterHub - Memory",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name=\"jupyterhub\"}", "legendFormat": "Memory"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 536870912}, {"color": "red", "value": 1073741824}]}}},
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "gridPos": {"h": 3, "w": 3, "x": 21, "y": 3}
+    },
+    {
+      "id": 17,
+      "title": "All Containers - CPU Over Time",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_cpu_usage_seconds_total{name!=\"\"}[1m]) * 100", "legendFormat": "{{name}}"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0}},
+      "options": {"tooltip": {"mode": "multi"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+    },
+    {
+      "id": 18,
+      "title": "All Containers - Memory Over Time",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "container_memory_usage_bytes{name!=\"\"}", "legendFormat": "{{name}}"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
+      "options": {"tooltip": {"mode": "multi"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+    },
+    {
+      "id": 19,
+      "title": "Container Network RX",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_network_receive_bytes_total{name!=\"\"}[1m])", "legendFormat": "{{name}}"}],
+      "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+    },
+    {
+      "id": 20,
+      "title": "Container Network TX",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_network_transmit_bytes_total{name!=\"\"}[1m])", "legendFormat": "{{name}}"}],
+      "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+    },
+    {
+      "id": 21,
+      "title": "Container Disk Read",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_fs_reads_bytes_total{name!=\"\"}[1m])", "legendFormat": "{{name}}"}],
+      "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+    },
+    {
+      "id": 22,
+      "title": "Container Disk Write",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "rate(container_fs_writes_bytes_total{name!=\"\"}[1m])", "legendFormat": "{{name}}"}],
+      "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "30s"
+}
