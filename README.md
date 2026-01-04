@@ -7,15 +7,17 @@ A comprehensive Docker-based homelab infrastructure running on Ubuntu Server wit
 ```
 ├── infrastructure/           # Service configurations
 │   ├── nginx/               # NGINX reverse proxy
-│   ├── jupyter/             # JupyterLab data science environment
+│   ├── jupyter/             # JupyterHub data science environment
 │   ├── opensearch/          # OpenSearch logging stack
 │   ├── personal-website/    # Nuxt.js personal website
 │   ├── flask-api/           # Flask API backend service
 │   ├── minecraft/           # Minecraft server
-│   └── monitoring/          # Prometheus/Grafana monitoring
+│   ├── monitoring/          # Prometheus/Grafana monitoring
+│   └── fluent-bit/          # Log shipper configuration
 ├── scripts/                 # Management and utility scripts
 ├── docker-compose.yml       # Base service definitions
 ├── docker-compose.prod.yml  # Production overrides
+├── Makefile                 # Common operations (make help)
 ├── .env                     # Environment configuration (secrets)
 ├── requirements.txt         # Python dependencies
 └── venv/                    # Python virtual environment
@@ -38,29 +40,33 @@ pip install -r requirements.txt
 # Navigate to project directory
 cd ~/83rr-poweredge
 
-# Deploy all services
+# Deploy all services (using Makefile)
+make up
+
+# Or use docker compose directly
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Check service status
-docker ps
+make status
 
 # View logs
-docker compose logs -f
+make logs
 ```
 
 ### 3. Verify Deployment
 ```bash
-# Test NGINX health
-curl http://localhost/health
+# Run health checks on all services
+make health
 
-# Test service endpoints
+# Or test manually
+curl http://localhost/health
 curl -I https://www.markcheli.com
 curl https://flask.markcheli.com/health
 ```
 
 ## Current Infrastructure
 
-### Active Services (10/10 - 100% Operational)
+### Active Services
 
 **Public Services:**
 - **Personal Website** - https://www.markcheli.com, https://markcheli.com
@@ -69,8 +75,8 @@ curl https://flask.markcheli.com/health
 - **Flask API** - https://flask.markcheli.com
   - Python API with weather endpoint and profile data
   - Health check: `/health`
-- **JupyterLab** - https://jupyter.markcheli.com
-  - Standalone data science environment
+- **JupyterHub** - https://jupyter.markcheli.com
+  - Multi-user data science environment
   - Real-time collaboration, SQL integration, AI assistance
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
@@ -78,6 +84,7 @@ curl https://flask.markcheli.com/health
 **LAN-Only Services** (*.ops.markcheli.com):
 - **Grafana** - https://grafana-local.ops.markcheli.com
   - Monitoring dashboards (login: admin/admin123)
+  - 5 provisioned dashboards (System, Infrastructure, Docker, NGINX, Containers)
 - **Prometheus** - https://prometheus-local.ops.markcheli.com
   - Metrics database with 30-day retention
 - **cAdvisor** - https://cadvisor-local.ops.markcheli.com
@@ -87,10 +94,13 @@ curl https://flask.markcheli.com/health
 - **Flask API Dev** - https://flask-dev.ops.markcheli.com
   - Development API environment
 
-**Infrastructure:**
+**Infrastructure Services:**
 - **NGINX** - Reverse proxy with SSL termination
   - Ports: 80 (HTTP), 443 (HTTPS), 25565 (Minecraft)
 - **OpenSearch** - Log aggregation and search engine
+- **Fluent Bit** - Log shipper (Docker logs → OpenSearch)
+- **Node Exporter** - Host system metrics (CPU, memory, disk)
+- **NGINX Exporter** - NGINX metrics for Prometheus
 
 ### Server Details
 - **Host**: 83rr-poweredge
@@ -127,7 +137,36 @@ curl https://flask.markcheli.com/health
 
 ## Service Management
 
-### Common Commands
+### Makefile Commands (Recommended)
+
+```bash
+# View all available commands
+make help
+
+# Start all services (production)
+make up
+
+# Stop all services
+make down
+
+# Restart all or specific service
+make restart
+make restart s=nginx
+
+# Build services
+make build
+make build s=personal-website
+
+# View logs
+make logs
+make logs s=grafana
+
+# Check status and health
+make status
+make health
+```
+
+### Direct Docker Compose Commands
 
 ```bash
 # Start all services
@@ -154,13 +193,13 @@ docker compose ps
 
 ```bash
 # Test configuration
-docker compose exec nginx nginx -t
+make nginx-test
 
 # Reload configuration (no downtime)
-docker compose exec nginx nginx -s reload
+make nginx-reload
 
 # View NGINX logs
-docker compose logs nginx
+make logs s=nginx
 ```
 
 ### SSL Certificate Renewal
@@ -207,21 +246,26 @@ OPENWEATHER_API_KEY=your_openweather_key
 
 ## Monitoring & Health Checks
 
-### Service Health
+### Metrics Stack
 - **Grafana Dashboard**: https://grafana-local.ops.markcheli.com
   - Pre-configured Prometheus datasource
-  - Container metrics and system monitoring
+  - 5 provisioned dashboards: Infrastructure Overview, System, Docker Services, Containers, NGINX
+  - Login: admin/admin123
 - **Prometheus**: https://prometheus-local.ops.markcheli.com
   - 30-day metric retention
-  - Comprehensive service monitoring
+  - Scrapes: cAdvisor, Node Exporter, NGINX Exporter
 - **cAdvisor**: https://cadvisor-local.ops.markcheli.com
   - Real-time container resource metrics
+- **Node Exporter**: Host system metrics (CPU, memory, disk, network)
+- **NGINX Exporter**: NGINX connections and request metrics
 
-### Logging
-- **OpenSearch**: Centralized log storage
+### Logging Stack
+- **Fluent Bit**: Log shipper collecting from all containers
+  - Ships to OpenSearch with daily index rotation
+- **OpenSearch**: Centralized log storage and search
 - **OpenSearch Dashboards**: https://logs-local.ops.markcheli.com
   - Log visualization and search
-  - Daily indices: `logs-homelab-YYYY.MM.dd`
+  - Daily indices: `logs-homelab-YYYY.MM.DD`
 
 ## Security
 
@@ -321,10 +365,16 @@ docker exec <container1> ping <container2>
 
 ## Documentation
 
+### Project Documentation
 - **CLAUDE.md** - Comprehensive infrastructure management guide for Claude Code
 - **DEPLOYMENT_STATUS.md** - Current deployment status and service health
-- **CLOUDFLARE_SSL_SETUP_GUIDE.md** - SSL certificate setup documentation
-- **DOCUMENTATION_REVIEW_REPORT.md** - Documentation audit and update tracking
+- **Makefile** - Run `make help` for all available commands
+
+### Infrastructure Documentation
+- **infrastructure/nginx/README.md** - NGINX reverse proxy configuration
+- **infrastructure/monitoring/README.md** - Prometheus/Grafana monitoring setup
+- **infrastructure/fluent-bit/README.md** - Fluent Bit log shipping configuration
+- **scripts/README.md** - Python script documentation
 
 ## Support & Maintenance
 

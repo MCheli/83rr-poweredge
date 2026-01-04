@@ -2,13 +2,13 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** January 3, 2026
+**Last Updated:** January 4, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
-**Architecture:** Local execution (SSH dependency removed for 92% test pass rate)
+**Architecture:** Local execution (Docker Compose + Makefile)
 
 ---
 
-## 📋 Active Scripts (7 total)
+## 📋 Active Scripts
 
 ### 1. `test_infrastructure.py` ⭐ PRIMARY TESTING
 **Purpose:** Comprehensive infrastructure health testing
@@ -22,10 +22,11 @@ Main testing script that validates all infrastructure components. Should be run 
 - DNS resolution (Cloudflare and local)
 - SSL certificate validation
 - HTTP/HTTPS endpoint availability
-- Service health checks (all 10 services)
+- Service health checks (all services)
 - Docker container status
 - Network connectivity
 - Minecraft server connection
+- Prometheus target health
 
 **Usage:**
 ```bash
@@ -275,7 +276,7 @@ python scripts/ssh_manager.py batch "docker ps" "docker stats --no-stream"
 
 ```
 scripts/
-├── SCRIPTS.md                        # This file (documentation)
+├── README.md                         # This file (documentation)
 ├── test_infrastructure.py            # ⭐ Main testing script
 ├── quick_service_test.py            # 🚀 Quick health checks
 ├── infrastructure_manager.py        # 🏗️ Deployment controller
@@ -344,14 +345,14 @@ When adding a new script to this directory:
 
 1. **Create the script** with proper shebang and documentation
 2. **Add executable permissions** (if shell script): `chmod +x script_name.sh`
-3. **Update this file** (`SCRIPTS.md`) with:
+3. **Update this file** (`README.md`) with:
    - Script name and purpose
    - Size and language
    - Comprehensive description
    - Usage examples
    - When to use / when not to use
 4. **Update CLAUDE.md** if script changes standard workflows
-5. **Add to git**: `git add scripts/script_name.{py,sh} scripts/SCRIPTS.md`
+5. **Add to git**: `git add scripts/script_name.{py,sh} scripts/README.md`
 6. **Commit with description**: Explain what the script does and why it's needed
 
 ### Modifying an Existing Script
@@ -359,7 +360,7 @@ When adding a new script to this directory:
 When significantly modifying a script:
 
 1. **Make your changes** to the script
-2. **Update this file** (`SCRIPTS.md`) to reflect:
+2. **Update this file** (`README.md`) to reflect:
    - New features or functionality
    - Changed usage patterns
    - Updated examples
@@ -374,7 +375,7 @@ When a script becomes obsolete:
 
 1. **Move to archive**: `mv scripts/script_name.{py,sh} scripts/archive/`
 2. **Update archive/README.md**: Document why it was archived
-3. **Remove from this file** (`SCRIPTS.md`)
+3. **Remove from this file** (`README.md`)
 4. **Update CLAUDE.md**: Remove references to archived script
 5. **Commit**: Explain why script is no longer needed
 
@@ -382,21 +383,32 @@ When a script becomes obsolete:
 
 ## 🎯 Quick Reference
 
+**Makefile Commands (Recommended):**
+```bash
+make help              # Show all available commands
+make up                # Start all services
+make status            # Show container status
+make health            # Run health checks
+make logs s=nginx      # View specific service logs
+```
+
 **Before Every Commit:**
 ```bash
-python scripts/test_infrastructure.py
+make health
+# or: python scripts/test_infrastructure.py
 ```
 
 **After Infrastructure Changes:**
 ```bash
-python scripts/infrastructure_manager.py deploy-all
-python scripts/quick_service_test.py
+make up                # Deploy all services
+make health            # Verify health
 ```
 
 **View Logs:**
 ```bash
-python scripts/infrastructure_manager.py logs recent
-python scripts/opensearch_diagnostic_ssh.py recent --hours 24
+make logs              # All logs
+make logs s=grafana    # Specific service
+python scripts/opensearch_diagnostic.py recent --hours 24
 ```
 
 **DNS Changes:**
@@ -407,7 +419,8 @@ python scripts/cloudflare_dns_manager.py add <subdomain> <ip>
 
 **Emergency Troubleshooting:**
 ```bash
-python scripts/ssh_manager.py run "docker ps -a"
+make status            # Check containers
+docker ps -a           # All containers including stopped
 python scripts/infrastructure_manager.py health-check-all
 ```
 
