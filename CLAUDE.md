@@ -110,7 +110,7 @@ docker compose down -v
 
 ## 🏗️ Infrastructure Architecture
 
-### Active Services (10/10 running)
+### Active Services
 1. **nginx** - Reverse proxy and SSL termination
 2. **personal-website** - Nuxt.js personal portfolio
 3. **flask-api** - Python Flask REST API
@@ -118,9 +118,12 @@ docker compose down -v
 5. **minecraft** - Minecraft Java Edition server
 6. **opensearch** - Log aggregation and search
 7. **opensearch-dashboards** - OpenSearch visualization
-8. **grafana** - Metrics visualization dashboards
+8. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
 9. **prometheus** - Metrics collection and storage
 10. **cadvisor** - Container resource monitoring
+11. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
+12. **node-exporter** - Host system metrics (CPU, memory, disk)
+13. **nginx-exporter** - NGINX metrics for Prometheus
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -375,7 +378,7 @@ docker compose exec nginx cat /etc/nginx/conf.d/production.conf
 5. **ALWAYS** run health checks after changes
 6. **ALWAYS** investigate 4XX/5XX errors immediately
 7. **ALWAYS** create backups before destructive operations
-8. **ALWAYS** update `scripts/SCRIPTS.md` when adding or significantly modifying scripts
+8. **ALWAYS** update `scripts/README.md` when adding or significantly modifying scripts
 
 ### Pre-Commit Checklist
 ```bash
@@ -479,6 +482,7 @@ docker compose up -d --build
 ├── docker-compose.yml              # Base service definitions
 ├── docker-compose.prod.yml         # Production overrides
 ├── docker-compose.override.yml     # Local development overrides
+├── Makefile                       # Common operations (make help)
 ├── .env                           # Environment variables
 ├── CLAUDE.md                      # This document
 ├── README.md                      # Project overview
@@ -497,13 +501,14 @@ docker compose up -d --build
 │   │
 │   ├── personal-website/          # Nuxt.js website
 │   ├── flask-api/                 # Python Flask API
-│   ├── jupyter/                   # JupyterLab
+│   ├── jupyter/                   # JupyterHub
 │   ├── minecraft/                 # Minecraft server
 │   ├── opensearch/                # Log aggregation
-│   └── monitoring/                # Prometheus/Grafana
+│   ├── monitoring/                # Prometheus/Grafana
+│   └── fluent-bit/                # Log shipper to OpenSearch
 │
 └── scripts/
-    ├── SCRIPTS.md                        # Script documentation (update this when modifying scripts!)
+    ├── README.md                         # Script documentation (update this when modifying scripts!)
     ├── test_infrastructure.py            # ⭐ Main testing script
     ├── quick_service_test.py            # 🚀 Quick health checks
     ├── infrastructure_manager.py        # 🏗️ Deployment controller
@@ -519,11 +524,11 @@ docker compose up -d --build
 
 ## 📜 Script Management Protocol
 
-**IMPORTANT:** Claude Code must maintain `scripts/SCRIPTS.md` whenever scripts are modified.
+**IMPORTANT:** Claude Code must maintain `scripts/README.md` whenever scripts are modified.
 
-### When to Update SCRIPTS.md
+### When to Update scripts/README.md
 
-Update `scripts/SCRIPTS.md` when:
+Update `scripts/README.md` when:
 1. **Adding a new script** to the `scripts/` directory
 2. **Significantly modifying** an existing script (functionality changes, not just bug fixes)
 3. **Archiving a script** (move to `scripts/archive/`)
@@ -531,7 +536,7 @@ Update `scripts/SCRIPTS.md` when:
 
 ### What to Update
 
-When updating SCRIPTS.md:
+When updating scripts/README.md:
 - Add/modify the relevant script section with:
   - Purpose and description
   - File size and language
@@ -580,17 +585,35 @@ python scripts/script_name.py [options]
 ## 🎯 Success Criteria
 
 Infrastructure is considered healthy when:
-1. ✅ All 8 services show as "Up" in `docker ps`
+1. ✅ All services show as "Up" in `docker ps`
 2. ✅ All public services return HTTP 200 or proper redirects
 3. ✅ NGINX config passes validation: `nginx -t`
 4. ✅ Monitoring dashboards are accessible (Grafana, Prometheus)
 5. ✅ Minecraft server responds on port 25565
-6. ✅ No error messages in recent logs (`docker compose logs`)
+6. ✅ All Prometheus targets are "up" (prometheus, cadvisor, node-exporter, nginx-exporter)
+7. ✅ Logs appearing in OpenSearch (via Fluent Bit)
+8. ✅ No error messages in recent logs (`docker compose logs`)
 
 ---
 
 ## 🚀 Quick Reference Commands
 
+### Makefile Commands (Recommended)
+```bash
+make help              # Show all available commands
+make up                # Start all services (production)
+make down              # Stop all services
+make status            # Show container status
+make health            # Run health checks on all services
+make logs              # Follow all logs
+make logs s=nginx      # Follow specific service logs
+make restart s=nginx   # Restart specific service
+make nginx-test        # Test NGINX configuration
+make nginx-reload      # Reload NGINX configuration
+make build s=NAME      # Build specific service
+```
+
+### Direct Docker Compose Commands
 ```bash
 # Deploy everything
 cd ~/83rr-poweredge
@@ -639,12 +662,14 @@ CLOUDFLARE_EMAIL=your_email@example.com
 ## 📖 Additional Documentation
 
 - **DEPLOYMENT_STATUS.md** - Current service status and deployment notes
-- **CLEANUP_PLAN.md** - Repository cleanup and modernization plan
+- **Makefile** - Run `make help` for available commands
 - **infrastructure/nginx/README.md** - NGINX configuration guide
-- **infrastructure/monitoring/README.md** - Monitoring setup guide
+- **infrastructure/monitoring/README.md** - Prometheus/Grafana monitoring guide
+- **infrastructure/fluent-bit/README.md** - Fluent Bit log shipping guide
+- **scripts/README.md** - Python script documentation
 
 ---
 
-**Last Updated**: January 2, 2026
+**Last Updated**: January 4, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
-**Status**: Production-ready, 10/10 services operational (100%)
+**Status**: Production-ready, all services operational

@@ -1,15 +1,17 @@
 # Infrastructure Deployment Status - Phase 6 Complete
 
-**Date**: January 2, 2026
-**Status**: ✅ PRODUCTION READY (10/10 services - 100% operational)
+**Date**: January 4, 2026
+**Status**: ✅ PRODUCTION READY
 
 ## ✅ Successfully Deployed Services
 
-### Core Infrastructure (10 services)
-1. **NGINX** - Modern reverse proxy with Cloudflare SSL ✅
+### Core Infrastructure
+
+1. **NGINX** - Reverse proxy with Cloudflare SSL ✅
    - Ports: 80 (HTTP), 443 (HTTPS), 25565 (Minecraft passthrough)
    - SSL: Wildcard certificates for *.markcheli.com and *.ops.markcheli.com
    - Configuration: Production-optimized with HTTP/2 support
+   - Metrics: stub_status endpoint for monitoring
 
 2. **Personal Website** - Nuxt.js frontend ✅
    - Status: Healthy
@@ -19,126 +21,158 @@
    - Status: Healthy
    - Endpoints: flask.markcheli.com, flask-dev.ops.markcheli.com
 
-4. **JupyterLab** - Data science environment ✅
+4. **JupyterHub** - Multi-user data science environment ✅
    - Status: Healthy
    - Endpoint: jupyter.markcheli.com
-   - Mode: Standalone JupyterLab
+   - Mode: Multi-user with Docker spawner
 
 5. **OpenSearch** - Log aggregation & search ✅
-   - Status: Green cluster (1 node, 4 primary shards)
+   - Status: Yellow cluster (1 node, single-node mode)
    - Version: Latest
+   - Indices: logs-homelab-* (daily rotation)
 
 6. **OpenSearch Dashboards** - Log visualization ✅
    - Endpoint: logs-local.ops.markcheli.com
 
 7. **Grafana** - Monitoring dashboards ✅
-   - Version: 12.3.1
+   - Version: 11.5.2
    - Endpoint: grafana-local.ops.markcheli.com
    - Login: admin/admin123
+   - Dashboards: 5 provisioned (System, Infrastructure, Docker, NGINX, Containers)
 
 8. **Prometheus** - Metrics database ✅
    - Status: Healthy
    - Endpoint: prometheus-local.ops.markcheli.com
    - Retention: 30 days
+   - Targets: 4 (prometheus, cadvisor, node-exporter, nginx-exporter)
 
 9. **cAdvisor** - Container metrics collector ✅
    - Endpoint: cadvisor-local.ops.markcheli.com
 
 10. **Minecraft Server** - Game server ✅
-   - Status: Healthy
-   - Port: 25565 (TCP)
-   - Endpoint: minecraft.markcheli.com:25565
+    - Status: Healthy
+    - Port: 25565 (TCP)
+    - Endpoint: minecraft.markcheli.com:25565
 
-## 🎯 Migration Achievements
+11. **Fluent Bit** - Log shipper ✅
+    - Status: Healthy
+    - Input: Docker container logs
+    - Output: OpenSearch (logs-homelab-* indices)
 
-### Infrastructure Modernization
-- ✅ Migrated from Traefik to NGINX
-- ✅ Implemented Cloudflare Origin Certificates (15-year validity)
-- ✅ Eliminated SSH deployment dependencies
-- ✅ Native Docker Compose architecture
-- ✅ Environment-aware configuration (dev/prod)
-- ✅ Automated deployment workflows
+12. **Node Exporter** - Host system metrics ✅
+    - Status: Healthy
+    - Metrics: CPU, memory, disk, network
 
-### Security Improvements
-- ✅ Wildcard SSL certificates with proper security headers
-- ✅ HSTS enabled on all services
-- ✅ HTTP → HTTPS automatic redirects
-- ✅ Proper X-Frame-Options, CSP, and security headers
+13. **NGINX Exporter** - NGINX metrics ✅
+    - Status: Healthy
+    - Metrics: Connections, requests, upstreams
 
-### Operational Benefits
-- ✅ Simplified deployment (single command)
-- ✅ All services managed via Docker Compose
-- ✅ Proper health checks on all containers
-- ✅ Centralized logging with OpenSearch
-- ✅ Comprehensive monitoring with Prometheus/Grafana
+## 📊 Monitoring Stack
 
-## 📊 Service Health Status
+### Prometheus Targets (All Healthy)
+- prometheus (self-monitoring)
+- cadvisor (container metrics)
+- node-exporter (host metrics)
+- nginx-exporter (NGINX metrics)
 
-All running services tested and verified healthy:
-- **Flask API**: `{"status": "healthy"}` ✅
-- **Grafana**: `{"database": "ok", "version": "12.3.1"}` ✅  
-- **Prometheus**: `Prometheus Server is Healthy` ✅
-- **OpenSearch**: `{"status": "green", "number_of_nodes": 1}` ✅
-- **Minecraft**: Healthy (Docker healthcheck passing) ✅
-- **cAdvisor**: Healthy (Docker healthcheck passing) ✅
+### Grafana Dashboards
+| Dashboard | Description |
+|-----------|-------------|
+| Infrastructure Overview | Single pane of glass - CPU, memory, containers |
+| System Metrics | Host-level metrics from node-exporter |
+| Docker Services | Per-service CPU/memory for each container |
+| Docker Containers | Container network and disk I/O |
+| NGINX | Connections, requests, upstream health |
+
+### Log Aggregation
+- **Fluent Bit**: Collects logs from all containers
+- **OpenSearch**: Stores logs with daily indices (logs-homelab-YYYY.MM.DD)
+- **OpenSearch Dashboards**: Log visualization and search
+
+## 🎯 Recent Improvements (January 2026)
+
+### Infrastructure Enhancements
+- ✅ Added Fluent Bit for centralized log collection
+- ✅ Added Node Exporter for host system metrics
+- ✅ Added NGINX Exporter for reverse proxy metrics
+- ✅ Configured log rotation for all services (10MB max, 3 files)
+- ✅ Added health checks to all services
+- ✅ Created Makefile for common operations
+
+### Monitoring Improvements
+- ✅ Provisioned 5 Grafana dashboards via JSON files
+- ✅ Configured Prometheus datasource with consistent UID
+- ✅ NGINX logs now captured via stdout/stderr
+
+### Security & Best Practices
+- ✅ Added .dockerignore files to reduce build context
+- ✅ Pinned Docker image versions for reproducibility
+- ✅ NGINX metrics restricted to internal networks
 
 ## 🔧 Configuration Files
 
 ### Key Infrastructure Files
 - `docker-compose.yml` - Base configuration
 - `docker-compose.prod.yml` - Production overrides
+- `Makefile` - Common operations
 - `infrastructure/nginx/conf.d/production.conf` - NGINX routing
 - `infrastructure/nginx/certs/` - SSL certificates
 - `infrastructure/monitoring/prometheus.yml` - Metrics config
+- `infrastructure/monitoring/grafana/provisioning/` - Grafana dashboards
+- `infrastructure/fluent-bit/fluent-bit.conf` - Log shipping config
 - `.env` - Environment variables
 
 ### Deployment Commands
 ```bash
-# Full deployment
-cd ~/83rr-poweredge
+# Using Makefile (recommended)
+make up              # Start all services
+make status          # Check container status
+make health          # Run health checks
+make logs s=nginx    # View specific service logs
+
+# Direct Docker Compose
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-
-# Individual service
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d <service>
-
-# View logs
-docker compose logs -f <service>
-
-# Health check
 docker ps
-curl http://localhost/health
 ```
 
-## 🌐 DNS Configuration Required
+## 🌐 Service Endpoints
 
-The following DNS records need to be configured in Cloudflare:
+### Public Services (via Cloudflare)
+| Service | URL |
+|---------|-----|
+| Personal Website | https://www.markcheli.com |
+| Flask API | https://flask.markcheli.com |
+| JupyterHub | https://jupyter.markcheli.com |
+| Minecraft | minecraft.markcheli.com:25565 |
 
-### Public Services (A records → 173.48.98.211)
-- `flask.markcheli.com` → Flask API
+### LAN Services (*.ops.markcheli.com)
+| Service | URL |
+|---------|-----|
+| Grafana | https://grafana-local.ops.markcheli.com |
+| Prometheus | https://prometheus-local.ops.markcheli.com |
+| cAdvisor | https://cadvisor-local.ops.markcheli.com |
+| OpenSearch Dashboards | https://logs-local.ops.markcheli.com |
+| Flask API Dev | https://flask-dev.ops.markcheli.com |
 
-### LAN Services (A records → 192.168.1.179)
-- `logs-local.ops.markcheli.com` → OpenSearch Dashboards
-- `grafana-local.ops.markcheli.com` → Grafana
-- `prometheus-local.ops.markcheli.com` → Prometheus  
-- `cadvisor-local.ops.markcheli.com` → cAdvisor
-- `flask-dev.ops.markcheli.com` → Flask API (dev)
+## 📝 Documentation
 
-### Minecraft (A record → 173.48.98.211)
-- `minecraft.markcheli.com` → Port 25565
-
-## 📝 Next Steps (Optional)
-
-1. Configure DNS records in Cloudflare (if any changes needed)
-2. Remove legacy documentation artifacts (completed migration docs)
-3. Consider upgrading to JupyterHub multi-user mode (currently standalone JupyterLab)
+| Document | Purpose |
+|----------|---------|
+| README.md | Project overview and quick start |
+| CLAUDE.md | Claude Code infrastructure management guide |
+| Makefile | Available make commands (run `make help`) |
+| infrastructure/*/README.md | Service-specific documentation |
+| scripts/README.md | Python script documentation |
 
 ## ✅ Sign-off
 
 **Infrastructure Status**: PRODUCTION READY
-**Services Operational**: 10/10 (100%) ✅
+**Services Operational**: All services running ✅
 **Critical Services**: 100% operational
-**Deployment Method**: Native Docker Compose
+**Deployment Method**: Native Docker Compose + Makefile
 **SSL/TLS**: Cloudflare Origin Certificates (valid until 2040) + Let's Encrypt (LAN services)
+**Monitoring**: Prometheus + Grafana with 5 dashboards
+**Logging**: Fluent Bit → OpenSearch
 
 ---
-*Deployment completed: January 2, 2026*
+*Last updated: January 4, 2026*
