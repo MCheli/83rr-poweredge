@@ -22,7 +22,7 @@ services:
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/dev-certs:/etc/nginx/certs:ro  # Self-signed certs for dev
-      - ./infrastructure/nginx/logs:/var/log/nginx
+      # nginx logs go to stdout/stderr for Docker log capture
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Personal Website - Local Build

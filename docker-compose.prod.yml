@@ -14,7 +14,7 @@ services:
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro  # Cloudflare Origin Certificates
-      - ./infrastructure/nginx/logs:/var/log/nginx
+      # nginx logs go to stdout/stderr for Docker log capture by Fluent Bit
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Personal Website - Production Image

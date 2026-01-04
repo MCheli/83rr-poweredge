@@ -9,6 +9,10 @@ RUN apk add --no-cache openssl gettext
 # Create certificate directories
 RUN mkdir -p /etc/nginx/certs /etc/nginx/dev-certs /etc/nginx/templates
 
+# Forward nginx logs to Docker (stdout/stderr) for log aggregation
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
+    ln -sf /dev/stderr /var/log/nginx/error.log
+
 # Copy all configuration files
 COPY conf.d/ /etc/nginx/conf.d/
 

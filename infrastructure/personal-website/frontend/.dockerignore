@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output (rebuilt in container)
+.output/
+.nuxt/
+dist/
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README*
+
+# Development files
+.env*
+*.bak
+*.tmp
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+*.test.js
+*.spec.js
+__tests__/
+
+# OS files
+.DS_Store
+Thumbs.db
