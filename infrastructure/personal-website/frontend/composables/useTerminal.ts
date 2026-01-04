@@ -10,18 +10,19 @@ export const useTerminal = () => {
 
 help                    Show this help message
 clear                   Clear terminal screen
-whoami                 Display user information
-ls                     List available services
-linkedin               Open LinkedIn profile
-github                 Open GitHub profile
-services               List all services and infrastructure
-weather                Check weather in Ashland, MA
-home                   Open Home Assistant
-jupyter                Open JupyterHub
-minecraft              Open Minecraft server status
-about                  About Mark Cheli
-contact                Contact information
-exit                   Exit terminal
+whoami                  Display user information
+ls                      List available services
+linkedin                Open LinkedIn profile
+github                  Open GitHub profile
+services                List all services and infrastructure
+weather                 Check weather in Ashland, MA
+cookbook                Open recipe cookbook
+home                    Open Home Assistant
+jupyter                 Open JupyterHub
+minecraft               Open Minecraft server status
+about                   About Mark Cheli
+contact                 Contact information
+exit                    Exit terminal
 
 Use 'help <command>' for more information about a specific command.`
     },
@@ -115,10 +116,11 @@ Professional:
 
 Services:
   Personal Website: https://www.markcheli.com
+  Cookbook: https://cookbook.markcheli.com
   API Server: https://flask.markcheli.com
   Development Environment: https://jupyter.markcheli.com
   Smart Home: https://home.markcheli.com
-  Minecraft Server: https://minecraft.markcheli.com
+  Minecraft Server: minecraft.markcheli.com:25565
 
 Infrastructure:
   All services are self-hosted on my homelab infrastructure
@@ -129,6 +131,7 @@ Infrastructure:
   const actionCommands = {
     linkedin: () => window.open('https://www.linkedin.com/in/mark-cheli-0354a163/', '_blank'),
     github: () => window.open('https://github.com/MCheli', '_blank'),
+    cookbook: () => window.open('https://cookbook.markcheli.com', '_blank'),
     home: () => window.open('https://home.markcheli.com', '_blank'),
     jupyter: () => window.open('https://jupyter.markcheli.com', '_blank'),
     minecraft: () => window.open('https://minecraft.markcheli.com', '_blank'),
@@ -150,12 +153,12 @@ Infrastructure:
     if (cmd === 'services') {
       return `Public Services (Internet accessible):
 
-https://www.markcheli.com      Interactive terminal website
-https://flask.markcheli.com    Flask API server with weather data
-https://jupyter.markcheli.com  JupyterHub data science environment
-https://home.markcheli.com     Home Assistant smart home platform
-https://minecraft.markcheli.com Minecraft Java Edition server
-https://ops.markcheli.com      Whoami test service
+https://www.markcheli.com       Interactive terminal website
+https://cookbook.markcheli.com  Recipe cookbook & meal planner
+https://flask.markcheli.com     Flask API server with weather data
+https://jupyter.markcheli.com   JupyterHub data science environment
+https://home.markcheli.com      Home Assistant smart home platform
+minecraft.markcheli.com:25565   Minecraft Java Edition server
 
 Internal Infrastructure (LAN-only):
 
@@ -164,12 +167,11 @@ https://opensearch-local.ops.markcheli.com  OpenSearch API and cluster managemen
 
 System Monitoring (LAN-only):
 
-https://grafana-local.ops.markcheli.com   Grafana system dashboards & metrics
+https://grafana-local.ops.markcheli.com    Grafana system dashboards & metrics
 https://prometheus-local.ops.markcheli.com Prometheus metrics database
-https://cadvisor-local.ops.markcheli.com  cAdvisor container monitoring
+https://cadvisor-local.ops.markcheli.com   cAdvisor container monitoring
 
-Type a service name to open it, or 'linkedin' to connect professionally.
-Connect to Minecraft: minecraft.markcheli.com:25565`
+Type a service name to open it, or 'linkedin' to connect professionally.`
     }
 
     if (cmd === 'weather') {
