@@ -27,6 +27,8 @@ services:
       - "80:80"
       - "443:443"
       # Note: Minecraft port 25565 added in prod override (docker-compose.prod.yml)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
@@ -495,6 +497,75 @@ services:
       - infrastructure
 
 # ═════════════════════════════════════════════════════════════════════════════
+  # Plex Media Server
+  # ═════════════════════════════════════════════════════════════════════════════
+  plex:
+    image: plexinc/pms-docker:latest
+    container_name: plex
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - TZ=America/New_York
+      - PLEX_CLAIM=${PLEX_CLAIM:-}
+    ports:
+      - "32400:32400"
+      - "1900:1900/udp"
+      - "32469:32469"
+      - "5353:5353/udp"
+    volumes:
+      - plex_config:/config
+      - /storage/media:/data:ro
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Seafile (Dropbox Replacement)
+  # ═════════════════════════════════════════════════════════════════════════════
+  seafile-db:
+    image: mariadb:10.11
+    container_name: seafile-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SEAFILE_DB_ROOT_PASSWORD}
+      - MYSQL_LOG_CONSOLE=true
+    volumes:
+      - seafile_db:/var/lib/mysql
+    networks:
+      - infrastructure
+
+  seafile-memcached:
+    image: memcached:1.6
+    container_name: seafile-memcached
+    restart: unless-stopped
+    logging: *default-logging
+    entrypoint: memcached -m 256
+    networks:
+      - infrastructure
+
+  seafile:
+    image: seafileltd/seafile-mc:latest
+    container_name: seafile
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      - seafile-db
+      - seafile-memcached
+    environment:
+      - DB_HOST=seafile-db
+      - DB_ROOT_PASSWD=${SEAFILE_DB_ROOT_PASSWORD}
+      - SEAFILE_ADMIN_EMAIL=${SEAFILE_ADMIN_EMAIL}
+      - SEAFILE_ADMIN_PASSWORD=${SEAFILE_ADMIN_PASSWORD}
+      - SEAFILE_SERVER_HOSTNAME=seafile.markcheli.com
+      - SEAFILE_SERVER_LETSENCRYPT=false
+      - SEAFILE_SERVICE_URL=https://seafile.markcheli.com
+      - SEAFILE_FILE_SERVER_ROOT=https://seafile.markcheli.com/seafhttp
+    volumes:
+      - /storage/seafile:/shared
+    networks:
+      - infrastructure
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Networks
 # ═════════════════════════════════════════════════════════════════════════════
 networks:
@@ -516,3 +587,5 @@ volumes:
   minecraft_data:
   prometheus_data:
   grafana_data:
+  plex_config:
+  seafile_db:
