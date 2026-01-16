@@ -12,6 +12,8 @@ A comprehensive Docker-based homelab infrastructure running on Ubuntu Server wit
 │   ├── personal-website/    # Nuxt.js personal website
 │   ├── flask-api/           # Flask API backend service
 │   ├── minecraft/           # Minecraft server
+│   ├── plex/                # Plex Media Server
+│   ├── seafile/             # Seafile file sync service
 │   ├── monitoring/          # Prometheus/Grafana monitoring
 │   └── fluent-bit/          # Log shipper configuration
 ├── scripts/                 # Management and utility scripts
@@ -78,6 +80,12 @@ curl https://flask.markcheli.com/health
 - **JupyterHub** - https://jupyter.markcheli.com
   - Multi-user data science environment
   - Real-time collaboration, SQL integration, AI assistance
+- **Plex Media Server** - https://plex.markcheli.com
+  - Media streaming for movies, TV shows, and music
+  - Personal media library management
+- **Seafile** - https://seafile.markcheli.com
+  - Self-hosted file sync and share (Dropbox alternative)
+  - File storage, sync, and collaboration
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
 
@@ -101,6 +109,8 @@ curl https://flask.markcheli.com/health
 - **Fluent Bit** - Log shipper (Docker logs → OpenSearch)
 - **Node Exporter** - Host system metrics (CPU, memory, disk)
 - **NGINX Exporter** - NGINX metrics for Prometheus
+- **Seafile DB** - MariaDB database backend for Seafile
+- **Seafile Memcached** - Cache server for Seafile performance
 
 ### Server Details
 - **Host**: 83rr-poweredge

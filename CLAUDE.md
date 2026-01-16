@@ -117,14 +117,16 @@ docker compose down -v
 4. **flask-api** - Python Flask REST API
 5. **jupyterhub** - Multi-user JupyterLab data science environment (password-protected)
 6. **minecraft** - Minecraft Java Edition server
-7. **opensearch** - Log aggregation and search
-8. **opensearch-dashboards** - OpenSearch visualization
-9. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
-10. **prometheus** - Metrics collection and storage
-11. **cadvisor** - Container resource monitoring
-12. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
-13. **node-exporter** - Host system metrics (CPU, memory, disk)
-14. **nginx-exporter** - NGINX metrics for Prometheus
+7. **plex** - Plex Media Server for streaming movies/TV/music
+8. **seafile** - Self-hosted file sync and share (Dropbox alternative)
+9. **opensearch** - Log aggregation and search
+10. **opensearch-dashboards** - OpenSearch visualization
+11. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
+12. **prometheus** - Metrics collection and storage
+13. **cadvisor** - Container resource monitoring
+14. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
+15. **node-exporter** - Host system metrics (CPU, memory, disk)
+16. **nginx-exporter** - NGINX metrics for Prometheus
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -146,6 +148,8 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://cookbook.markcheli.com** - Recipe cookbook (static site)
 - **https://flask.markcheli.com** - Flask API
 - **https://jupyter.markcheli.com** - JupyterHub (password-protected, multi-user data science environment)
+- **https://plex.markcheli.com** - Plex Media Server (streaming movies, TV, music)
+- **https://seafile.markcheli.com** - Seafile file sync and share
 - **minecraft.markcheli.com:25565** - Minecraft server
 
 ### LAN-Only Services (HTTPS with Let's Encrypt)
