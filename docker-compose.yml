@@ -353,6 +353,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - fluent_bit_data:/var/log
       - plex_config:/plex-logs:ro
+      - /storage/seafile/seafile/logs:/seafile-logs:ro
     depends_on:
       - opensearch
     # Note: Fluent Bit distroless image has no shell utilities for health checks
