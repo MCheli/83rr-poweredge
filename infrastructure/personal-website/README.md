@@ -254,6 +254,8 @@ Personal profile and services
 | `github` | Open GitHub profile |
 | `home` | Open Home Assistant smart home platform |
 | `jupyter` | Open JupyterHub data science environment |
+| `plex` | Open Plex Media Server |
+| `seafile` | Open Seafile file storage |
 | `exit` | Exit message |
 
 ### Tab Completion
