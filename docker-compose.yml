@@ -488,7 +488,7 @@ services:
     volumes:
       - '/:/host:ro,rslave'
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/"]
       interval: 30s
       timeout: 10s
       retries: 3
