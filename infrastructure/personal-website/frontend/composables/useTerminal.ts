@@ -19,6 +19,8 @@ weather                 Check weather in Ashland, MA
 cookbook                Open recipe cookbook
 home                    Open Home Assistant
 jupyter                 Open JupyterHub
+plex                    Open Plex Media Server
+seafile                 Open Seafile file storage
 minecraft               Open Minecraft server status
 about                   About Mark Cheli
 contact                 Contact information
@@ -119,6 +121,8 @@ Services:
   Cookbook: https://cookbook.markcheli.com
   API Server: https://flask.markcheli.com
   Development Environment: https://jupyter.markcheli.com
+  Plex Media Server: https://plex.markcheli.com
+  Seafile File Storage: https://seafile.markcheli.com
   Smart Home: https://home.markcheli.com
   Minecraft Server: minecraft.markcheli.com:25565
 
@@ -134,6 +138,8 @@ Infrastructure:
     cookbook: () => window.open('https://cookbook.markcheli.com', '_blank'),
     home: () => window.open('https://home.markcheli.com', '_blank'),
     jupyter: () => window.open('https://jupyter.markcheli.com', '_blank'),
+    plex: () => window.open('https://plex.markcheli.com', '_blank'),
+    seafile: () => window.open('https://seafile.markcheli.com', '_blank'),
     minecraft: () => window.open('https://minecraft.markcheli.com', '_blank'),
   }
 
@@ -157,6 +163,8 @@ https://www.markcheli.com       Interactive terminal website
 https://cookbook.markcheli.com  Recipe cookbook & meal planner
 https://flask.markcheli.com     Flask API server with weather data
 https://jupyter.markcheli.com   JupyterHub data science environment
+https://plex.markcheli.com      Plex media streaming server
+https://seafile.markcheli.com   Seafile file sync & storage
 https://home.markcheli.com      Home Assistant smart home platform
 minecraft.markcheli.com:25565   Minecraft Java Edition server
 

@@ -21,6 +21,8 @@ def test_endpoints():
         "Personal Website": "https://www.markcheli.com",
         "Flask API": "https://flask.markcheli.com/health",
         "JupyterHub": "https://jupyter.markcheli.com",
+        "Plex": "https://plex.markcheli.com",
+        "Seafile": "https://seafile.markcheli.com",
 
         # LAN services (monitoring)
         "Grafana": "https://grafana-local.ops.markcheli.com",
