@@ -20,18 +20,18 @@ def test_endpoints():
         # Public services
         "Personal Website": "https://www.markcheli.com",
         "Flask API": "https://flask.markcheli.com/health",
-        "JupyterHub": "https://jupyter.markcheli.com",
-        "Plex": "https://plex.markcheli.com",
-        "Seafile": "https://seafile.markcheli.com",
+        "JupyterHub": "https://data.markcheli.com",
+        "Plex": "https://videos.markcheli.com",
+        "Seafile": "https://files.markcheli.com",
 
         # LAN services (monitoring)
-        "Grafana": "https://grafana-local.ops.markcheli.com",
-        "Prometheus": "https://prometheus-local.ops.markcheli.com",
-        "cAdvisor": "https://cadvisor-local.ops.markcheli.com",
+        "Grafana": "https://dashboard.ops.markcheli.com",
+        "Prometheus": "https://prometheus.ops.markcheli.com",
+        "cAdvisor": "https://cadvisor.ops.markcheli.com",
 
         # LAN services (logging)
-        "OpenSearch Dashboards": "https://logs-local.ops.markcheli.com",
-        "OpenSearch API": "https://opensearch-local.ops.markcheli.com",
+        "OpenSearch Dashboards": "https://logs.ops.markcheli.com",
+        "OpenSearch API": "https://opensearch.ops.markcheli.com",
     }
 
     print("🔍 Quick Service Availability Test")

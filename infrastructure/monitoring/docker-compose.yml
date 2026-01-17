@@ -12,7 +12,7 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
-      - '--web.external-url=https://prometheus-local.ops.markcheli.com'
+      - '--web.external-url=https://prometheus.ops.markcheli.com'
     ports:
       - "9090:9090"
     volumes:
@@ -26,7 +26,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_default"
-      - "traefik.http.routers.prometheus.rule=Host(`prometheus-local.ops.markcheli.com`)"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.ops.markcheli.com`)"
       - "traefik.http.routers.prometheus.entrypoints=websecure"
       - "traefik.http.routers.prometheus.tls=true"
       - "traefik.http.routers.prometheus.middlewares=lan-only@docker"
@@ -41,7 +41,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=https://grafana-local.ops.markcheli.com
+      - GF_SERVER_ROOT_URL=https://dashboard.ops.markcheli.com
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
@@ -55,7 +55,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_default"
-      - "traefik.http.routers.grafana.rule=Host(`grafana-local.ops.markcheli.com`)"
+      - "traefik.http.routers.grafana.rule=Host(`dashboard.ops.markcheli.com`)"
       - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.grafana.tls=true"
       - "traefik.http.routers.grafana.middlewares=lan-only@docker"
@@ -81,7 +81,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_default"
-      - "traefik.http.routers.cadvisor.rule=Host(`cadvisor-local.ops.markcheli.com`)"
+      - "traefik.http.routers.cadvisor.rule=Host(`cadvisor.ops.markcheli.com`)"
       - "traefik.http.routers.cadvisor.entrypoints=websecure"
       - "traefik.http.routers.cadvisor.tls=true"
       - "traefik.http.routers.cadvisor.middlewares=lan-only@docker"

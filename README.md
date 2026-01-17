@@ -77,27 +77,29 @@ curl https://flask.markcheli.com/health
 - **Flask API** - https://flask.markcheli.com
   - Python API with weather endpoint and profile data
   - Health check: `/health`
-- **JupyterHub** - https://jupyter.markcheli.com
+- **JupyterHub** - https://data.markcheli.com
   - Multi-user data science environment
   - Real-time collaboration, SQL integration, AI assistance
-- **Plex Media Server** - https://plex.markcheli.com
+- **Plex Media Server** - https://videos.markcheli.com
   - Media streaming for movies, TV shows, and music
   - Personal media library management
-- **Seafile** - https://seafile.markcheli.com
+- **Seafile** - https://files.markcheli.com
   - Self-hosted file sync and share (Dropbox alternative)
   - File storage, sync, and collaboration
+- **Home Assistant** - https://home.markcheli.com
+  - Smart home automation platform
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
 
 **LAN-Only Services** (*.ops.markcheli.com):
-- **Grafana** - https://grafana-local.ops.markcheli.com
+- **Grafana** - https://dashboard.ops.markcheli.com
   - Monitoring dashboards (login: admin/admin123)
   - 5 provisioned dashboards (System, Infrastructure, Docker, NGINX, Containers)
-- **Prometheus** - https://prometheus-local.ops.markcheli.com
+- **Prometheus** - https://prometheus.ops.markcheli.com
   - Metrics database with 30-day retention
-- **cAdvisor** - https://cadvisor-local.ops.markcheli.com
+- **cAdvisor** - https://cadvisor.ops.markcheli.com
   - Container resource metrics
-- **OpenSearch Dashboards** - https://logs-local.ops.markcheli.com
+- **OpenSearch Dashboards** - https://logs.ops.markcheli.com
   - Log visualization and search
 - **Flask API Dev** - https://flask-dev.ops.markcheli.com
   - Development API environment
@@ -257,14 +259,14 @@ OPENWEATHER_API_KEY=your_openweather_key
 ## Monitoring & Health Checks
 
 ### Metrics Stack
-- **Grafana Dashboard**: https://grafana-local.ops.markcheli.com
+- **Grafana Dashboard**: https://dashboard.ops.markcheli.com
   - Pre-configured Prometheus datasource
   - 5 provisioned dashboards: Infrastructure Overview, System, Docker Services, Containers, NGINX
   - Login: admin/admin123
-- **Prometheus**: https://prometheus-local.ops.markcheli.com
+- **Prometheus**: https://prometheus.ops.markcheli.com
   - 30-day metric retention
   - Scrapes: cAdvisor, Node Exporter, NGINX Exporter
-- **cAdvisor**: https://cadvisor-local.ops.markcheli.com
+- **cAdvisor**: https://cadvisor.ops.markcheli.com
   - Real-time container resource metrics
 - **Node Exporter**: Host system metrics (CPU, memory, disk, network)
 - **NGINX Exporter**: NGINX connections and request metrics
@@ -273,7 +275,7 @@ OPENWEATHER_API_KEY=your_openweather_key
 - **Fluent Bit**: Log shipper collecting from all containers
   - Ships to OpenSearch with daily index rotation
 - **OpenSearch**: Centralized log storage and search
-- **OpenSearch Dashboards**: https://logs-local.ops.markcheli.com
+- **OpenSearch Dashboards**: https://logs.ops.markcheli.com
   - Log visualization and search
   - Daily indices: `logs-homelab-YYYY.MM.DD`
 

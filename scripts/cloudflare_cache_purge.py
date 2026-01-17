@@ -29,7 +29,10 @@ SERVICE_DOMAINS = {
     "cookbook": "cookbook.markcheli.com",
     "personal-website": "www.markcheli.com",
     "flask-api": "flask.markcheli.com",
-    "jupyterhub": "jupyter.markcheli.com",
+    "jupyterhub": "data.markcheli.com",
+    "plex": "videos.markcheli.com",
+    "seafile": "files.markcheli.com",
+    "home-assistant": "home.markcheli.com",
 }
 
 def load_config():

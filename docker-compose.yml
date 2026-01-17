@@ -558,10 +558,10 @@ services:
       - DB_ROOT_PASSWD=${SEAFILE_DB_ROOT_PASSWORD}
       - SEAFILE_ADMIN_EMAIL=${SEAFILE_ADMIN_EMAIL}
       - SEAFILE_ADMIN_PASSWORD=${SEAFILE_ADMIN_PASSWORD}
-      - SEAFILE_SERVER_HOSTNAME=seafile.markcheli.com
+      - SEAFILE_SERVER_HOSTNAME=files.markcheli.com
       - SEAFILE_SERVER_LETSENCRYPT=false
-      - SEAFILE_SERVICE_URL=https://seafile.markcheli.com
-      - SEAFILE_FILE_SERVER_ROOT=https://seafile.markcheli.com/seafhttp
+      - SEAFILE_SERVICE_URL=https://files.markcheli.com
+      - SEAFILE_FILE_SERVER_ROOT=https://files.markcheli.com/seafhttp
     volumes:
       - /storage/seafile:/shared
     networks:
