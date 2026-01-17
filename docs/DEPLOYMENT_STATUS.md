@@ -1,6 +1,6 @@
 # Infrastructure Deployment Status - Phase 6 Complete
 
-**Date**: January 4, 2026
+**Date**: January 16, 2026
 **Status**: ✅ PRODUCTION READY
 
 ## ✅ Successfully Deployed Services
@@ -67,6 +67,26 @@
     - Status: Healthy
     - Metrics: Connections, requests, upstreams
 
+14. **Plex Media Server** - Media streaming ✅
+    - Status: Healthy
+    - Endpoint: plex.markcheli.com
+    - Port: 32400 (internal)
+    - Features: Movies, TV shows, music streaming
+
+15. **Seafile** - File sync and share ✅
+    - Status: Healthy
+    - Endpoint: seafile.markcheli.com
+    - Features: File storage, sync, sharing (Dropbox alternative)
+    - Dependencies: seafile-db, seafile-memcached
+
+16. **Seafile Database** (MariaDB) ✅
+    - Status: Healthy
+    - Purpose: Backend database for Seafile
+
+17. **Seafile Cache** (Memcached) ✅
+    - Status: Healthy
+    - Purpose: Performance caching for Seafile
+
 ## 📊 Monitoring Stack
 
 ### Prometheus Targets (All Healthy)
@@ -98,6 +118,8 @@
 - ✅ Configured log rotation for all services (10MB max, 3 files)
 - ✅ Added health checks to all services
 - ✅ Created Makefile for common operations
+- ✅ Added Plex Media Server for media streaming
+- ✅ Added Seafile for file sync and share (with MariaDB and Memcached)
 
 ### Monitoring Improvements
 - ✅ Provisioned 5 Grafana dashboards via JSON files
@@ -143,6 +165,8 @@ docker ps
 | Personal Website | https://www.markcheli.com |
 | Flask API | https://flask.markcheli.com |
 | JupyterHub | https://jupyter.markcheli.com |
+| Plex Media Server | https://plex.markcheli.com |
+| Seafile | https://seafile.markcheli.com |
 | Minecraft | minecraft.markcheli.com:25565 |
 
 ### LAN Services (*.ops.markcheli.com)
@@ -175,4 +199,4 @@ docker ps
 **Logging**: Fluent Bit → OpenSearch
 
 ---
-*Last updated: January 4, 2026*
+*Last updated: January 16, 2026*

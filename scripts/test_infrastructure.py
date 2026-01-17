@@ -44,6 +44,16 @@ class InfrastructureHealthTest:
                 'url': 'https://flask.markcheli.com/health',
                 'expected_content': 'healthy',
                 'description': 'Flask API health endpoint'
+            },
+            'plex': {
+                'url': 'https://plex.markcheli.com',
+                'expected_content': 'plex',
+                'description': 'Plex Media Server'
+            },
+            'seafile': {
+                'url': 'https://seafile.markcheli.com',
+                'expected_content': 'seafile',
+                'description': 'Seafile file sync and share'
             }
         }
 
@@ -92,6 +102,10 @@ class InfrastructureHealthTest:
             'flask-api': {'status': 'running', 'health': None},
             'personal-website': {'status': 'running', 'health': None},
             'minecraft': {'status': 'running', 'health': 'healthy'},
+            'plex': {'status': 'running', 'health': None},
+            'seafile': {'status': 'running', 'health': None},
+            'seafile-db': {'status': 'running', 'health': None},
+            'seafile-memcached': {'status': 'running', 'health': None},
             'grafana': {'status': 'running', 'health': None},
             'prometheus': {'status': 'running', 'health': None},
             'cadvisor': {'status': 'running', 'health': 'healthy'}

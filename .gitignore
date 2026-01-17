@@ -18,6 +18,11 @@ venv/
 __pycache__/
 .pytest_cache/
 
+# Node.js / Nuxt
+.nuxt/
+node_modules/
+.output/
+
 # Logs (but not infrastructure/logs config)
 /logs/
 *.log
