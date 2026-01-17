@@ -249,15 +249,15 @@ test:
 
 # Open Grafana in browser (macOS)
 open-grafana:
-	open https://grafana-local.ops.markcheli.com
+	open https://dashboard.ops.markcheli.com
 
 # Open logs dashboard in browser (macOS)
 open-logs:
-	open https://logs-local.ops.markcheli.com
+	open https://logs.ops.markcheli.com
 
 # Open Prometheus in browser (macOS)
 open-prometheus:
-	open https://prometheus-local.ops.markcheli.com
+	open https://prometheus.ops.markcheli.com
 
 # Show recent git commits
 git-log:

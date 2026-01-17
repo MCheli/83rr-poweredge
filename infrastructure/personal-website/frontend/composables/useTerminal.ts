@@ -120,9 +120,9 @@ Services:
   Personal Website: https://www.markcheli.com
   Cookbook: https://cookbook.markcheli.com
   API Server: https://flask.markcheli.com
-  Development Environment: https://jupyter.markcheli.com
-  Plex Media Server: https://plex.markcheli.com
-  Seafile File Storage: https://seafile.markcheli.com
+  Development Environment: https://data.markcheli.com
+  Plex Media Server: https://videos.markcheli.com
+  Seafile File Storage: https://files.markcheli.com
   Smart Home: https://home.markcheli.com
   Minecraft Server: minecraft.markcheli.com:25565
 
@@ -137,9 +137,9 @@ Infrastructure:
     github: () => window.open('https://github.com/MCheli', '_blank'),
     cookbook: () => window.open('https://cookbook.markcheli.com', '_blank'),
     home: () => window.open('https://home.markcheli.com', '_blank'),
-    jupyter: () => window.open('https://jupyter.markcheli.com', '_blank'),
-    plex: () => window.open('https://plex.markcheli.com', '_blank'),
-    seafile: () => window.open('https://seafile.markcheli.com', '_blank'),
+    jupyter: () => window.open('https://data.markcheli.com', '_blank'),
+    plex: () => window.open('https://videos.markcheli.com', '_blank'),
+    seafile: () => window.open('https://files.markcheli.com', '_blank'),
     minecraft: () => window.open('https://minecraft.markcheli.com', '_blank'),
   }
 
@@ -162,22 +162,23 @@ Infrastructure:
 https://www.markcheli.com       Interactive terminal website
 https://cookbook.markcheli.com  Recipe cookbook & meal planner
 https://flask.markcheli.com     Flask API server with weather data
-https://jupyter.markcheli.com   JupyterHub data science environment
-https://plex.markcheli.com      Plex media streaming server
-https://seafile.markcheli.com   Seafile file sync & storage
+https://data.markcheli.com      JupyterHub data science environment
+https://videos.markcheli.com    Plex media streaming server
+https://files.markcheli.com     Seafile file sync & storage
 https://home.markcheli.com      Home Assistant smart home platform
 minecraft.markcheli.com:25565   Minecraft Java Edition server
 
 Internal Infrastructure (LAN-only):
 
-https://logs-local.ops.markcheli.com        OpenSearch Dashboards log aggregation
-https://opensearch-local.ops.markcheli.com  OpenSearch API and cluster management
+https://logs.ops.markcheli.com        OpenSearch Dashboards log aggregation
+https://opensearch.ops.markcheli.com  OpenSearch API and cluster management
+https://nas.ops.markcheli.com         NAS for backups and bulk file storage
 
 System Monitoring (LAN-only):
 
-https://grafana-local.ops.markcheli.com    Grafana system dashboards & metrics
-https://prometheus-local.ops.markcheli.com Prometheus metrics database
-https://cadvisor-local.ops.markcheli.com   cAdvisor container monitoring
+https://dashboard.ops.markcheli.com   Grafana system dashboards & metrics
+https://prometheus.ops.markcheli.com  Prometheus metrics database
+https://cadvisor.ops.markcheli.com    cAdvisor container monitoring
 
 Type a service name to open it, or 'linkedin' to connect professionally.`
     }

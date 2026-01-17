@@ -31,7 +31,7 @@ class InfrastructureHealthTest:
         # Test configuration
         self.public_services = {
             'jupyter': {
-                'url': 'https://jupyter.markcheli.com',
+                'url': 'https://data.markcheli.com',
                 'expected_content': 'JupyterHub',
                 'description': 'JupyterHub login page'
             },
@@ -46,12 +46,12 @@ class InfrastructureHealthTest:
                 'description': 'Flask API health endpoint'
             },
             'plex': {
-                'url': 'https://plex.markcheli.com',
+                'url': 'https://videos.markcheli.com',
                 'expected_content': 'plex',
                 'description': 'Plex Media Server'
             },
             'seafile': {
-                'url': 'https://seafile.markcheli.com',
+                'url': 'https://files.markcheli.com',
                 'expected_content': 'seafile',
                 'description': 'Seafile file sync and share'
             }
@@ -60,7 +60,7 @@ class InfrastructureHealthTest:
         # LAN-only services (skip if not on LAN)
         self.lan_services = {
             'opensearch-dashboards': {
-                'url': 'https://logs-local.ops.markcheli.com',
+                'url': 'https://logs.ops.markcheli.com',
                 'expected_content': 'OpenSearch',
                 'description': 'OpenSearch Dashboards',
                 'auth_required': False
@@ -72,19 +72,19 @@ class InfrastructureHealthTest:
                 'auth_required': False
             },
             'grafana': {
-                'url': 'https://grafana-local.ops.markcheli.com',
+                'url': 'https://dashboard.ops.markcheli.com',
                 'expected_content': 'Grafana',
                 'description': 'Grafana monitoring dashboard',
                 'auth_required': True
             },
             'prometheus': {
-                'url': 'https://prometheus-local.ops.markcheli.com',
+                'url': 'https://prometheus.ops.markcheli.com',
                 'expected_content': 'Prometheus',
                 'description': 'Prometheus metrics database',
                 'auth_required': False
             },
             'cadvisor': {
-                'url': 'https://cadvisor-local.ops.markcheli.com',
+                'url': 'https://cadvisor.ops.markcheli.com',
                 'expected_content': 'cAdvisor',
                 'description': 'Container metrics monitoring',
                 'auth_required': False
@@ -155,8 +155,8 @@ class InfrastructureHealthTest:
             domains = [
                 'www.markcheli.com',
                 'flask.markcheli.com',
-                'jupyter.markcheli.com',
-                'grafana-local.ops.markcheli.com'
+                'data.markcheli.com',
+                'dashboard.ops.markcheli.com'
             ]
             for domain in domains:
                 try:

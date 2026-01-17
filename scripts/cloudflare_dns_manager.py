@@ -291,18 +291,20 @@ class CloudflareDNSManager:
                     # Public services
                     ('www', 'A', '173.48.98.211'),
                     ('flask', 'A', '173.48.98.211'),
-                    ('jupyter', 'A', '173.48.98.211'),
-                    ('ha', 'A', '173.48.98.211'),
+                    ('data', 'A', '173.48.98.211'),
+                    ('home', 'A', '173.48.98.211'),
+                    ('videos', 'A', '173.48.98.211'),
+                    ('files', 'A', '173.48.98.211'),
                     # LAN services (*.ops.markcheli.com as subdomains)
                     ('traefik-local.ops', 'A', '192.168.1.179'),
                     ('portainer-local.ops', 'A', '192.168.1.179'),
-                    ('logs-local.ops', 'A', '192.168.1.179'),
-                    ('opensearch-local.ops', 'A', '192.168.1.179'),
+                    ('logs.ops', 'A', '192.168.1.179'),
+                    ('opensearch.ops', 'A', '192.168.1.179'),
                     ('www-dev.ops', 'A', '192.168.1.179'),
                     ('flask-dev.ops', 'A', '192.168.1.179'),
-                    ('grafana-local.ops', 'A', '192.168.1.179'),
-                    ('prometheus-local.ops', 'A', '192.168.1.179'),
-                    ('cadvisor-local.ops', 'A', '192.168.1.179'),
+                    ('dashboard.ops', 'A', '192.168.1.179'),
+                    ('prometheus.ops', 'A', '192.168.1.179'),
+                    ('cadvisor.ops', 'A', '192.168.1.179'),
                 ]
             }
         }

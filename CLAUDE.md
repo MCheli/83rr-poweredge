@@ -147,17 +147,18 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://www.markcheli.com** - Personal website
 - **https://cookbook.markcheli.com** - Recipe cookbook (static site)
 - **https://flask.markcheli.com** - Flask API
-- **https://jupyter.markcheli.com** - JupyterHub (password-protected, multi-user data science environment)
-- **https://plex.markcheli.com** - Plex Media Server (streaming movies, TV, music)
-- **https://seafile.markcheli.com** - Seafile file sync and share
+- **https://data.markcheli.com** - JupyterHub (password-protected, multi-user data science environment)
+- **https://videos.markcheli.com** - Plex Media Server (streaming movies, TV, music)
+- **https://files.markcheli.com** - Seafile file sync and share
+- **https://home.markcheli.com** - Home Assistant smart home platform
 - **minecraft.markcheli.com:25565** - Minecraft server
 
 ### LAN-Only Services (HTTPS with Let's Encrypt)
-- **https://grafana-local.ops.markcheli.com** - Grafana dashboards (admin/admin123)
-- **https://prometheus-local.ops.markcheli.com** - Prometheus metrics
-- **https://cadvisor-local.ops.markcheli.com** - Container monitoring
-- **https://logs-local.ops.markcheli.com** - OpenSearch Dashboards
-- **https://opensearch-local.ops.markcheli.com** - OpenSearch API
+- **https://dashboard.ops.markcheli.com** - Grafana dashboards (admin/admin123)
+- **https://prometheus.ops.markcheli.com** - Prometheus metrics
+- **https://cadvisor.ops.markcheli.com** - Container monitoring
+- **https://logs.ops.markcheli.com** - OpenSearch Dashboards
+- **https://opensearch.ops.markcheli.com** - OpenSearch API
 
 ### NGINX Routing
 All HTTPS traffic is handled by NGINX:
@@ -216,12 +217,15 @@ All DNS records are managed in **Cloudflare Dashboard** (not via API/scripts):
 **Public Services** (proxied through Cloudflare):
 - `www.markcheli.com` → A record → `173.48.98.211` (public IP)
 - `flask.markcheli.com` → A record → `173.48.98.211`
-- `jupyter.markcheli.com` → A record → `173.48.98.211`
+- `data.markcheli.com` → A record → `173.48.98.211`
+- `videos.markcheli.com` → A record → `173.48.98.211`
+- `files.markcheli.com` → A record → `173.48.98.211`
+- `home.markcheli.com` → A record → `173.48.98.211`
 - `minecraft.markcheli.com` → A record → `173.48.98.211`
 
 **LAN Services** (DNS-only, not proxied):
 - `*.ops.markcheli.com` → A record → `192.168.1.179` (LAN IP)
-- Used for internal services like Grafana, Prometheus, etc.
+- Used for internal services like Grafana (dashboard.ops), Prometheus, etc.
 
 ### DNS Management Scripts
 ```bash
@@ -252,16 +256,16 @@ openssl s_client -connect www.markcheli.com:443 -servername www.markcheli.com
 ## 📊 Monitoring with Prometheus & Grafana
 
 ### Access Monitoring Dashboards
-**Grafana**: https://grafana-local.ops.markcheli.com
+**Grafana**: https://dashboard.ops.markcheli.com
 - **Login**: admin / admin123
 - **Pre-configured datasource**: Prometheus
 - **Recommended dashboards**: 193, 1860, 14282 (Docker monitoring)
 
-**Prometheus**: https://prometheus-local.ops.markcheli.com
+**Prometheus**: https://prometheus.ops.markcheli.com
 - Query interface for metrics
 - 30-day retention policy
 
-**cAdvisor**: https://cadvisor-local.ops.markcheli.com
+**cAdvisor**: https://cadvisor.ops.markcheli.com
 - Real-time container resource monitoring
 - Per-container CPU/memory/network stats
 
@@ -676,6 +680,6 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ---
 
-**Last Updated**: January 4, 2026
+**Last Updated**: January 17, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Status**: Production-ready, all services operational

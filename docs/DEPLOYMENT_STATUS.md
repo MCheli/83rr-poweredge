@@ -23,7 +23,7 @@
 
 4. **JupyterHub** - Multi-user data science environment ✅
    - Status: Healthy
-   - Endpoint: jupyter.markcheli.com
+   - Endpoint: data.markcheli.com
    - Mode: Multi-user with Docker spawner
 
 5. **OpenSearch** - Log aggregation & search ✅
@@ -32,22 +32,22 @@
    - Indices: logs-homelab-* (daily rotation)
 
 6. **OpenSearch Dashboards** - Log visualization ✅
-   - Endpoint: logs-local.ops.markcheli.com
+   - Endpoint: logs.ops.markcheli.com
 
 7. **Grafana** - Monitoring dashboards ✅
    - Version: 11.5.2
-   - Endpoint: grafana-local.ops.markcheli.com
+   - Endpoint: dashboard.ops.markcheli.com
    - Login: admin/admin123
    - Dashboards: 5 provisioned (System, Infrastructure, Docker, NGINX, Containers)
 
 8. **Prometheus** - Metrics database ✅
    - Status: Healthy
-   - Endpoint: prometheus-local.ops.markcheli.com
+   - Endpoint: prometheus.ops.markcheli.com
    - Retention: 30 days
    - Targets: 4 (prometheus, cadvisor, node-exporter, nginx-exporter)
 
 9. **cAdvisor** - Container metrics collector ✅
-   - Endpoint: cadvisor-local.ops.markcheli.com
+   - Endpoint: cadvisor.ops.markcheli.com
 
 10. **Minecraft Server** - Game server ✅
     - Status: Healthy
@@ -69,13 +69,13 @@
 
 14. **Plex Media Server** - Media streaming ✅
     - Status: Healthy
-    - Endpoint: plex.markcheli.com
+    - Endpoint: videos.markcheli.com
     - Port: 32400 (internal)
     - Features: Movies, TV shows, music streaming
 
 15. **Seafile** - File sync and share ✅
     - Status: Healthy
-    - Endpoint: seafile.markcheli.com
+    - Endpoint: files.markcheli.com
     - Features: File storage, sync, sharing (Dropbox alternative)
     - Dependencies: seafile-db, seafile-memcached
 
@@ -164,18 +164,19 @@ docker ps
 |---------|-----|
 | Personal Website | https://www.markcheli.com |
 | Flask API | https://flask.markcheli.com |
-| JupyterHub | https://jupyter.markcheli.com |
-| Plex Media Server | https://plex.markcheli.com |
-| Seafile | https://seafile.markcheli.com |
+| JupyterHub | https://data.markcheli.com |
+| Plex Media Server | https://videos.markcheli.com |
+| Seafile | https://files.markcheli.com |
+| Home Assistant | https://home.markcheli.com |
 | Minecraft | minecraft.markcheli.com:25565 |
 
 ### LAN Services (*.ops.markcheli.com)
 | Service | URL |
 |---------|-----|
-| Grafana | https://grafana-local.ops.markcheli.com |
-| Prometheus | https://prometheus-local.ops.markcheli.com |
-| cAdvisor | https://cadvisor-local.ops.markcheli.com |
-| OpenSearch Dashboards | https://logs-local.ops.markcheli.com |
+| Grafana | https://dashboard.ops.markcheli.com |
+| Prometheus | https://prometheus.ops.markcheli.com |
+| cAdvisor | https://cadvisor.ops.markcheli.com |
+| OpenSearch Dashboards | https://logs.ops.markcheli.com |
 | Flask API Dev | https://flask-dev.ops.markcheli.com |
 
 ## 📝 Documentation
@@ -199,4 +200,4 @@ docker ps
 **Logging**: Fluent Bit → OpenSearch
 
 ---
-*Last updated: January 16, 2026*
+*Last updated: January 17, 2026*
