@@ -36,6 +36,7 @@
           v-model="currentInput"
           :class="['terminal-input', { 'terminal-input-focused': inputFocused }]"
           type="text"
+          :readonly="isAutoTyping"
           @keydown="handleKeydown"
           @input="handleInput"
           @focus="inputFocused = true"
@@ -56,12 +57,48 @@
 
 <script setup>
 const { executeCommand, addToHistory, navigateHistory, currentCommand, getTabCompletion } = useTerminal()
+const route = useRoute()
 
 const terminalHistory = ref([])
 const currentInput = ref('')
 const inputElement = ref(null)
 const inputFocused = ref(true)
 const showLinkedinSuggestion = ref(true)
+const isAutoTyping = ref(false)
+
+// Simulate typing a command character by character
+const simulateTyping = async (command, delayMs = 50) => {
+  isAutoTyping.value = true
+  showLinkedinSuggestion.value = false
+
+  for (let i = 0; i < command.length; i++) {
+    currentInput.value = command.substring(0, i + 1)
+    await new Promise(resolve => setTimeout(resolve, delayMs))
+  }
+
+  // Brief pause before executing
+  await new Promise(resolve => setTimeout(resolve, 200))
+
+  // Execute the command
+  addToHistory(command)
+  const output = await executeCommand(command)
+
+  if (output === 'CLEAR_SCREEN') {
+    terminalHistory.value = []
+  } else {
+    terminalHistory.value.push({
+      command,
+      output,
+      timestamp: new Date()
+    })
+  }
+
+  currentInput.value = ''
+  isAutoTyping.value = false
+
+  await nextTick()
+  window.scrollTo(0, document.body.scrollHeight)
+}
 
 // Auto-focus input when component mounts
 onMounted(async () => {
@@ -82,6 +119,14 @@ onMounted(async () => {
     output: neofetchOutput,
     timestamp: new Date()
   })
+
+  // Check for cmd query parameter and auto-type it
+  const cmdParam = route.query.cmd
+  if (cmdParam && typeof cmdParam === 'string') {
+    // Small delay after neofetch before typing the command
+    await new Promise(resolve => setTimeout(resolve, 500))
+    await simulateTyping(cmdParam)
+  }
 })
 
 const formatDate = (date) => {
@@ -117,6 +162,12 @@ const handleInput = () => {
 }
 
 const handleKeydown = async (event) => {
+  // Ignore input while auto-typing is in progress
+  if (isAutoTyping.value) {
+    event.preventDefault()
+    return
+  }
+
   if (event.key === 'Enter') {
     const command = currentInput.value.trim()
 
