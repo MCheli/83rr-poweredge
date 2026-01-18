@@ -502,13 +502,14 @@ services:
   # Plex Media Server
   # ═════════════════════════════════════════════════════════════════════════════
   plex:
-    image: plexinc/pms-docker:1.41.3  # Pinned for security
+    image: plexinc/pms-docker:latest
     container_name: plex
     restart: unless-stopped
     logging: *default-logging
     environment:
       - TZ=America/New_York
       - PLEX_CLAIM=${PLEX_CLAIM:-}
+      - ALLOWED_NETWORKS=172.24.0.0/16,192.168.1.0/24
     ports:
       - "32400:32400"
       - "1900:1900/udp"
