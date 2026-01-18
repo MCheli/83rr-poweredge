@@ -284,7 +284,7 @@ services:
   # Note: Using 'latest' because data format requires matching version; pin after fresh install
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch:
-    image: opensearchproject/opensearch:latest
+    image: opensearchproject/opensearch:2.19.0  # Pinned for security
     container_name: opensearch
     restart: unless-stopped
     logging: *default-logging
@@ -318,7 +318,7 @@ services:
   # OpenSearch Dashboards (Logging UI)
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:latest
+    image: opensearchproject/opensearch-dashboards:2.19.0  # Match OpenSearch version
     container_name: opensearch-dashboards
     restart: unless-stopped
     logging: *default-logging
@@ -502,7 +502,7 @@ services:
   # Plex Media Server
   # ═════════════════════════════════════════════════════════════════════════════
   plex:
-    image: plexinc/pms-docker:latest
+    image: plexinc/pms-docker:1.41.3  # Pinned for security
     container_name: plex
     restart: unless-stopped
     logging: *default-logging
@@ -546,7 +546,7 @@ services:
       - infrastructure
 
   seafile:
-    image: seafileltd/seafile-mc:latest
+    image: seafileltd/seafile-mc:11.0.13  # Pinned for security
     container_name: seafile
     restart: unless-stopped
     logging: *default-logging

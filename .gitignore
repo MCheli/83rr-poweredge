@@ -43,4 +43,4 @@ backups/*
 *~
 
 # Claude Code
-.claude-code/
+infrastructure/nginx/.htpasswd
