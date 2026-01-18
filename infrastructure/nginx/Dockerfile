@@ -13,11 +13,17 @@ RUN mkdir -p /etc/nginx/certs /etc/nginx/dev-certs /etc/nginx/templates
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
     ln -sf /dev/stderr /var/log/nginx/error.log
 
+# Copy main nginx.conf with rate limiting zones
+COPY nginx.conf /etc/nginx/nginx.conf
+
 # Copy all configuration files
 COPY conf.d/ /etc/nginx/conf.d/
 
 # Copy production certificates
 COPY certs/ /etc/nginx/certs/
+
+# Copy htpasswd for basic auth
+COPY .htpasswd /etc/nginx/.htpasswd
 
 # Set certificate permissions
 RUN chmod -R 644 /etc/nginx/certs/*.crt 2>/dev/null || true && \
