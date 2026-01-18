@@ -1,0 +1,8 @@
+# Sudoers configuration for 83RR PowerEdge backup script
+# Install with: sudo cp /home/mcheli/83rr-poweredge/scripts/backup-sudoers /etc/sudoers.d/backup
+# Then: sudo chmod 440 /etc/sudoers.d/backup
+
+# Allow mcheli to run rsync and mount without password for backups
+mcheli ALL=(ALL) NOPASSWD: /usr/bin/rsync
+mcheli ALL=(ALL) NOPASSWD: /usr/bin/mount /mnt/nas
+mcheli ALL=(ALL) NOPASSWD: /usr/bin/test
