@@ -115,7 +115,7 @@ docker compose down -v
 2. **personal-website** - Nuxt.js personal portfolio
 3. **cookbook** - Static recipe website (image from ghcr.io/mcheli/cookbook)
 4. **flask-api** - Python Flask REST API
-5. **jupyterhub** - Multi-user JupyterLab data science environment (password-protected)
+5. **marimo** - Reactive Python notebooks for data science (password-protected)
 6. **minecraft** - Minecraft Java Edition server
 7. **plex** - Plex Media Server for streaming movies/TV/music
 8. **seafile** - Self-hosted file sync and share (Dropbox alternative)
@@ -127,6 +127,8 @@ docker compose down -v
 14. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
 15. **node-exporter** - Host system metrics (CPU, memory, disk)
 16. **nginx-exporter** - NGINX metrics for Prometheus
+17. **tallied** - Personal finance dashboard (image from ghcr.io/mcheli/tallied)
+18. **tallied-db** - PostgreSQL database for Tallied
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -147,10 +149,11 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://www.markcheli.com** - Personal website
 - **https://cookbook.markcheli.com** - Recipe cookbook (static site)
 - **https://flask.markcheli.com** - Flask API
-- **https://data.markcheli.com** - JupyterHub (password-protected, multi-user data science environment)
+- **https://data.markcheli.com** - Marimo (reactive Python notebooks, password-protected)
 - **https://videos.markcheli.com** - Plex Media Server (streaming movies, TV, music)
 - **https://files.markcheli.com** - Seafile file sync and share
 - **https://home.markcheli.com** - Home Assistant smart home platform
+- **https://money.markcheli.com** - Tallied personal finance dashboard (Google SSO)
 - **minecraft.markcheli.com:25565** - Minecraft server
 
 ### LAN-Only Services (HTTPS with Let's Encrypt)
@@ -511,11 +514,12 @@ docker compose up -d --build
 │   │
 │   ├── personal-website/          # Nuxt.js website
 │   ├── flask-api/                 # Python Flask API
-│   ├── jupyter/                   # JupyterHub
+│   ├── marimo/                    # Marimo (reactive Python notebooks) - Note: uses Docker image, no local build
 │   ├── minecraft/                 # Minecraft server
 │   ├── opensearch/                # Log aggregation
 │   ├── monitoring/                # Prometheus/Grafana
-│   └── fluent-bit/                # Log shipper to OpenSearch
+│   ├── fluent-bit/                # Log shipper to OpenSearch
+│   └── tallied/                   # Tallied finance dashboard (uses Docker image, no local build)
 │
 └── scripts/
     ├── README.md                         # Script documentation (update this when modifying scripts!)
@@ -680,6 +684,6 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ---
 
-**Last Updated**: January 17, 2026
+**Last Updated**: March 23, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Status**: Production-ready, all services operational

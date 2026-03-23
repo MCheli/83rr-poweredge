@@ -57,6 +57,15 @@ services:
   # Production Services (No Direct Port Exposure)
   # Access via NGINX reverse proxy only
   # ═════════════════════════════════════════════════════════════════════════════
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Tallied - Production Images
+  # ═════════════════════════════════════════════════════════════════════════════
+  tallied-db:
+    image: postgres:16-alpine
+
+  tallied:
+    image: ghcr.io/mcheli/tallied:latest
+
   opensearch:
     volumes:
       - opensearch_data:/usr/share/opensearch/data  # Production data volume

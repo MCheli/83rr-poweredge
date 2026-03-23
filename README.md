@@ -16,6 +16,7 @@ A comprehensive Docker-based homelab infrastructure running on Ubuntu Server wit
 │   ├── seafile/             # Seafile file sync service
 │   ├── monitoring/          # Prometheus/Grafana monitoring
 │   └── fluent-bit/          # Log shipper configuration
+│   └── tallied/             # Tallied personal finance dashboard
 ├── scripts/                 # Management and utility scripts
 ├── docker-compose.yml       # Base service definitions
 ├── docker-compose.prod.yml  # Production overrides
@@ -88,6 +89,8 @@ curl https://flask.markcheli.com/health
   - File storage, sync, and collaboration
 - **Home Assistant** - https://home.markcheli.com
   - Smart home automation platform
+- **Tallied** - https://money.markcheli.com
+  - Personal finance dashboard with Google SSO
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
 
@@ -113,6 +116,7 @@ curl https://flask.markcheli.com/health
 - **NGINX Exporter** - NGINX metrics for Prometheus
 - **Seafile DB** - MariaDB database backend for Seafile
 - **Seafile Memcached** - Cache server for Seafile performance
+- **Tallied DB** - PostgreSQL database backend for Tallied
 
 ### Server Details
 - **Host**: 83rr-poweredge
