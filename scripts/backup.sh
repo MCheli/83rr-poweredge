@@ -24,10 +24,11 @@ DRY_RUN=false
 
 # Load database credentials from .env
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
-    source <(grep -E '^(SEAFILE_DB_ROOT_PASSWORD|POSTGRES_PASSWORD)=' "${PROJECT_DIR}/.env")
+    source <(grep -E '^(SEAFILE_DB_ROOT_PASSWORD|POSTGRES_PASSWORD|TALLIED_DB_PASSWORD)=' "${PROJECT_DIR}/.env")
 fi
 SEAFILE_DB_PASS="${SEAFILE_DB_ROOT_PASSWORD:-}"
 JUPYTERHUB_DB_PASS="${POSTGRES_PASSWORD:-}"
+TALLIED_DB_PASS="${TALLIED_DB_PASSWORD:-}"
 
 # Retention settings
 DAILY_KEEP=7
@@ -132,6 +133,26 @@ backup_jupyterhub_db() {
     success "JupyterHub database backed up: ${dump_file}.gz"
 }
 
+# Dump Tallied PostgreSQL database
+backup_tallied_db() {
+    log "Backing up Tallied database..."
+    local dump_file="${BACKUP_ROOT}/databases/tallied_${TIMESTAMP}.sql"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would dump Tallied PostgreSQL to ${dump_file}"
+        return
+    fi
+
+    docker exec tallied-db pg_dump -U tallied tallied \
+        > "${dump_file}" 2>/dev/null || {
+        error "Failed to dump Tallied database"
+        return 1
+    }
+
+    gzip -f "${dump_file}"
+    success "Tallied database backed up: ${dump_file}.gz"
+}
+
 # Backup Docker volumes
 backup_docker_volumes() {
     log "Backing up Docker volumes..."
@@ -146,6 +167,7 @@ backup_docker_volumes() {
         "83rr-poweredge_jupyterhub_data"
         "83rr-poweredge_jupyterhub_shared"
         "jupyterhub-user-mcheli"
+        "83rr-poweredge_tallied_db_data"
     )
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -321,6 +343,7 @@ main() {
     # Database backups (do these first while services are running)
     backup_seafile_db || true
     backup_jupyterhub_db || true
+    backup_tallied_db || true
 
     # File backups
     backup_configs

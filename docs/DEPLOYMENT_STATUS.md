@@ -87,6 +87,17 @@
     - Status: Healthy
     - Purpose: Performance caching for Seafile
 
+18. **Tallied** - Personal finance dashboard ✅
+    - Status: Healthy
+    - Endpoint: money.markcheli.com
+    - Image: ghcr.io/mcheli/tallied:latest
+    - Auth: Google SSO
+    - Dependencies: tallied-db (PostgreSQL 16)
+
+19. **Tallied Database** (PostgreSQL 16) ✅
+    - Status: Healthy
+    - Purpose: Backend database for Tallied
+
 ## 📊 Monitoring Stack
 
 ### Prometheus Targets (All Healthy)
@@ -168,6 +179,7 @@ docker ps
 | Plex Media Server | https://videos.markcheli.com |
 | Seafile | https://files.markcheli.com |
 | Home Assistant | https://home.markcheli.com |
+| Tallied | https://money.markcheli.com |
 | Minecraft | minecraft.markcheli.com:25565 |
 
 ### LAN Services (*.ops.markcheli.com)
@@ -200,4 +212,4 @@ docker ps
 **Logging**: Fluent Bit → OpenSearch
 
 ---
-*Last updated: January 17, 2026*
+*Last updated: March 23, 2026*
