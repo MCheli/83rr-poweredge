@@ -63,16 +63,11 @@ services:
       - ./infrastructure/flask-api/backend:/app
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # JupyterHub - Local Build
+  # Marimo - Local Development
   # ═════════════════════════════════════════════════════════════════════════════
-  jupyterhub:
-    # Config is generated inline in main compose file
-    user: root  # DEV ONLY: Required to write config to /srv/jupyterhub volume
+  marimo:
     ports:
-      - "8000:8000"  # Direct access to proxy for development
-
-  jupyterhub-proxy:
-    # No changes needed - uses default config
+      - "8000:8080"  # Direct access for development
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Development Services with Direct Port Access
@@ -111,7 +106,6 @@ services:
 # ═════════════════════════════════════════════════════════════════════════════
 volumes:
   personal-website-node-modules:
-  jupyter_data_local:
   opensearch_data_local:
   minecraft_data_local:
 
