@@ -41,6 +41,7 @@ services:
       start_period: 10s
     networks:
       - infrastructure
+      - nginx-openclaw
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Personal Website (Nuxt.js)
@@ -478,6 +479,11 @@ services:
 networks:
   infrastructure:
     driver: bridge
+  nginx-openclaw:
+    # Dedicated proxy network: only NGINX and OpenClaw
+    # Created by infrastructure/openclaw/docker-compose.yml
+    external: true
+    name: openclaw_nginx-openclaw
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Volumes

@@ -44,3 +44,7 @@ backups/*
 
 # Claude Code
 infrastructure/nginx/.htpasswd
+
+# OpenClaw (all runtime data — secrets, credentials, workspace, agent state)
+infrastructure/openclaw/openclaw-home/
+infrastructure/openclaw/gogcli/
