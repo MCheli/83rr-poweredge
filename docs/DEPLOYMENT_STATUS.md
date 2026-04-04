@@ -21,10 +21,10 @@
    - Status: Healthy
    - Endpoints: flask.markcheli.com, flask-dev.ops.markcheli.com
 
-4. **JupyterHub** - Multi-user data science environment ✅
+4. **Marimo** - Reactive Python notebooks ✅
    - Status: Healthy
    - Endpoint: data.markcheli.com
-   - Mode: Multi-user with Docker spawner
+   - Mode: Password-protected
 
 5. **OpenSearch** - Log aggregation & search ✅
    - Status: Yellow cluster (1 node, single-node mode)
@@ -175,7 +175,7 @@ docker ps
 |---------|-----|
 | Personal Website | https://www.markcheli.com |
 | Flask API | https://flask.markcheli.com |
-| JupyterHub | https://data.markcheli.com |
+| Marimo | https://data.markcheli.com |
 | Plex Media Server | https://videos.markcheli.com |
 | Seafile | https://files.markcheli.com |
 | Home Assistant | https://home.markcheli.com |

@@ -76,13 +76,12 @@ docker ps -q | wc -l
 | personal-website | Main website |
 | cookbook | Recipe website |
 | flask-api | REST API |
-| jupyterhub | Data science environment |
-| jupyterhub-db | JupyterHub PostgreSQL |
+| marimo | Reactive Python notebooks |
 | minecraft | Game server |
 | plex | Media server |
 | seafile | File sync |
 | seafile-memcached | Seafile cache |
-| seafile-mariadb | Seafile database |
+| seafile-db | Seafile database |
 | opensearch | Log storage |
 | opensearch-dashboards | Log visualization |
 | grafana | Metrics dashboards |
@@ -91,6 +90,9 @@ docker ps -q | wc -l
 | fluent-bit | Log shipper |
 | node-exporter | Host metrics |
 | nginx-exporter | NGINX metrics |
+| tallied | Finance dashboard |
+| tallied-db | Tallied PostgreSQL |
+| watchtower | Auto-deploy |
 
 **If containers not running**:
 ```bash
@@ -107,7 +109,8 @@ Test from the server or external network:
 - [ ] **Personal Website**: https://www.markcheli.com → HTTP 200
 - [ ] **Cookbook**: https://cookbook.markcheli.com → HTTP 200
 - [ ] **Flask API**: https://flask.markcheli.com → HTTP 200
-- [ ] **JupyterHub**: https://data.markcheli.com → HTTP 200
+- [ ] **Marimo**: https://data.markcheli.com → HTTP 200
+- [ ] **Tallied**: https://money.markcheli.com → HTTP 200
 - [ ] **Plex**: https://videos.markcheli.com → HTTP 401 (auth expected)
 - [ ] **Seafile**: https://files.markcheli.com → HTTP 200
 - [ ] **Home Assistant**: https://home.markcheli.com → HTTP 200
