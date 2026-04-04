@@ -506,6 +506,7 @@ services:
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_NOTIFICATIONS=shoutrrr
       - WATCHTOWER_NOTIFICATION_URL=logger://
+      - WATCHTOWER_LIFECYCLE_HOOKS=false
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/mcheli/.docker/config.json:/config.json:ro
