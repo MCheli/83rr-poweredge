@@ -24,43 +24,19 @@ services:
       - ./infrastructure/nginx/dev-certs:/etc/nginx/certs:ro  # Self-signed certs for dev
       # nginx logs go to stdout/stderr for Docker log capture
 
-  # ═════════════════════════════════════════════════════════════════════════════
-  # Personal Website - Local Build
-  # ═════════════════════════════════════════════════════════════════════════════
+  # Personal Website and Flask API source code moved to github.com/mcheli/PersonalWebsite
+  # For local development, clone that repo and use its own docker-compose setup
+  # In this stack, they use the same pre-built images as production
   personal-website:
-    build:
-      context: ./infrastructure/personal-website/frontend
-      dockerfile: Dockerfile
-      target: builder  # Use builder stage with dependencies installed
-    user: root  # DEV ONLY: Required for npm install to write to mounted node_modules volume
-    command: sh -c "npm install --legacy-peer-deps && npm run dev"  # Install deps and run dev mode
-    environment:
-      - NODE_ENV=development
-      - NUXT_PUBLIC_API_BASE=/api
-      - API_URL=http://flask-api:5000
     ports:
       - "3000:3000"  # Direct access for development
-    volumes:
-      # Mount source code for hot reloading
-      - ./infrastructure/personal-website/frontend:/app
-      - personal-website-node-modules:/app/node_modules  # Named volume for node_modules persistence
 
-  # ═════════════════════════════════════════════════════════════════════════════
-  # Flask API - Local Build
-  # ═════════════════════════════════════════════════════════════════════════════
   flask-api:
-    build:
-      context: ./infrastructure/flask-api/backend
-      dockerfile: Dockerfile
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
     ports:
-      - "5001:5000"  # Direct access for development (5000 conflicts with macOS AirPlay)
-    volumes:
-      # Mount source code for hot reloading
-      - ./infrastructure/flask-api/backend:/app
+      - "5001:5000"  # Direct access for development
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Marimo - Local Development
@@ -105,7 +81,6 @@ services:
 # Local Development Volumes (separate from production)
 # ═════════════════════════════════════════════════════════════════════════════
 volumes:
-  personal-website-node-modules:
   opensearch_data_local:
   minecraft_data_local:
 

@@ -16,24 +16,9 @@ services:
       - ./infrastructure/nginx/certs:/etc/nginx/certs:ro  # Cloudflare Origin Certificates
       # nginx logs go to stdout/stderr for Docker log capture by Fluent Bit
 
-  # ═════════════════════════════════════════════════════════════════════════════
-  # Personal Website - Production Image
-  # ═════════════════════════════════════════════════════════════════════════════
-  personal-website:
-    image: ghcr.io/mcheli/personal-website:latest
-    environment:
-      - NODE_ENV=production
-      - NUXT_PUBLIC_API_BASE=/api
-      - API_URL=http://flask-api:5000
-
-  # ═════════════════════════════════════════════════════════════════════════════
-  # Flask API - Production Image
-  # ═════════════════════════════════════════════════════════════════════════════
-  flask-api:
-    image: ghcr.io/mcheli/flask-api:latest
-    environment:
-      - FLASK_ENV=production
-      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
+  # Personal Website and Flask API use pre-built images from base compose
+  # (ghcr.io/mcheli/personal-website and ghcr.io/mcheli/flask-api)
+  # No production overrides needed - configured in base docker-compose.yml
 
   # ═════════════════════════════════════════════════════════════════════════════
   # JupyterHub - Production Images
