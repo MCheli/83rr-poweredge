@@ -7,15 +7,12 @@ A comprehensive Docker-based homelab infrastructure running on Ubuntu Server wit
 ```
 ├── infrastructure/           # Service configurations
 │   ├── nginx/               # NGINX reverse proxy
-│   ├── jupyter/             # JupyterHub data science environment
 │   ├── opensearch/          # OpenSearch logging stack
-│   ├── personal-website/    # Nuxt.js personal website
-│   ├── flask-api/           # Flask API backend service
 │   ├── minecraft/           # Minecraft server
 │   ├── plex/                # Plex Media Server
 │   ├── seafile/             # Seafile file sync service
 │   ├── monitoring/          # Prometheus/Grafana monitoring
-│   └── fluent-bit/          # Log shipper configuration
+│   ├── fluent-bit/          # Log shipper configuration
 │   └── tallied/             # Tallied personal finance dashboard
 ├── scripts/                 # Management and utility scripts
 ├── docker-compose.yml       # Base service definitions
@@ -78,9 +75,8 @@ curl https://flask.markcheli.com/health
 - **Flask API** - https://flask.markcheli.com
   - Python API with weather endpoint and profile data
   - Health check: `/health`
-- **JupyterHub** - https://data.markcheli.com
-  - Multi-user data science environment
-  - Real-time collaboration, SQL integration, AI assistance
+- **Marimo** - https://data.markcheli.com
+  - Reactive Python notebooks (password-protected)
 - **Plex Media Server** - https://videos.markcheli.com
   - Media streaming for movies, TV shows, and music
   - Personal media library management
@@ -104,9 +100,6 @@ curl https://flask.markcheli.com/health
   - Container resource metrics
 - **OpenSearch Dashboards** - https://logs.ops.markcheli.com
   - Log visualization and search
-- **Flask API Dev** - https://flask-dev.ops.markcheli.com
-  - Development API environment
-
 **Infrastructure Services:**
 - **NGINX** - Reverse proxy with SSL termination
   - Ports: 80 (HTTP), 443 (HTTPS), 25565 (Minecraft)
@@ -117,6 +110,7 @@ curl https://flask.markcheli.com/health
 - **Seafile DB** - MariaDB database backend for Seafile
 - **Seafile Memcached** - Cache server for Seafile performance
 - **Tallied DB** - PostgreSQL database backend for Tallied
+- **Watchtower** - Automatic container updates (monitors ghcr.io images)
 
 ### Server Details
 - **Host**: 83rr-poweredge
@@ -149,7 +143,8 @@ curl https://flask.markcheli.com/health
 - **Native Docker Compose** - All services managed via Docker Compose CLI
 - **No SSH Required** - Claude runs directly on server
 - **Environment-Aware** - Base config + production overrides
-- **Local Builds** - Services build from Dockerfiles on server
+- **Pre-built Images** - App services pull from ghcr.io (built via GitHub Actions)
+- **Auto-deploy** - Watchtower monitors for new images and does rolling restarts
 
 ## Service Management
 

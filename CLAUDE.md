@@ -139,7 +139,6 @@ docker compose down -v
 ### Environment Variables
 Each service can use `.env` files from its infrastructure directory:
 - `infrastructure/minecraft/.env` - Minecraft server configuration
-- `infrastructure/flask-api/.env` - Flask API secrets
 - Root `.env` - Cloudflare credentials and global settings
 
 ---

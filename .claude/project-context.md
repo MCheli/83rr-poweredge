@@ -46,13 +46,12 @@
 - **Status**: ✅ RUNNING
 - **Networks**: infrastructure
 
-### 4. JupyterLab (Data Science Environment)
-- **URL**: https://jupyter.markcheli.com
-- **Container Name**: jupyter
-- **Port**: 8888
-- **Mode**: Standalone JupyterLab (not JupyterHub)
-- **Auth**: Token-less (open access via domain)
-- **Volume**: jupyter_data_local:/home/jovyan/work
+### 4. Marimo (Reactive Python Notebooks)
+- **URL**: https://data.markcheli.com
+- **Container Name**: marimo
+- **Port**: 8080
+- **Mode**: Password-protected
+- **Volume**: marimo_data:/data
 - **Networks**: infrastructure
 - **SSL**: Cloudflare Origin Certificate
 
@@ -103,9 +102,8 @@
 │   ├── nginx/
 │   │   ├── conf.d/production.conf    # NGINX routing configuration
 │   │   └── certs/                    # SSL certificates
-│   ├── flask-api/                    # Flask API service
-│   ├── personal-website/             # Nuxt.js frontend
-│   ├── jupyter/                      # JupyterLab environment
+│   ├── flask-api/                    # (source at github.com/mcheli/PersonalWebsite)
+│   ├── personal-website/             # (source at github.com/mcheli/PersonalWebsite)
 │   ├── opensearch/                   # Logging stack
 │   └── monitoring/                   # Prometheus/Grafana configs
 ├── scripts/                          # Management scripts
@@ -129,7 +127,8 @@
 - **Commands**: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
 - **No SSH Required**: Claude runs directly on server
 - **No Portainer**: All management via Docker Compose CLI
-- **No Registry**: Services build locally from Dockerfiles
+- **Images**: App services pull pre-built images from ghcr.io (built via GitHub Actions)
+- **Auto-deploy**: Watchtower monitors labeled containers for new images
 
 ## Security Considerations
 1. **Public Services**: Protected by Cloudflare proxy and Origin Certificates
@@ -196,22 +195,11 @@ docker compose logs --tail 100 <service_name>
 
 ## Known Issues & Status
 
-### Operational Services (10/10)
-1. ✅ NGINX - Reverse proxy
-2. ✅ Flask API - Backend service
-3. ✅ Personal Website - Nuxt.js frontend
-4. ✅ JupyterLab - Data science environment
-5. ✅ OpenSearch - Log storage
-6. ✅ OpenSearch Dashboards - Log visualization
-7. ✅ Grafana - Monitoring dashboards
-8. ✅ Prometheus - Metrics database
-9. ✅ cAdvisor - Container metrics
-10. ✅ Minecraft - Game server
-
 ### Current Status
-- **Infrastructure**: ✅ 100% operational (all 10 services running)
+- **Infrastructure**: ✅ All services operational
 - **SSL Configuration**: ✅ Cloudflare Full (Strict) mode enabled
 - **Certificates**: ✅ All certificates valid and auto-renewing
+- **Auto-deploy**: ✅ Watchtower monitoring ghcr.io images
 
 ## Emergency Procedures
 

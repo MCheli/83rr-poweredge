@@ -88,7 +88,7 @@ purge-cache:
 ifndef s
 	@echo "Error: Specify service with s=NAME"
 	@echo "Example: make purge-cache s=cookbook"
-	@echo "Available: cookbook, personal-website, flask-api, jupyterhub"
+	@echo "Available: cookbook, personal-website, flask-api, tallied"
 	@exit 1
 endif
 	@. venv/bin/activate && python scripts/cloudflare_cache_purge.py $(s)
