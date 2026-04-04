@@ -112,9 +112,9 @@ docker compose down -v
 
 ### Active Services
 1. **nginx** - Reverse proxy and SSL termination
-2. **personal-website** - Nuxt.js personal portfolio
+2. **personal-website** - Nuxt.js personal portfolio (image from ghcr.io/mcheli/personal-website)
 3. **cookbook** - Static recipe website (image from ghcr.io/mcheli/cookbook)
-4. **flask-api** - Python Flask REST API
+4. **flask-api** - Python Flask REST API (image from ghcr.io/mcheli/flask-api)
 5. **marimo** - Reactive Python notebooks for data science (password-protected)
 6. **minecraft** - Minecraft Java Edition server
 7. **plex** - Plex Media Server for streaming movies/TV/music
@@ -129,6 +129,7 @@ docker compose down -v
 16. **nginx-exporter** - NGINX metrics for Prometheus
 17. **tallied** - Personal finance dashboard (image from ghcr.io/mcheli/tallied)
 18. **tallied-db** - PostgreSQL database for Tallied
+19. **watchtower** - Automatic container updates (monitors ghcr.io images)
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -512,8 +513,8 @@ docker compose up -d --build
 │   │       ├── wildcard-ops-markcheli.crt
 │   │       └── wildcard-ops-markcheli.key
 │   │
-│   ├── personal-website/          # Nuxt.js website
-│   ├── flask-api/                 # Python Flask API
+│   ├── personal-website/          # (source moved to github.com/mcheli/PersonalWebsite)
+│   ├── flask-api/                 # (source moved to github.com/mcheli/PersonalWebsite)
 │   ├── marimo/                    # Marimo (reactive Python notebooks) - Note: uses Docker image, no local build
 │   ├── minecraft/                 # Minecraft server
 │   ├── opensearch/                # Log aggregation
@@ -684,6 +685,6 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ---
 
-**Last Updated**: March 23, 2026
+**Last Updated**: April 4, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Status**: Production-ready, all services operational

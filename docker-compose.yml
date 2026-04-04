@@ -45,14 +45,15 @@ services:
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Personal Website (Nuxt.js)
+  # Image published from: github.com/mcheli/PersonalWebsite
   # ═════════════════════════════════════════════════════════════════════════════
   personal-website:
-    build:
-      context: ./infrastructure/personal-website/frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/mcheli/personal-website:latest
     container_name: personal-website
     restart: unless-stopped
     logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - NODE_ENV=production
       - NUXT_PUBLIC_API_BASE=/api
@@ -75,6 +76,8 @@ services:
     container_name: cookbook
     restart: unless-stopped
     logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     networks:
       - infrastructure
     healthcheck:
@@ -86,14 +89,15 @@ services:
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Flask API Service
+  # Image published from: github.com/mcheli/PersonalWebsite
   # ═════════════════════════════════════════════════════════════════════════════
   flask-api:
-    build:
-      context: ./infrastructure/flask-api/backend
-      dockerfile: Dockerfile
+    image: ghcr.io/mcheli/flask-api:latest
     container_name: flask-api
     restart: unless-stopped
     logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
@@ -389,12 +393,22 @@ services:
     container_name: tallied-db
     restart: unless-stopped
     logging: *default-logging
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/var/lib/postgresql/data/server.crt
+      -c ssl_key_file=/var/lib/postgresql/data/server.key
+      -c hba_file=/etc/postgresql/pg_hba.conf
     environment:
       - POSTGRES_USER=tallied
       - POSTGRES_PASSWORD=${TALLIED_DB_PASSWORD}
       - POSTGRES_DB=tallied
     volumes:
       - tallied_db_data:/var/lib/postgresql/data
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./docker/postgres/init-ssl.sh:/docker-entrypoint-initdb.d/init-ssl.sh:ro
+    ports:
+      - "5432:5432"
     networks:
       - infrastructure
     healthcheck:
@@ -408,6 +422,8 @@ services:
     container_name: tallied
     restart: unless-stopped
     logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     depends_on:
       tallied-db:
         condition: service_healthy
@@ -470,6 +486,29 @@ services:
       - SEAFILE_FILE_SERVER_ROOT=https://files.markcheli.com/seafhttp
     volumes:
       - /storage/seafile:/shared
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Watchtower (Automatic Container Updates)
+  # Monitors ghcr.io images and auto-deploys when new versions are pushed
+  # ═════════════════════════════════════════════════════════════════════════════
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_NOTIFICATIONS=shoutrrr
+      - WATCHTOWER_NOTIFICATION_URL=logger://
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/mcheli/.docker/config.json:/config.json:ro
     networks:
       - infrastructure
 
