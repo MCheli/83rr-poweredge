@@ -490,6 +490,48 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Voice AI Services (LAN-only, for HeyClawy ESP32 devices)
+  # ═════════════════════════════════════════════════════════════════════════════
+  edge-tts:
+    image: travisvn/openai-edge-tts:latest
+    container_name: edge-tts
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "5050:5050"
+    environment:
+      - DEFAULT_VOICE=en-US-AndrewNeural
+      - DEFAULT_LANGUAGE=en-US
+    networks:
+      - voice-services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  faster-whisper:
+    image: fedirz/faster-whisper-server:latest-cuda
+    container_name: faster-whisper
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "5051:8000"
+    environment:
+      - WHISPER__MODEL=Systran/faster-whisper-small
+      - WHISPER__DEVICE=cpu
+      - WHISPER__COMPUTE_TYPE=int8
+    networks:
+      - voice-services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Watchtower (Automatic Container Updates)
   # Monitors ghcr.io images and auto-deploys when new versions are pushed
   # ═════════════════════════════════════════════════════════════════════════════
@@ -524,6 +566,9 @@ networks:
     # Created by infrastructure/openclaw/docker-compose.yml
     external: true
     name: openclaw_nginx-openclaw
+  voice-services:
+    # LAN-only network for voice AI services (EdgeTTS, faster-whisper)
+    driver: bridge
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Volumes
