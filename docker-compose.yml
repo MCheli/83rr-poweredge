@@ -502,10 +502,11 @@ services:
     environment:
       - DEFAULT_VOICE=en-US-AndrewNeural
       - DEFAULT_LANGUAGE=en-US
+      - REQUIRE_API_KEY=false
     networks:
       - voice-services
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5050/v1/models"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5050/v1/models')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -525,7 +526,7 @@ services:
     networks:
       - voice-services
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
