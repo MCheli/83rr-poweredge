@@ -443,6 +443,61 @@ services:
       start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Tasks (Cycle-based Todo App)
+  # Image published from: github.com/mcheli/tasks
+  # ═════════════════════════════════════════════════════════════════════════════
+  tasks-db:
+    image: postgres:16-alpine
+    container_name: tasks-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=tasks
+      - POSTGRES_PASSWORD=${TASKS_DB_PASSWORD}
+      - POSTGRES_DB=tasks
+    volumes:
+      - tasks_db_data:/var/lib/postgresql/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasks -d tasks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tasks:
+    image: ghcr.io/mcheli/tasks:latest
+    container_name: tasks
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      tasks-db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - TASKS_ENV=${TASKS_ENV}
+      - TASKS_ENABLE_DOCS=${TASKS_ENABLE_DOCS}
+      - TASKS_DATABASE_URL=${TASKS_DATABASE_URL}
+      - TASKS_JWT_SECRET=${TASKS_JWT_SECRET}
+      - TASKS_COOKIE_SECURE=${TASKS_COOKIE_SECURE}
+      - TASKS_ALLOWED_ORIGINS=${TASKS_ALLOWED_ORIGINS}
+      - TASKS_GOOGLE_CLIENT_ID=${TASKS_GOOGLE_CLIENT_ID}
+      - TASKS_GOOGLE_CLIENT_SECRET=${TASKS_GOOGLE_CLIENT_SECRET}
+      - TASKS_GOOGLE_REDIRECT_URI=${TASKS_GOOGLE_REDIRECT_URI}
+      - TASKS_TEST_USER_EMAIL=${TASKS_TEST_USER_EMAIL}
+      - TASKS_TEST_USER_PASSWORD=${TASKS_TEST_USER_PASSWORD}
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Seafile (Dropbox Replacement)
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
@@ -583,4 +638,5 @@ volumes:
   grafana_data:
   plex_config:
   tallied_db_data:
+  tasks_db_data:
   seafile_db:

@@ -129,7 +129,9 @@ docker compose down -v
 16. **nginx-exporter** - NGINX metrics for Prometheus
 17. **tallied** - Personal finance dashboard (image from ghcr.io/mcheli/tallied)
 18. **tallied-db** - PostgreSQL database for Tallied
-19. **watchtower** - Automatic container updates (monitors ghcr.io images)
+19. **tasks** - Cycle-based todo app (image from ghcr.io/mcheli/tasks), Google SSO auth
+20. **tasks-db** - PostgreSQL database for Tasks
+21. **watchtower** - Automatic container updates (monitors ghcr.io images)
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -154,6 +156,7 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://files.markcheli.com** - Seafile file sync and share
 - **https://home.markcheli.com** - Home Assistant smart home platform
 - **https://money.markcheli.com** - Tallied personal finance dashboard (Google SSO)
+- **https://tasks.markcheli.com** - Tasks cycle-based todo app (Google SSO)
 - **minecraft.markcheli.com:25565** - Minecraft server
 
 ### LAN-Only Services (HTTPS with Let's Encrypt)
@@ -224,6 +227,7 @@ All DNS records are managed in **Cloudflare Dashboard** (not via API/scripts):
 - `videos.markcheli.com` → A record → `173.48.98.211`
 - `files.markcheli.com` → A record → `173.48.98.211`
 - `home.markcheli.com` → A record → `173.48.98.211`
+- `tasks.markcheli.com` → A record → `173.48.98.211`
 - `minecraft.markcheli.com` → A record → `173.48.98.211`
 
 **LAN Services** (DNS-only, not proxied):
@@ -519,7 +523,8 @@ docker compose up -d --build
 │   ├── opensearch/                # Log aggregation
 │   ├── monitoring/                # Prometheus/Grafana
 │   ├── fluent-bit/                # Log shipper to OpenSearch
-│   └── tallied/                   # Tallied finance dashboard (uses Docker image, no local build)
+│   ├── tallied/                   # Tallied finance dashboard (uses Docker image, no local build)
+│   └── tasks/                     # Tasks todo app (uses Docker image, no local build)
 │
 └── scripts/
     ├── README.md                         # Script documentation (update this when modifying scripts!)
@@ -684,6 +689,6 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ---
 
-**Last Updated**: April 4, 2026
+**Last Updated**: April 19, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Status**: Production-ready, all services operational
