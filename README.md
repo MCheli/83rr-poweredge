@@ -13,7 +13,8 @@ A comprehensive Docker-based homelab infrastructure running on Ubuntu Server wit
 │   ├── seafile/             # Seafile file sync service
 │   ├── monitoring/          # Prometheus/Grafana monitoring
 │   ├── fluent-bit/          # Log shipper configuration
-│   └── tallied/             # Tallied personal finance dashboard
+│   ├── tallied/             # Tallied personal finance dashboard
+│   └── tasks/               # Tasks cycle-based todo app
 ├── scripts/                 # Management and utility scripts
 ├── docker-compose.yml       # Base service definitions
 ├── docker-compose.prod.yml  # Production overrides
@@ -87,6 +88,8 @@ curl https://flask.markcheli.com/health
   - Smart home automation platform
 - **Tallied** - https://money.markcheli.com
   - Personal finance dashboard with Google SSO
+- **Tasks** - https://tasks.markcheli.com
+  - Cycle-based todo app with Google SSO
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
 
@@ -110,6 +113,7 @@ curl https://flask.markcheli.com/health
 - **Seafile DB** - MariaDB database backend for Seafile
 - **Seafile Memcached** - Cache server for Seafile performance
 - **Tallied DB** - PostgreSQL database backend for Tallied
+- **Tasks DB** - PostgreSQL database backend for Tasks
 - **Watchtower** - Automatic container updates (monitors ghcr.io images)
 
 ### Server Details

@@ -29,6 +29,12 @@ services:
   tallied:
     image: ghcr.io/mcheli/tallied:latest
 
+  tasks-db:
+    image: postgres:16-alpine
+
+  tasks:
+    image: ghcr.io/mcheli/tasks:latest
+
   opensearch:
     volumes:
       - opensearch_data:/usr/share/opensearch/data  # Production data volume

@@ -98,6 +98,17 @@
     - Status: Healthy
     - Purpose: Backend database for Tallied
 
+20. **Tasks** - Cycle-based todo app ✅
+    - Status: Healthy
+    - Endpoint: tasks.markcheli.com
+    - Image: ghcr.io/mcheli/tasks:latest
+    - Auth: Google SSO
+    - Dependencies: tasks-db (PostgreSQL)
+
+21. **Tasks Database** (PostgreSQL 16) ✅
+    - Status: Healthy
+    - Purpose: Backend database for Tasks
+
 ## 📊 Monitoring Stack
 
 ### Prometheus Targets (All Healthy)
@@ -180,6 +191,7 @@ docker ps
 | Seafile | https://files.markcheli.com |
 | Home Assistant | https://home.markcheli.com |
 | Tallied | https://money.markcheli.com |
+| Tasks | https://tasks.markcheli.com |
 | Minecraft | minecraft.markcheli.com:25565 |
 
 ### LAN Services (*.ops.markcheli.com)
@@ -212,4 +224,4 @@ docker ps
 **Logging**: Fluent Bit → OpenSearch
 
 ---
-*Last updated: March 23, 2026*
+*Last updated: April 19, 2026*
