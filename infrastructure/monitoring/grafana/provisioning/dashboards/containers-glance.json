@@ -1,0 +1,243 @@
+{
+  "id": null,
+  "uid": "containers-glance",
+  "title": "Containers — Glance",
+  "tags": ["overview", "homelab", "containers", "glance"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Containers Running",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "count(container_last_seen{name!=\"\"})", "legendFormat": "running"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 22},
+              {"color": "green", "value": 27}
+            ]
+          }
+        }
+      },
+      "options": {"colorMode": "value", "graphMode": "area", "textMode": "auto"},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Host CPU",
+      "type": "gauge",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "cpu"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Host Memory",
+      "type": "gauge",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "legendFormat": "mem"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 75},
+              {"color": "red", "value": 90}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Host Disk (root)",
+      "type": "gauge",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|fuse.*\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!~\"tmpfs|fuse.*\"}) * 100)", "legendFormat": "disk"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 75},
+              {"color": "red", "value": 90}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+    },
+    {
+      "id": 5,
+      "title": "Per-Container Status",
+      "type": "table",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "One row per container. Sort by any column. CPU/Memory cells are colored against per-row thresholds. 'Restarted' is time since the container last started — for Watchtower-managed containers (most of the stack) this is effectively 'when the image was last updated', so sort ascending to see what just rolled. Default sort: most recently restarted at top.",
+      "targets": [
+        {"refId": "A", "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[2m])) * 100", "legendFormat": "{{name}}", "instant": true, "format": "table"},
+        {"refId": "B", "expr": "sum by (name) (container_memory_usage_bytes{name!=\"\"})", "legendFormat": "{{name}}", "instant": true, "format": "table"},
+        {"refId": "C", "expr": "sum by (name) (rate(container_network_receive_bytes_total{name!=\"\"}[2m]))", "legendFormat": "{{name}}", "instant": true, "format": "table"},
+        {"refId": "D", "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name!=\"\"}[2m]))", "legendFormat": "{{name}}", "instant": true, "format": "table"},
+        {"refId": "E", "expr": "time() - max by (name) (container_start_time_seconds{name!=\"\"})", "legendFormat": "{{name}}", "instant": true, "format": "table"}
+      ],
+      "transformations": [
+        {"id": "merge", "options": {}},
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "Time 1": true, "Time 2": true, "Time 3": true, "Time 4": true, "Time 5": true, "__name__": true, "job": true, "instance": true},
+            "renameByName": {
+              "name": "Container",
+              "Value #A": "CPU %",
+              "Value #B": "Memory",
+              "Value #C": "Net In/s",
+              "Value #D": "Net Out/s",
+              "Value #E": "Restarted"
+            },
+            "indexByName": {"name": 0, "Value #E": 1, "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "displayMode": "auto"}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "CPU %"},
+            "properties": [
+              {"id": "unit", "value": "percent"},
+              {"id": "decimals", "value": 2},
+              {"id": "custom.displayMode", "value": "color-background-solid"},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 25},
+                {"color": "red", "value": 75}
+              ]}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Memory"},
+            "properties": [
+              {"id": "unit", "value": "bytes"},
+              {"id": "custom.displayMode", "value": "gradient-gauge"},
+              {"id": "max", "value": 8589934592},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1073741824},
+                {"color": "red", "value": 4294967296}
+              ]}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Net In/s"},
+            "properties": [{"id": "unit", "value": "Bps"}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Net Out/s"},
+            "properties": [{"id": "unit", "value": "Bps"}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Restarted"},
+            "properties": [
+              {"id": "unit", "value": "s"},
+              {"id": "decimals", "value": 0},
+              {"id": "custom.displayMode", "value": "color-text"},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 600},
+                {"color": "yellow", "value": 3600},
+                {"color": "text", "value": 86400}
+              ]}}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Restarted", "desc": false}]
+      },
+      "gridPos": {"h": 14, "w": 24, "x": 0, "y": 4}
+    },
+    {
+      "id": 6,
+      "title": "Container CPU (all)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[2m])) * 100", "legendFormat": "{{name}}"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {"drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "stacking": {"mode": "none"}}
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 18}
+    },
+    {
+      "id": 7,
+      "title": "Container Memory (all)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum by (name) (container_memory_usage_bytes{name!=\"\"})", "legendFormat": "{{name}}"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {"drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "stacking": {"mode": "none"}}
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "gridPos": {"h": 10, "w": 12, "x": 12, "y": 18}
+    }
+  ]
+}
