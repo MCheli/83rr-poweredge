@@ -1,6 +1,6 @@
 # Infrastructure Deployment Status - Phase 6 Complete
 
-**Date**: January 16, 2026
+**Date**: April 26, 2026
 **Status**: ✅ PRODUCTION READY
 
 ## ✅ Successfully Deployed Services
@@ -108,6 +108,14 @@
 21. **Tasks Database** (PostgreSQL 16) ✅
     - Status: Healthy
     - Purpose: Backend database for Tasks
+
+22. **Daily Report** - Thermal-printer report generator ✅
+    - Status: Healthy
+    - Endpoint: report.ops.markcheli.com (LAN-only HTML preview + trigger API)
+    - Image: ghcr.io/mcheli/daily-report:latest
+    - Schedule: Once daily at 07:00 ET (REPORT_TIMES=07:00)
+    - Auth: Bearer token on `POST /trigger` (DAILY_REPORT_API_TOKEN); GET endpoints unauthenticated but LAN-restricted at NGINX
+    - Dependencies: prometheus (server section), printer at 192.168.1.147:9100, Anthropic API, Tallied API, Tasks API, Home Assistant, Google Calendar ICS
 
 ## 📊 Monitoring Stack
 

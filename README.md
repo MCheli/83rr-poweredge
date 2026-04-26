@@ -103,6 +103,9 @@ curl https://flask.markcheli.com/health
   - Container resource metrics
 - **OpenSearch Dashboards** - https://logs.ops.markcheli.com
   - Log visualization and search
+- **Daily Report** - https://report.ops.markcheli.com
+  - Thermal-printer report generator (HTML preview + bearer-protected `/trigger`); prints daily at 07:00 ET to LAN printer at 192.168.1.147:9100
+
 **Infrastructure Services:**
 - **NGINX** - Reverse proxy with SSL termination
   - Ports: 80 (HTTP), 443 (HTTPS), 25565 (Minecraft)

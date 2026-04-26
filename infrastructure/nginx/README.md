@@ -71,6 +71,7 @@ The following upstreams are defined in `conf.d/production.conf`:
 | prometheus-local.ops.markcheli.com | prometheus | Let's Encrypt |
 | cadvisor-local.ops.markcheli.com | cadvisor | Let's Encrypt |
 | logs-local.ops.markcheli.com | opensearch_dashboards | Let's Encrypt |
+| report.ops.markcheli.com | daily-report:8080 | Let's Encrypt |
 
 ## SSL Certificates
 

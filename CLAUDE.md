@@ -131,7 +131,8 @@ docker compose down -v
 18. **tallied-db** - PostgreSQL database for Tallied
 19. **tasks** - Cycle-based todo app (image from ghcr.io/mcheli/tasks), Google SSO auth
 20. **tasks-db** - PostgreSQL database for Tasks
-21. **watchtower** - Automatic container updates (monitors ghcr.io images)
+21. **daily-report** - Thermal-printer daily report generator (image from ghcr.io/mcheli/daily-report), prints to LAN printer at 192.168.1.147:9100 once a day at 07:00 ET
+22. **watchtower** - Automatic container updates (monitors ghcr.io images)
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -165,6 +166,7 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://cadvisor.ops.markcheli.com** - Container monitoring
 - **https://logs.ops.markcheli.com** - OpenSearch Dashboards
 - **https://opensearch.ops.markcheli.com** - OpenSearch API
+- **https://report.ops.markcheli.com** - Daily report HTML preview + ad-hoc trigger API (LAN-only, bearer token required for `/trigger`)
 
 ### NGINX Routing
 All HTTPS traffic is handled by NGINX:
@@ -218,7 +220,7 @@ docker compose exec nginx nginx -s reload
 ## 🌐 DNS Management with Cloudflare
 
 ### DNS Configuration
-All DNS records are managed in **Cloudflare Dashboard** (not via API/scripts):
+DNS records can be managed two ways: via the Cloudflare Dashboard (for one-offs / proxied flag changes) or via `scripts/cloudflare_dns_manager.py` (preferred for adding LAN-only `*.ops.markcheli.com` records — the script defaults to `proxied: false`, which matches the existing LAN pattern).
 
 **Public Services** (proxied through Cloudflare):
 - `www.markcheli.com` → A record → `173.48.98.211` (public IP)
@@ -239,11 +241,11 @@ All DNS records are managed in **Cloudflare Dashboard** (not via API/scripts):
 # View current DNS records
 python scripts/cloudflare_dns_manager.py list
 
-# Add new DNS record
-python scripts/cloudflare_dns_manager.py add <subdomain> <ip_address>
+# Add new DNS record (creates as DNS-only / unproxied — fine for *.ops.markcheli.com)
+python scripts/cloudflare_dns_manager.py create --domain markcheli.com --type A --name <fqdn> --content <ip> --ttl 300
 
-# Delete DNS record
-python scripts/cloudflare_dns_manager.py delete <subdomain>
+# Delete DNS record — the `delete` action is registered in argparse but has no handler in main();
+# delete via the Cloudflare Dashboard or extend the script if needed.
 ```
 
 ### DNS Troubleshooting
@@ -523,8 +525,7 @@ docker compose up -d --build
 │   ├── opensearch/                # Log aggregation
 │   ├── monitoring/                # Prometheus/Grafana
 │   ├── fluent-bit/                # Log shipper to OpenSearch
-│   ├── tallied/                   # Tallied finance dashboard (uses Docker image, no local build)
-│   └── tasks/                     # Tasks todo app (uses Docker image, no local build)
+│   └── (no local dirs for: tallied, tasks, daily-report — defined inline in docker-compose.yml, image-only)
 │
 └── scripts/
     ├── README.md                         # Script documentation (update this when modifying scripts!)
@@ -689,6 +690,6 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ---
 
-**Last Updated**: April 19, 2026
+**Last Updated**: April 26, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Status**: Production-ready, all services operational
