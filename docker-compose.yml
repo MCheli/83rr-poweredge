@@ -486,6 +486,7 @@ services:
       - TASKS_GOOGLE_CLIENT_ID=${TASKS_GOOGLE_CLIENT_ID}
       - TASKS_GOOGLE_CLIENT_SECRET=${TASKS_GOOGLE_CLIENT_SECRET}
       - TASKS_GOOGLE_REDIRECT_URI=${TASKS_GOOGLE_REDIRECT_URI}
+      - TASKS_API_KEY_PEPPER=${TASKS_API_KEY_PEPPER}
       - TASKS_TEST_USER_EMAIL=${TASKS_TEST_USER_EMAIL}
       - TASKS_TEST_USER_PASSWORD=${TASKS_TEST_USER_PASSWORD}
     networks:
@@ -496,6 +497,40 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Daily Report (thermal-printer report generator)
+  # Image published from: github.com/MCheli/daily-report
+  # ═════════════════════════════════════════════════════════════════════════════
+  daily-report:
+    image: ghcr.io/mcheli/daily-report:latest
+    container_name: daily-report
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    env_file: .env
+    environment:
+      - TZ=America/New_York
+      - REPORT_TIMES=07:00
+      - PROM_URL=http://prometheus:9090
+      - DAILY_REPORT_PORT=8080
+      # ANTHROPIC_API_KEY is shadowed via DAILY_REPORT_ANTHROPIC_API_KEY so it
+      # doesn't clash with the jupyter service's own ANTHROPIC_API_KEY.
+      - ANTHROPIC_API_KEY=${DAILY_REPORT_ANTHROPIC_API_KEY}
+      - TALLIED_API_KEY=${TALLIED_API_KEY}
+      - TASKS_API_KEY=${TASKS_API_KEY}
+      - HOME_ASSISTANT_TOKEN=${HOME_ASSISTANT_TOKEN}
+      - CALENDAR_ICS_URL=${CALENDAR_ICS_URL}
+      - DAILY_REPORT_API_TOKEN=${DAILY_REPORT_API_TOKEN}
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Seafile (Dropbox Replacement)
