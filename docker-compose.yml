@@ -429,6 +429,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
+      - APP_ROLE=web
       - DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_BASE_URL=https://money.markcheli.com
@@ -439,6 +440,35 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
       timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  tallied-scheduler:
+    image: ghcr.io/mcheli/tallied:latest
+    container_name: tallied-scheduler
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      tallied-db:
+        condition: service_healthy
+      tallied:
+        condition: service_healthy
+    env_file: .env
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      - APP_ROLE=scheduler
+      - DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
+      - FINANCE_DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
+      - FINANCE_BASE_URL=https://money.markcheli.com
+      - FINANCE_DEV_MODE=false
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q python /proc/1/comm"]
+      interval: 30s
+      timeout: 5s
       retries: 3
       start_period: 15s
 
