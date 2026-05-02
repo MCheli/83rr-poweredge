@@ -563,6 +563,57 @@ services:
       start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Energy Monitor (panel-tool — circuit breaker → CT channel mapper)
+  # Image published from: github.com/MCheli/energy-monitor
+  # LAN-only (energy.ops.markcheli.com); ships without auth — keep behind
+  # the *.ops nginx allowlist. ESPHome / HA URLs are configured in-app.
+  # ═════════════════════════════════════════════════════════════════════════════
+  energy-monitor-db:
+    image: postgres:16-alpine
+    container_name: energy-monitor-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=panel_tool
+      - POSTGRES_PASSWORD=${ENERGY_MONITOR_DB_PASSWORD}
+      - POSTGRES_DB=panel_tool
+    volumes:
+      - energy_monitor_db_data:/var/lib/postgresql/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U panel_tool"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  energy-monitor:
+    image: ghcr.io/mcheli/panel-tool:latest
+    container_name: energy-monitor
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      energy-monitor-db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://panel_tool:${ENERGY_MONITOR_DB_PASSWORD}@energy-monitor-db:5432/panel_tool
+      - SECRET_KEY=${ENERGY_MONITOR_SECRET_KEY}
+      - PANEL_TOOL_DATA_DIR=/data
+    volumes:
+      - energy_monitor_data:/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Seafile (Dropbox Replacement)
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
@@ -704,4 +755,6 @@ volumes:
   plex_config:
   tallied_db_data:
   tasks_db_data:
+  energy_monitor_db_data:
+  energy_monitor_data:
   seafile_db:

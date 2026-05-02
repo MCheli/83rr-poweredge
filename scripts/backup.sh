@@ -153,6 +153,26 @@ backup_tallied_db() {
     success "Tallied database backed up: ${dump_file}.gz"
 }
 
+# Dump Energy Monitor PostgreSQL database
+backup_energy_monitor_db() {
+    log "Backing up Energy Monitor database..."
+    local dump_file="${BACKUP_ROOT}/databases/energy_monitor_${TIMESTAMP}.sql"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would dump Energy Monitor PostgreSQL to ${dump_file}"
+        return
+    fi
+
+    docker exec energy-monitor-db pg_dump -U panel_tool panel_tool \
+        > "${dump_file}" 2>/dev/null || {
+        error "Failed to dump Energy Monitor database"
+        return 1
+    }
+
+    gzip -f "${dump_file}"
+    success "Energy Monitor database backed up: ${dump_file}.gz"
+}
+
 # Backup Docker volumes
 backup_docker_volumes() {
     log "Backing up Docker volumes..."
@@ -168,6 +188,8 @@ backup_docker_volumes() {
         "83rr-poweredge_jupyterhub_shared"
         "jupyterhub-user-mcheli"
         "83rr-poweredge_tallied_db_data"
+        "83rr-poweredge_energy_monitor_db_data"
+        "83rr-poweredge_energy_monitor_data"
     )
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -344,6 +366,7 @@ main() {
     backup_seafile_db || true
     backup_jupyterhub_db || true
     backup_tallied_db || true
+    backup_energy_monitor_db || true
 
     # File backups
     backup_configs
