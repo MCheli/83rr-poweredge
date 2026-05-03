@@ -3,22 +3,47 @@
   "monitor_type": "query_level_monitor",
   "name": "watchtower-update-failure",
   "enabled": true,
-  "schedule": { "period": { "interval": 1, "unit": "HOURS" } },
+  "schedule": {
+    "period": {
+      "interval": 1,
+      "unit": "HOURS"
+    }
+  },
   "inputs": [
     {
       "search": {
-        "indices": ["logs-homelab-*"],
+        "indices": [
+          "logs-homelab-*"
+        ],
         "query": {
           "size": 0,
           "query": {
             "bool": {
               "must": [
-                { "term": { "container_name": "watchtower" } },
-                { "wildcard": { "extras": "*Failed=*" } },
-                { "range": { "@timestamp": { "gte": "now-1h" } } }
+                {
+                  "term": {
+                    "container_name": "watchtower"
+                  }
+                },
+                {
+                  "wildcard": {
+                    "extras": "*Failed=*"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-1h"
+                    }
+                  }
+                }
               ],
               "must_not": [
-                { "wildcard": { "extras": "*Failed=0*" } }
+                {
+                  "wildcard": {
+                    "extras": "*Failed=0*"
+                  }
+                }
               ]
             }
           }
@@ -36,7 +61,21 @@
           "lang": "painless"
         }
       },
-      "actions": []
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\": [{\"to\": [{\"email\": \"mpcheli7@gmail.com\"}]}], \"from\": {\"email\": \"status@markcheli.com\", \"name\": \"Homelab Alerts\"}, \"subject\": \"[homelab] {{ctx.monitor.name}} ({{ctx.results.0.hits.total.value}} events)\", \"content\": [{\"type\": \"text/plain\", \"value\": \"Monitor: {{ctx.monitor.name}}\\nTrigger: {{ctx.trigger.name}} (severity {{ctx.trigger.severity}})\\nEvent count: {{ctx.results.0.hits.total.value}}\\n\\nDashboards: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\\nDiscover: https://logs.ops.markcheli.com/app/discover\"}]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
+        }
+      ]
     }
   ]
 }

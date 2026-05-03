@@ -35,7 +35,18 @@
           "lang": "painless"
         }
       },
-      "actions": []
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] {{ctx.monitor.name}} ({{ctx.results.0.hits.total.value}} events)\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}}\\nTrigger: {{ctx.trigger.name}} (severity {{ctx.trigger.severity}})\\nEvent count: {{ctx.results.0.hits.total.value}}\\n\\nDashboards: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\\nDiscover: https://logs.ops.markcheli.com/app/discover\"}]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": { "value": 30, "unit": "MINUTES" }
+        }
+      ]
     }
   ]
 }
