@@ -113,26 +113,6 @@ backup_seafile_db() {
     success "Seafile database backed up: ${dump_file}.gz"
 }
 
-# Dump JupyterHub PostgreSQL database
-backup_jupyterhub_db() {
-    log "Backing up JupyterHub database..."
-    local dump_file="${BACKUP_ROOT}/databases/jupyterhub_${TIMESTAMP}.sql"
-
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  Would dump JupyterHub PostgreSQL to ${dump_file}"
-        return
-    fi
-
-    docker exec jupyterhub-db pg_dumpall -U jhub \
-        > "${dump_file}" 2>/dev/null || {
-        error "Failed to dump JupyterHub database"
-        return 1
-    }
-
-    gzip -f "${dump_file}"
-    success "JupyterHub database backed up: ${dump_file}.gz"
-}
-
 # Dump Tallied PostgreSQL database
 backup_tallied_db() {
     log "Backing up Tallied database..."
@@ -184,9 +164,6 @@ backup_docker_volumes() {
         "83rr-poweredge_prometheus_data"
         "83rr-poweredge_minecraft_data"
         "83rr-poweredge_plex_config"
-        "83rr-poweredge_jupyterhub_data"
-        "83rr-poweredge_jupyterhub_shared"
-        "jupyterhub-user-mcheli"
         "83rr-poweredge_tallied_db_data"
         "83rr-poweredge_energy_monitor_db_data"
         "83rr-poweredge_energy_monitor_data"
@@ -364,7 +341,6 @@ main() {
 
     # Database backups (do these first while services are running)
     backup_seafile_db || true
-    backup_jupyterhub_db || true
     backup_tallied_db || true
     backup_energy_monitor_db || true
 

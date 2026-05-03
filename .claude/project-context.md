@@ -118,8 +118,7 @@
 ├── 83rr-poweredge_grafana_data/
 ├── 83rr-poweredge_prometheus_data/
 ├── 83rr-poweredge_opensearch_data/
-├── 83rr-poweredge_minecraft_data/
-└── 83rr-poweredge_jupyter_data_local/
+└── 83rr-poweredge_minecraft_data/
 ```
 
 ## Deployment Method
