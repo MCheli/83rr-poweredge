@@ -32,6 +32,16 @@ cp "$LETSENCRYPT_DIR/config/live/$DOMAIN/fullchain.pem" \
 cp "$LETSENCRYPT_DIR/config/live/$DOMAIN/privkey.pem" \
    "$PROJECT_ROOT/infrastructure/nginx/certs/letsencrypt-ops-markcheli.key"
 
+# status.markcheli.com is a separate single-name cert (LAN clients resolve
+# to origin and would otherwise see the untrusted CloudFlare Origin CA).
+# Mirror the renewed copy if certbot rolled it.
+if [ -f "$LETSENCRYPT_DIR/config/live/status.markcheli.com/fullchain.pem" ]; then
+    cp "$LETSENCRYPT_DIR/config/live/status.markcheli.com/fullchain.pem" \
+       "$PROJECT_ROOT/infrastructure/nginx/certs/letsencrypt-status.crt"
+    cp "$LETSENCRYPT_DIR/config/live/status.markcheli.com/privkey.pem" \
+       "$PROJECT_ROOT/infrastructure/nginx/certs/letsencrypt-status.key"
+fi
+
 # Test NGINX configuration
 docker compose -f "$PROJECT_ROOT/docker-compose.yml" exec nginx nginx -t
 
