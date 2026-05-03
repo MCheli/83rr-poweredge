@@ -76,7 +76,6 @@ docker ps -q | wc -l
 | personal-website | Main website |
 | cookbook | Recipe website |
 | flask-api | REST API |
-| marimo | Reactive Python notebooks |
 | minecraft | Game server |
 | plex | Media server |
 | seafile | File sync |
@@ -109,7 +108,6 @@ Test from the server or external network:
 - [ ] **Personal Website**: https://www.markcheli.com → HTTP 200
 - [ ] **Cookbook**: https://cookbook.markcheli.com → HTTP 200
 - [ ] **Flask API**: https://flask.markcheli.com → HTTP 200
-- [ ] **Marimo**: https://data.markcheli.com → HTTP 200
 - [ ] **Tallied**: https://money.markcheli.com → HTTP 200
 - [ ] **Plex**: https://videos.markcheli.com → HTTP 401 (auth expected)
 - [ ] **Seafile**: https://files.markcheli.com → HTTP 200
@@ -120,7 +118,6 @@ Test from the server or external network:
 curl -sI https://www.markcheli.com | head -1
 curl -sI https://cookbook.markcheli.com | head -1
 curl -sI https://flask.markcheli.com | head -1
-curl -sI https://data.markcheli.com | head -1
 curl -sI https://videos.markcheli.com | head -1
 curl -sI https://files.markcheli.com | head -1
 curl -sI https://home.markcheli.com | head -1

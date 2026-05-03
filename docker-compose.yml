@@ -111,38 +111,6 @@ services:
       start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # Marimo (Reactive Python Notebooks)
-  # ═════════════════════════════════════════════════════════════════════════════
-  marimo:
-    image: ghcr.io/marimo-team/marimo:latest-data
-    container_name: marimo
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      - TZ=${TZ:-America/New_York}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-    command:
-      - marimo
-      - edit
-      - --host=0.0.0.0
-      - --port=8080
-      - --token-password=${MARIMO_PASSWORD}
-      - --headless
-      - --proxy=https://data.markcheli.com
-      - /data
-    volumes:
-      - marimo_data:/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    networks:
-      - infrastructure
-
-  # ═════════════════════════════════════════════════════════════════════════════
   # OpenSearch (Logging Infrastructure)
   # Note: Using 'latest' because data format requires matching version; pin after fresh install
   # ═════════════════════════════════════════════════════════════════════════════
@@ -768,7 +736,6 @@ networks:
 # Volumes
 # ═════════════════════════════════════════════════════════════════════════════
 volumes:
-  marimo_data:
   opensearch_data:
   fluent_bit_data:
   minecraft_data:

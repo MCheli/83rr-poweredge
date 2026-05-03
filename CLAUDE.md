@@ -115,7 +115,6 @@ docker compose down -v
 2. **personal-website** - Nuxt.js personal portfolio (image from ghcr.io/mcheli/personal-website)
 3. **cookbook** - Static recipe website (image from ghcr.io/mcheli/cookbook)
 4. **flask-api** - Python Flask REST API (image from ghcr.io/mcheli/flask-api)
-5. **marimo** - Reactive Python notebooks for data science (password-protected)
 6. **minecraft** - Minecraft Java Edition server
 7. **plex** - Plex Media Server for streaming movies/TV/music
 8. **seafile** - Self-hosted file sync and share (Dropbox alternative)
@@ -152,7 +151,6 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://www.markcheli.com** - Personal website
 - **https://cookbook.markcheli.com** - Recipe cookbook (static site)
 - **https://flask.markcheli.com** - Flask API
-- **https://data.markcheli.com** - Marimo (reactive Python notebooks, password-protected)
 - **https://videos.markcheli.com** - Plex Media Server (streaming movies, TV, music)
 - **https://files.markcheli.com** - Seafile file sync and share
 - **https://home.markcheli.com** - Home Assistant smart home platform
@@ -225,7 +223,6 @@ DNS records can be managed two ways: via the Cloudflare Dashboard (for one-offs 
 **Public Services** (proxied through Cloudflare):
 - `www.markcheli.com` → A record → `173.48.98.211` (public IP)
 - `flask.markcheli.com` → A record → `173.48.98.211`
-- `data.markcheli.com` → A record → `173.48.98.211`
 - `videos.markcheli.com` → A record → `173.48.98.211`
 - `files.markcheli.com` → A record → `173.48.98.211`
 - `home.markcheli.com` → A record → `173.48.98.211`
@@ -520,7 +517,6 @@ docker compose up -d --build
 │   │
 │   ├── personal-website/          # (source moved to github.com/mcheli/PersonalWebsite)
 │   ├── flask-api/                 # (source moved to github.com/mcheli/PersonalWebsite)
-│   ├── marimo/                    # Marimo (reactive Python notebooks) - Note: uses Docker image, no local build
 │   ├── minecraft/                 # Minecraft server
 │   ├── opensearch/                # Log aggregation
 │   ├── monitoring/                # Prometheus/Grafana

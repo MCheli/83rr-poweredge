@@ -55,7 +55,17 @@
         "subscope": { "type": "keyword" },
         "thread_id": { "type": "keyword" },
         "pid": { "type": "integer" },
-        "extras": { "type": "text" }
+        "extras": { "type": "text" },
+        "event_type": { "type": "keyword" },
+        "event_scope": { "type": "keyword" },
+        "wt_failed": { "type": "integer" },
+        "wt_updated": { "type": "integer" },
+        "wt_scanned": { "type": "integer" },
+        "metric_name": { "type": "keyword" },
+        "metric_value": { "type": "float" },
+        "image": { "type": "keyword" },
+        "Action": { "type": "keyword" },
+        "Type": { "type": "keyword" }
       }
     }
   }

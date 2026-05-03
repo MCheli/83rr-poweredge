@@ -48,7 +48,6 @@ The following upstreams are defined in `conf.d/production.conf`:
 |----------|--------|-------------|
 | `personal_website` | personal-website:3000 | Nuxt.js website |
 | `flask_api` | flask-api:5000 | Flask REST API |
-| `marimo` | marimo:8080 | Marimo notebooks |
 | `grafana` | grafana:3000 | Grafana dashboards |
 | `prometheus` | prometheus:9090 | Prometheus metrics |
 | `cadvisor` | cadvisor:8080 | Container metrics |
