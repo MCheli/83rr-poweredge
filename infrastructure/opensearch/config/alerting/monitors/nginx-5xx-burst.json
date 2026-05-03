@@ -1,0 +1,42 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "nginx-5xx-burst",
+  "enabled": true,
+  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "container_name": "nginx" } },
+                { "range": { "status": { "gte": 500, "lte": 599 } } },
+                { "range": { "@timestamp": { "gte": "now-5m" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_path": { "terms": { "field": "path", "size": 10 } }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "5xx-burst",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 5",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "auth-bruteforce",
+  "enabled": true,
+  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "container_name": "nginx" } },
+                { "term": { "status": 401 } },
+                { "range": { "@timestamp": { "gte": "now-5m" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_ip": {
+              "terms": { "field": "client_ip", "size": 5, "min_doc_count": 30 }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "single-ip-401-burst",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].aggregations.by_ip.buckets.size() > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

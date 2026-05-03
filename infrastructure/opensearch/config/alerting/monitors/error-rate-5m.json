@@ -1,0 +1,41 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "error-rate-5m",
+  "enabled": true,
+  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "terms": { "level": ["ERROR", "CRITICAL", "FATAL"] } },
+                { "range": { "@timestamp": { "gte": "now-5m" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_service": { "terms": { "field": "container_name", "size": 20 } }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "error-burst",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 10",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

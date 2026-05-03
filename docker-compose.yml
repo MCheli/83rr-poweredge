@@ -561,6 +561,30 @@ services:
       start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Uptime Kuma (status page + uptime monitor)
+  # Public at status.markcheli.com — needs to be reachable when other things
+  # are down. Polls all public + LAN endpoints itself; alerting destinations
+  # (SendGrid, Discord, ntfy) are configured via the in-app Settings UI.
+  # ═════════════════════════════════════════════════════════════════════════════
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "node", "extra/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Energy Monitor (panel-tool — circuit breaker → CT channel mapper)
   # Image published from: github.com/MCheli/energy-monitor
   # LAN-only (energy.ops.markcheli.com); ships without auth — keep behind
@@ -755,4 +779,5 @@ volumes:
   tasks_db_data:
   energy_monitor_db_data:
   energy_monitor_data:
+  uptime_kuma_data:
   seafile_db:
