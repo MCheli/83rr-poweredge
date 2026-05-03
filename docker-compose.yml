@@ -98,6 +98,16 @@ services:
     logging: *default-logging
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+    # Image's default CMD lacks gunicorn access logging — override it to
+    # emit access + error logs to stdout so requests show up in OpenSearch.
+    command:
+      - gunicorn
+      - --bind=0.0.0.0:5000
+      - --workers=2
+      - --timeout=30
+      - --access-logfile=-
+      - --error-logfile=-
+      - app:app
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname

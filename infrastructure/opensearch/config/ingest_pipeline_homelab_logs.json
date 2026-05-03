@@ -97,10 +97,11 @@
         "if": "ctx.container_name == 'flask-api'",
         "field": "log",
         "patterns": [
-          "^\\[%{DATA:app_time}\\] \\[%{INT:pid}\\] \\[%{LOGLEVEL:level}\\] %{GREEDYDATA:msg}"
+          "^\\[%{DATA:app_time}\\] \\[%{INT:pid}\\] \\[%{LOGLEVEL:level}\\] %{GREEDYDATA:msg}",
+          "^%{IP:client_ip} - (?:%{DATA:remote_user}|-) \\[%{HTTPDATE:nginx_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} \"%{DATA:referrer}\" \"%{DATA:user_agent}\""
         ],
         "ignore_failure": true,
-        "description": "gunicorn"
+        "description": "gunicorn — startup messages + access log (combined format from --access-logfile=-)"
       }
     },
 
