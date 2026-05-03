@@ -1,0 +1,55 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "container-died",
+  "enabled": true,
+  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "terms": { "event_type": ["die", "kill", "oom"] } },
+                { "range": { "@timestamp": { "gte": "now-5m" } } }
+              ],
+              "must_not": [
+                { "terms": { "container_name": ["watchtower", "uptime-kuma"] } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_container": { "terms": { "field": "container_name", "size": 20 } }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "container-down-event",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] container die/kill/oom event\",\"content\":[{\"type\":\"text/plain\",\"value\":\"One or more containers were killed or died in the last 5 min (excluding watchtower's normal restart cycle and uptime-kuma's own probes). Check `docker ps -a` and `docker logs <name>`.\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": { "value": 30, "unit": "MINUTES" }
+        }
+      ]
+    }
+  ]
+}

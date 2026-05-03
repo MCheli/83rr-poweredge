@@ -37,6 +37,33 @@
                     }
                   }
                 }
+              ],
+              "must_not": [
+                {
+                  "prefix": {
+                    "path": "/api/"
+                  }
+                },
+                {
+                  "prefix": {
+                    "path": "/grafana/"
+                  }
+                },
+                {
+                  "prefix": {
+                    "path": "/_dashboards"
+                  }
+                },
+                {
+                  "prefix": {
+                    "path": "/-/healthy"
+                  }
+                },
+                {
+                  "prefix": {
+                    "path": "/-/ready"
+                  }
+                }
               ]
             }
           },

@@ -161,13 +161,93 @@
 
     {
       "grok": {
-        "if": "ctx.container_name == 'opensearch' || ctx.container_name == 'opensearch-dashboards'",
+        "if": "ctx.container_name == 'opensearch'",
         "field": "log",
         "patterns": [
           "^\\[%{TIMESTAMP_ISO8601:app_time}\\]\\[%{LOGLEVEL:level}\\s*\\]\\[%{DATA:logger}\\s*\\] %{GREEDYDATA:msg}"
         ],
         "ignore_failure": true,
         "description": "OpenSearch's own log4j format"
+      }
+    },
+
+    {
+      "json": {
+        "if": "ctx.container_name == 'opensearch-dashboards' && ctx.log != null && ctx.log.startsWith('{')",
+        "field": "log",
+        "target_field": "_osd",
+        "ignore_failure": true,
+        "description": "OS Dashboards emits JSON to stdout"
+      }
+    },
+    {
+      "script": {
+        "if": "ctx._osd != null",
+        "lang": "painless",
+        "source": "if (ctx._osd.statusCode != null) { ctx.status = ctx._osd.statusCode; } if (ctx._osd.req != null) { if (ctx._osd.req.url != null) { ctx.path = ctx._osd.req.url; } if (ctx._osd.req.method != null) { ctx.method = ctx._osd.req.method.toUpperCase(); } } if (ctx._osd.message != null) { ctx.msg = ctx._osd.message; } else if (ctx._osd.req != null && ctx._osd.req.url != null) { ctx.msg = (ctx._osd.method == null ? '' : ctx._osd.method.toUpperCase()) + ' ' + ctx._osd.req.url + (ctx._osd.statusCode == null ? '' : ' -> ' + ctx._osd.statusCode); } if (ctx._osd.type == 'error') { ctx.level = 'ERROR'; } else { ctx.level = 'INFO'; }",
+        "ignore_failure": true
+      }
+    },
+    {
+      "remove": {
+        "field": "_osd",
+        "ignore_missing": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'cookbook' || ctx.container_name == 'personal-website'",
+        "field": "log",
+        "patterns": [
+          "^%{IP:client_ip} - (?:%{DATA:remote_user}|-) \\[%{HTTPDATE:nginx_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} \"%{DATA:referrer}\" \"%{DATA:user_agent}\"(?: \"%{DATA:x_forwarded_for}\")?"
+        ],
+        "ignore_failure": true,
+        "description": "cookbook + personal-website (Nginx-served static, combined log format)"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'seafile'",
+        "field": "log",
+        "patterns": [
+          "^\\[%{TIMESTAMP_ISO8601:app_time}\\]\\s+%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "Seafile logs (file-input with [timestamp] message format)"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name != null && ctx.container_name.endsWith('-db')",
+        "field": "log",
+        "patterns": [
+          "^%{TIMESTAMP_ISO8601:app_time} (?:UTC|GMT|EST|EDT|PST|PDT) \\[%{INT:pid:int}\\] (?<pg_level>LOG|DEBUG|INFO|NOTICE|WARNING|ERROR|FATAL|PANIC):\\s+%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "Postgres log format for *-db containers — LOG is postgres-specific, mapped to INFO below"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.pg_level == 'LOG'",
+        "field": "level",
+        "value": "INFO"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.pg_level != null && ctx.pg_level != 'LOG' && ctx.level == null",
+        "field": "level",
+        "value": "{{{pg_level}}}"
+      }
+    },
+    {
+      "remove": {
+        "field": "pg_level",
+        "ignore_missing": true
       }
     },
 

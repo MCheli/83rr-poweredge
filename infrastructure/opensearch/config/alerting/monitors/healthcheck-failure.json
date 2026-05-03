@@ -56,11 +56,11 @@
   ],
   "triggers": [
     {
-      "name": "healthcheck-failed",
+      "name": "healthcheck-failed-3",
       "severity": "2",
       "condition": {
         "script": {
-          "source": "ctx.results[0].hits.total.value > 0",
+          "source": "ctx.results[0].hits.total.value >= 3",
           "lang": "painless"
         }
       },

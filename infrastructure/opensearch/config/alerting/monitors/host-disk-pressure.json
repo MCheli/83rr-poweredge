@@ -1,0 +1,88 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "host-disk-pressure",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 15,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 1,
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "term": {
+                    "container_name": "host-metrics"
+                  }
+                },
+                {
+                  "term": {
+                    "metric_name": "disk_used_pct"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-30m"
+                    }
+                  }
+                },
+                {
+                  "range": {
+                    "metric_value": {
+                      "gte": 85
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "sort": [
+            {
+              "@timestamp": {
+                "order": "desc"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "disk-warning",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] DISK PRESSURE \u2014 root filesystem >= 85%\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Root filesystem is at >=85% used. Free space NOW or backups may fail and Docker may stop.\\n\\nSSH and run: df -h /, du -sh /var/lib/docker/volumes/*\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 360,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}

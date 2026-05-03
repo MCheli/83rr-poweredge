@@ -1,0 +1,74 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "letsencrypt-renew-failed",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 1,
+      "unit": "HOURS"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "term": {
+                    "container_name": "letsencrypt-renew"
+                  }
+                },
+                {
+                  "term": {
+                    "event_type": "renew_failed"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-2h"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "renew-failed",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] Let's Encrypt renewal failed\",\"content\":[{\"type\":\"text/plain\",\"value\":\"renew-letsencrypt-certs.sh exited non-zero. Certs auto-renew at 30 days before expiry, so we have time, but investigate now: ssh in and run /home/mcheli/83rr-poweredge/scripts/renew-letsencrypt-certs.sh manually. Likely cause: Cloudflare API token rotated, or rate limited.\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 720,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}
