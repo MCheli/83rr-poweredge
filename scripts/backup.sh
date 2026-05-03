@@ -10,6 +10,13 @@
 #
 # Schedule via cron (daily at 2:00 AM):
 #   0 2 * * * /home/mcheli/83rr-poweredge/scripts/backup.sh >> /home/mcheli/83rr-poweredge/logs/backup.log 2>&1
+#
+# INTENTIONALLY NOT BACKED UP:
+#   - /storage/media (Plex library, ~2.3 TB) — too large for the NAS;
+#     content is re-rippable / re-downloadable. If a media-loss event
+#     would matter to you, set up a separate large-volume backup target.
+#   - OpenSearch / Fluent Bit / Marimo data — logs and ephemeral state.
+#   - Docker images — all reproducible from ghcr.io / dockerhub.
 # =============================================================================
 
 set -euo pipefail
@@ -24,11 +31,11 @@ DRY_RUN=false
 
 # Load database credentials from .env
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
-    source <(grep -E '^(SEAFILE_DB_ROOT_PASSWORD|POSTGRES_PASSWORD|TALLIED_DB_PASSWORD)=' "${PROJECT_DIR}/.env")
+    source <(grep -E '^(SEAFILE_DB_ROOT_PASSWORD|TALLIED_DB_PASSWORD|TASKS_DB_PASSWORD)=' "${PROJECT_DIR}/.env")
 fi
 SEAFILE_DB_PASS="${SEAFILE_DB_ROOT_PASSWORD:-}"
-JUPYTERHUB_DB_PASS="${POSTGRES_PASSWORD:-}"
 TALLIED_DB_PASS="${TALLIED_DB_PASSWORD:-}"
+TASKS_DB_PASS="${TASKS_DB_PASSWORD:-}"
 
 # Retention settings
 DAILY_KEEP=7
@@ -133,6 +140,26 @@ backup_tallied_db() {
     success "Tallied database backed up: ${dump_file}.gz"
 }
 
+# Dump Tasks PostgreSQL database
+backup_tasks_db() {
+    log "Backing up Tasks database..."
+    local dump_file="${BACKUP_ROOT}/databases/tasks_${TIMESTAMP}.sql"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would dump Tasks PostgreSQL to ${dump_file}"
+        return
+    fi
+
+    docker exec tasks-db pg_dump -U tasks tasks \
+        > "${dump_file}" 2>/dev/null || {
+        error "Failed to dump Tasks database"
+        return 1
+    }
+
+    gzip -f "${dump_file}"
+    success "Tasks database backed up: ${dump_file}.gz"
+}
+
 # Dump Energy Monitor PostgreSQL database
 backup_energy_monitor_db() {
     log "Backing up Energy Monitor database..."
@@ -165,6 +192,7 @@ backup_docker_volumes() {
         "83rr-poweredge_minecraft_data"
         "83rr-poweredge_plex_config"
         "83rr-poweredge_tallied_db_data"
+        "83rr-poweredge_tasks_db_data"
         "83rr-poweredge_energy_monitor_db_data"
         "83rr-poweredge_energy_monitor_data"
     )
@@ -232,7 +260,16 @@ backup_configs() {
         rsync -aL --delete "/home/mcheli/letsencrypt/" "${config_dir}/letsencrypt/"
     fi
 
-    # Note: NAS credentials at /root/.nas-credentials require manual backup with sudo
+    # NAS credentials — root-owned (referenced in /etc/fstab). Without these
+    # you cannot remount the NAS in DR, which would block reading any of
+    # this backup. NOPASSWD rsync is already granted in /etc/sudoers.d/backup.
+    # Also save the contents to a password manager off-host as a true offline copy.
+    if sudo rsync -aL --delete /root/.nas-credentials "${config_dir}/nas-credentials" 2>/dev/null; then
+        chmod 600 "${config_dir}/nas-credentials" 2>/dev/null || true
+        success "NAS credentials backed up"
+    else
+        log "  NAS credentials at /root/.nas-credentials not backed up (sudo rsync failed)"
+    fi
 
     success "Configuration files backed up"
 }
@@ -342,6 +379,7 @@ main() {
     # Database backups (do these first while services are running)
     backup_seafile_db || true
     backup_tallied_db || true
+    backup_tasks_db || true
     backup_energy_monitor_db || true
 
     # File backups
