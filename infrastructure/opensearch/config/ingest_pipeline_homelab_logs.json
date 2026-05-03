@@ -229,10 +229,23 @@
         "if": "ctx.container_name == 'seafile'",
         "field": "log",
         "patterns": [
-          "^\\[%{TIMESTAMP_ISO8601:app_time}\\]\\s+%{GREEDYDATA:msg}"
+          "^\\[%{TIMESTAMP_ISO8601:app_time}\\]\\s+%{GREEDYDATA:msg}",
+          "^%{GREEDYDATA:msg}"
         ],
         "ignore_failure": true,
-        "description": "Seafile logs (file-input with [timestamp] message format)"
+        "description": "Seafile logs — bracketed timestamp variant + plain-line variant for log lines without timestamp prefix"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'fluent-bit'",
+        "field": "log",
+        "patterns": [
+          "^\\[%{DATA:app_time}\\] \\[\\s*%{WORD:level_lc}\\] %{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "Fluent Bit's own log format: [time] [level] message"
       }
     },
 

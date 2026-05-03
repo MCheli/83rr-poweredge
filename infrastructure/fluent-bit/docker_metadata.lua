@@ -25,8 +25,16 @@ function normalize_docker_event(tag, timestamp, record)
         record["message"] = nil
     end
 
+    -- For Type=image events the "name" is actually the image name/sha and
+    -- shouldn't masquerade as a container_name (would pollute aggregations).
+    -- Move it to an `image` field instead.
     if record["actor_name"] then
-        record["container_name"] = record["actor_name"]
+        if record["Type"] == "image" then
+            record["image"] = record["actor_name"]
+            record["container_name"] = "docker-image-event"
+        else
+            record["container_name"] = record["actor_name"]
+        end
         record["actor_name"] = nil
     end
     if record["actor_id"] then
