@@ -52,7 +52,7 @@ python scripts/test_infrastructure.py
 Lightweight alternative to full test suite. Quick validation of critical services for rapid feedback during development.
 
 **Tests:**
-- Public services (www, flask, jupyter, minecraft)
+- Public services (www, flask, minecraft)
 - LAN services (grafana, prometheus, logs, opensearch)
 - Basic HTTP response codes
 

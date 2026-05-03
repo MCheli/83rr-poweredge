@@ -132,7 +132,7 @@ Use only for services intended for internet access:
 - **Naming**: `{service}.markcheli.com`
 - **SSL**: Cloudflare Origin Certificate
 - **Access**: Public internet
-- **Examples**: Personal website, Flask API, JupyterLab
+- **Examples**: Personal website, Flask API, Tallied
 - **Requirement**: Must have explicit justification
 
 ### Adding a New Service
@@ -248,7 +248,6 @@ git diff HEAD
 - ✅ Check that services return proper HTTP 200 responses
 
 ## Performance Considerations
-- JupyterLab containers can take 30-60 seconds to start
 - NGINX configuration reloads are instant (no downtime)
 - Database containers need 10-15 seconds to be ready
 - Always wait appropriate time before health checks

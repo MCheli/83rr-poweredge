@@ -545,8 +545,6 @@ services:
       - REPORT_TIMES=07:00
       - PROM_URL=http://prometheus:9090
       - DAILY_REPORT_PORT=8080
-      # ANTHROPIC_API_KEY is shadowed via DAILY_REPORT_ANTHROPIC_API_KEY so it
-      # doesn't clash with the jupyter service's own ANTHROPIC_API_KEY.
       - ANTHROPIC_API_KEY=${DAILY_REPORT_ANTHROPIC_API_KEY}
       - TALLIED_API_KEY=${TALLIED_API_KEY}
       - TASKS_API_KEY=${TASKS_API_KEY}

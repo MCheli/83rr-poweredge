@@ -60,7 +60,6 @@ The following upstreams are defined in `conf.d/production.conf`:
 |--------|---------|-----|
 | www.markcheli.com | personal_website | Cloudflare Origin |
 | flask.markcheli.com | flask_api | Cloudflare Origin |
-| jupyter.markcheli.com | jupyter | Cloudflare Origin |
 | minecraft.markcheli.com:25565 | TCP passthrough | N/A |
 
 ### LAN Services (*.ops.markcheli.com)
