@@ -25,7 +25,12 @@
         "time": { "type": "date" },
         "app_time": { "type": "keyword" },
         "log": { "type": "text" },
-        "msg": { "type": "text" },
+        "msg": {
+          "type": "text",
+          "fields": {
+            "keyword": { "type": "keyword", "ignore_above": 256 }
+          }
+        },
         "stream": { "type": "keyword" },
         "container_id": { "type": "keyword" },
         "container_name": { "type": "keyword" },

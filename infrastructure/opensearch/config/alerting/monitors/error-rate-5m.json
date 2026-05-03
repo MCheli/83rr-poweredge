@@ -3,23 +3,49 @@
   "monitor_type": "query_level_monitor",
   "name": "error-rate-5m",
   "enabled": true,
-  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
   "inputs": [
     {
       "search": {
-        "indices": ["logs-homelab-*"],
+        "indices": [
+          "logs-homelab-*"
+        ],
         "query": {
           "size": 0,
           "query": {
             "bool": {
               "must": [
-                { "terms": { "level": ["ERROR", "CRITICAL", "FATAL"] } },
-                { "range": { "@timestamp": { "gte": "now-5m" } } }
+                {
+                  "terms": {
+                    "level": [
+                      "ERROR",
+                      "CRITICAL",
+                      "FATAL"
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-5m"
+                    }
+                  }
+                }
               ]
             }
           },
           "aggs": {
-            "by_service": { "terms": { "field": "container_name", "size": 20 } }
+            "by_service": {
+              "terms": {
+                "field": "container_name",
+                "size": 20
+              }
+            }
           }
         }
       }
@@ -40,11 +66,14 @@
           "name": "email-mpcheli",
           "destination_id": "cVtg7p0BAgiY_8mBBS8g",
           "message_template": {
-            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] {{ctx.monitor.name}} ({{ctx.results.0.hits.total.value}} events)\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}}\\nTrigger: {{ctx.trigger.name}} (severity {{ctx.trigger.severity}})\\nEvent count: {{ctx.results.0.hits.total.value}}\\n\\nDashboards: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\\nDiscover: https://logs.ops.markcheli.com/app/discover\"}]}",
+            "source": "{\"personalizations\": [{\"to\": [{\"email\": \"mpcheli7@gmail.com\"}]}], \"from\": {\"email\": \"status@markcheli.com\", \"name\": \"Homelab Alerts\"}, \"subject\": \"[homelab] {{ctx.monitor.name}} ({{ctx.results.0.hits.total.value}} events)\", \"content\": [{\"type\": \"text/plain\", \"value\": \"Monitor: {{ctx.monitor.name}}\\nTrigger: {{ctx.trigger.name}} (severity {{ctx.trigger.severity}})\\nEvent count: {{ctx.results.0.hits.total.value}}\\n\\nDashboards: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\\nDiscover: https://logs.ops.markcheli.com/app/discover\"}], \"tracking_settings\": {\"click_tracking\": {\"enable\": false, \"enable_text\": false}, \"open_tracking\": {\"enable\": false}, \"subscription_tracking\": {\"enable\": false}}}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
-          "throttle": { "value": 30, "unit": "MINUTES" }
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
         }
       ]
     }
