@@ -1,0 +1,52 @@
+{
+  "policy": {
+    "description": "Homelab log retention: hot 7d, then warm/read-only, delete after 90d. Adjust the deletion age via the transitions[2].conditions.min_index_age field.",
+    "default_state": "hot",
+    "schema_version": 1,
+    "states": [
+      {
+        "name": "hot",
+        "actions": [
+          {
+            "replica_count": { "number_of_replicas": 0 }
+          }
+        ],
+        "transitions": [
+          {
+            "state_name": "warm",
+            "conditions": { "min_index_age": "7d" }
+          }
+        ]
+      },
+      {
+        "name": "warm",
+        "actions": [
+          {
+            "read_only": {}
+          },
+          {
+            "force_merge": { "max_num_segments": 1 }
+          }
+        ],
+        "transitions": [
+          {
+            "state_name": "delete",
+            "conditions": { "min_index_age": "90d" }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "actions": [
+          { "delete": {} }
+        ]
+      }
+    ],
+    "ism_template": [
+      {
+        "index_patterns": ["logs-homelab-*"],
+        "priority": 100
+      }
+    ]
+  }
+}

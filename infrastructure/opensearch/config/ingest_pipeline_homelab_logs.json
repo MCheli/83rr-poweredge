@@ -1,0 +1,242 @@
+{
+  "description": "Parse homelab Docker logs into structured fields by container_name. Single-pass pipeline applied via index template default_pipeline.",
+  "processors": [
+    {
+      "remove": {
+        "field": ["environment", "infrastructure"],
+        "ignore_missing": true,
+        "description": "Drop constants (every doc has the same value)"
+      }
+    },
+    {
+      "set": {
+        "field": "_orig_log",
+        "value": "{{{log}}}",
+        "ignore_empty_value": true,
+        "description": "Preserve original line in case parsing fails or for raw search"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'nginx'",
+        "field": "log",
+        "patterns": [
+          "^%{IP:client_ip} - (?:%{DATA:remote_user}|-) \\[%{HTTPDATE:nginx_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} \"%{DATA:referrer}\" \"%{DATA:user_agent}\" \"%{DATA:x_forwarded_for}\""
+        ],
+        "ignore_failure": true,
+        "description": "nginx combined access log + X-Forwarded-For"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'tasks' || ctx.container_name == 'faster-whisper'",
+        "field": "log",
+        "patterns": [
+          "^%{LOGLEVEL:level}:\\s+%{IP:client_ip}:%{INT:client_port} - \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int}",
+          "^%{LOGLEVEL:level}:\\s+%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "uvicorn access + generic INFO/ERROR lines"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'tallied' || ctx.container_name == 'tallied-scheduler'",
+        "field": "log",
+        "patterns": [
+          "^%{IP:client_ip}:%{INT:client_port} - \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int}",
+          "^%{TIMESTAMP_ISO8601:app_time} \\[%{LOGLEVEL:level}\\] %{DATA:logger}: %{GREEDYDATA:msg}",
+          "^%{LOGLEVEL:level}:%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "tallied asgi access + python logger lines"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'daily-report'",
+        "field": "log",
+        "patterns": [
+          "^\\[http\\] %{IP:client_ip} - \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int}",
+          "^\\[%{DATA:scope}\\] %{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'edge-tts'",
+        "field": "log",
+        "patterns": [
+          "^%{IP:client_ip} - - \\[%{DATA:app_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} %{NUMBER:request_time:float}"
+        ],
+        "ignore_failure": true,
+        "description": "Apache-style access log with response time"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'energy-monitor'",
+        "field": "log",
+        "patterns": [
+          "^%{LOGLEVEL:level}\\s+\\[%{DATA:logger}\\]\\s+%{GREEDYDATA:msg}",
+          "^INFO:%{DATA:logger}:%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'flask-api'",
+        "field": "log",
+        "patterns": [
+          "^\\[%{DATA:app_time}\\] \\[%{INT:pid}\\] \\[%{LOGLEVEL:level}\\] %{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "gunicorn"
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'watchtower'",
+        "field": "log",
+        "patterns": [
+          "^time=\"%{TIMESTAMP_ISO8601:app_time}\" level=%{WORD:level_lc} msg=\"%{DATA:msg}\"%{GREEDYDATA:extras}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'grafana'",
+        "field": "log",
+        "patterns": [
+          "^logger=%{DATA:logger} t=%{TIMESTAMP_ISO8601:app_time} level=%{WORD:level_lc} msg=\"%{DATA:msg}\"%{GREEDYDATA:extras}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'prometheus'",
+        "field": "log",
+        "patterns": [
+          "^time=%{TIMESTAMP_ISO8601:app_time} level=%{WORD:level_lc} source=%{DATA:source} msg=\"%{DATA:msg}\"%{GREEDYDATA:extras}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'plex'",
+        "field": "log",
+        "patterns": [
+          "^%{DATA:app_time} \\[%{DATA:thread_id}\\] %{LOGLEVEL:level} - %{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'openclaw'",
+        "field": "log",
+        "patterns": [
+          "^%{TIMESTAMP_ISO8601:app_time} \\[%{DATA:scope}\\] (?:\\[%{DATA:subscope}\\] )?%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true
+      }
+    },
+
+    {
+      "grok": {
+        "if": "ctx.container_name == 'opensearch' || ctx.container_name == 'opensearch-dashboards'",
+        "field": "log",
+        "patterns": [
+          "^\\[%{TIMESTAMP_ISO8601:app_time}\\]\\[%{LOGLEVEL:level}\\s*\\]\\[%{DATA:logger}\\s*\\] %{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "OpenSearch's own log4j format"
+      }
+    },
+
+    {
+      "lowercase": {
+        "if": "ctx.level_lc != null",
+        "field": "level_lc",
+        "target_field": "level",
+        "ignore_missing": true
+      }
+    },
+    {
+      "remove": {
+        "if": "ctx.level_lc != null",
+        "field": "level_lc",
+        "ignore_missing": true
+      }
+    },
+    {
+      "uppercase": {
+        "if": "ctx.level != null",
+        "field": "level",
+        "ignore_missing": true,
+        "description": "Normalize all level values to uppercase (INFO, ERROR, etc.)"
+      }
+    },
+
+    {
+      "script": {
+        "if": "ctx.level == null && ctx.log != null",
+        "lang": "painless",
+        "source": "def m = /\\b(CRITICAL|FATAL|ERROR|WARNING|WARN|INFO|DEBUG|TRACE)\\b/.matcher(ctx.log); if (m.find()) { ctx.level = m.group(1); }",
+        "ignore_failure": true,
+        "description": "Fallback: extract a log-level word from the raw log if no parser matched"
+      }
+    },
+
+    {
+      "set": {
+        "if": "ctx.level == 'WARN'",
+        "field": "level",
+        "value": "WARNING",
+        "description": "Normalize WARN -> WARNING for consistent grouping"
+      }
+    },
+
+    {
+      "set": {
+        "if": "ctx.path != null && (ctx.path == '/health' || ctx.path == '/api/health' || ctx.path == '/api/v1/health' || ctx.path.startsWith('/api/health/') || ctx.path.startsWith('/health/'))",
+        "field": "healthcheck",
+        "value": true,
+        "description": "Tag synthetic-probe traffic so dashboards can include or exclude"
+      }
+    },
+
+    {
+      "remove": {
+        "field": "_orig_log",
+        "ignore_missing": true,
+        "description": "Drop preserved copy after pipeline succeeds"
+      }
+    }
+  ],
+  "on_failure": [
+    {
+      "set": {
+        "field": "ingest_error",
+        "value": "{{ _ingest.on_failure_message }}"
+      }
+    }
+  ]
+}
