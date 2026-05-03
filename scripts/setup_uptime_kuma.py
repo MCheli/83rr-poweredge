@@ -9,6 +9,7 @@ Run after `docker compose up -d uptime-kuma`. Requires:
     source venv/bin/activate
     pip install uptime-kuma-api  # already installed in the project venv
 """
+import json
 import os
 import sys
 import time
@@ -42,6 +43,13 @@ PUBLIC_MONITORS = [
     ("Home Assistant", "https://home.markcheli.com"),
     ("Tallied", "https://money.markcheli.com"),
     ("Tasks", "https://tasks.markcheli.com"),
+]
+
+# External SaaS dependencies — failing one of these means our alerts may not
+# arrive even if the homelab is fine. Probed at the public API endpoint.
+SAAS_MONITORS = [
+    # SendGrid scopes endpoint requires Bearer auth and confirms our key works
+    ("SendGrid API", "https://api.sendgrid.com/v3/scopes"),
 ]
 
 # LAN monitors probe the *backend* over the docker bridge so we bypass
@@ -130,10 +138,10 @@ def main() -> int:
         sg_id = api.add_notification(**sg_payload)["id"]
         print(f"notification created: {sg_name} (id={sg_id})")
 
-    # Tags: 'public' vs 'lan' so the status page can group them.
+    # Tags: 'public' vs 'lan' vs 'saas' so the status page can group them.
     existing_tags = {t["name"]: t for t in api.get_tags()}
     tag_ids = {}
-    for tag, color in [("public", "#0096FF"), ("lan", "#888888")]:
+    for tag, color in [("public", "#0096FF"), ("lan", "#888888"), ("saas", "#A020F0")]:
         if tag in existing_tags:
             tag_ids[tag] = existing_tags[tag]["id"]
         else:
@@ -171,10 +179,49 @@ def main() -> int:
             pass
         return mid
 
+    def upsert_monitor_authed(name, url, tag_id, headers):
+        """Variant for monitors that need an Authorization header."""
+        common = {
+            "type": MonitorType.HTTP,
+            "name": name,
+            "url": url,
+            "interval": 300,
+            "retryInterval": 60,
+            "maxretries": 2,
+            "method": "GET",
+            "timeout": 30,
+            "accepted_statuscodes": ["200-299", "300-399"],
+            "ignoreTls": False,
+            "headers": headers,
+            "notificationIDList": {sg_id: True},
+        }
+        if name in existing_monitors:
+            mid = existing_monitors[name]["id"]
+            api.edit_monitor(mid, **common)
+            print(f"  monitor updated: {name} (id={mid})")
+        else:
+            mid = api.add_monitor(**common)["monitorID"]
+            print(f"  monitor created: {name} (id={mid})")
+        try:
+            api.add_monitor_tag(tag_id=tag_id, monitor_id=mid, value="")
+        except Exception:
+            pass
+        return mid
+
     print("public monitors:")
     public_ids = [upsert_monitor(n, u, tag_ids["public"]) for n, u in PUBLIC_MONITORS]
     print("lan monitors:")
     lan_ids = [upsert_monitor(n, u, tag_ids["lan"]) for n, u in LAN_MONITORS]
+    print("saas monitors:")
+    saas_ids = []
+    for n, u in SAAS_MONITORS:
+        if n == "SendGrid API":
+            saas_ids.append(upsert_monitor_authed(
+                n, u, tag_ids["saas"],
+                json.dumps({"Authorization": f"Bearer {sg_key}"}),
+            ))
+        else:
+            saas_ids.append(upsert_monitor(n, u, tag_ids["saas"]))
 
     # Public status page bundling all monitors.
     sp_slug = "homelab"
@@ -199,6 +246,13 @@ def main() -> int:
                 "weight": 2,
                 "monitorList": [
                     {"id": mid, "weight": idx} for idx, mid in enumerate(lan_ids)
+                ],
+            },
+            {
+                "name": "External SaaS dependencies",
+                "weight": 3,
+                "monitorList": [
+                    {"id": mid, "weight": idx} for idx, mid in enumerate(saas_ids)
                 ],
             },
         ],

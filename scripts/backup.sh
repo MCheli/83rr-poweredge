@@ -343,6 +343,29 @@ cleanup_old_backups() {
     success "Old backups cleaned up"
 }
 
+# Emit a heartbeat doc to OpenSearch so we can alert on its absence.
+# A monitor in OpenSearch fires if no heartbeat appears in 26h. This is
+# the single canonical "did the backup run successfully?" signal.
+emit_heartbeat() {
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would emit backup heartbeat to OpenSearch"
+        return
+    fi
+
+    # Hit OpenSearch via its docker network endpoint
+    local now_iso=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+    local payload="{\"@timestamp\":\"${now_iso}\",\"container_name\":\"backup-heartbeat\",\"event_type\":\"backup_completed\",\"level\":\"INFO\",\"msg\":\"83rr-poweredge backup completed successfully\",\"backup_size\":\"$(du -sb "${BACKUP_ROOT}" 2>/dev/null | cut -f1 || echo 0)\"}"
+
+    if docker exec opensearch curl -s -X POST \
+        "http://localhost:9200/logs-homelab-$(date +%Y.%m.%d)/_doc" \
+        -H 'Content-Type: application/json' \
+        -d "${payload}" >/dev/null 2>&1; then
+        success "Heartbeat emitted to OpenSearch"
+    else
+        log "Could not emit heartbeat (OpenSearch unreachable?) — non-fatal"
+    fi
+}
+
 # Calculate backup size
 report_backup_size() {
     log "Calculating backup size..."
@@ -405,6 +428,9 @@ main() {
 
     # Report
     report_backup_size
+
+    # Emit heartbeat (after everything else succeeds)
+    emit_heartbeat
 
     echo ""
     log "=========================================="

@@ -1,0 +1,74 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "backup-no-heartbeat",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 1,
+      "unit": "HOURS"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "term": {
+                    "container_name": "backup-heartbeat"
+                  }
+                },
+                {
+                  "term": {
+                    "event_type": "backup_completed"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-26h"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "backup-stale",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value == 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] BACKUP STALE \u2014 no successful backup in 26h\",\"content\":[{\"type\":\"text/plain\",\"value\":\"No backup_completed heartbeat seen in OpenSearch for 26 hours.\\n\\nLast resort: ssh to host, run /home/mcheli/83rr-poweredge/scripts/backup.sh manually and inspect ~/83rr-poweredge/logs/backup.log for what's wrong (NAS unmounted, DB unreachable, etc.).\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 360,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}
