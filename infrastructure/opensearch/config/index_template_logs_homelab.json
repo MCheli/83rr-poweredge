@@ -1,0 +1,57 @@
+{
+  "index_patterns": ["logs-homelab-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "index.number_of_shards": 1,
+      "index.number_of_replicas": 0,
+      "index.default_pipeline": "homelab-logs",
+      "index.refresh_interval": "10s"
+    },
+    "mappings": {
+      "dynamic_templates": [
+        {
+          "strings_as_keyword_default": {
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword",
+              "ignore_above": 8192
+            }
+          }
+        }
+      ],
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "time": { "type": "date" },
+        "app_time": { "type": "keyword" },
+        "log": { "type": "text" },
+        "msg": { "type": "text" },
+        "stream": { "type": "keyword" },
+        "container_id": { "type": "keyword" },
+        "container_name": { "type": "keyword" },
+        "source": { "type": "keyword" },
+        "level": { "type": "keyword" },
+        "logger": { "type": "keyword" },
+        "method": { "type": "keyword" },
+        "path": { "type": "keyword" },
+        "status": { "type": "integer" },
+        "bytes": { "type": "long" },
+        "client_ip": { "type": "ip" },
+        "client_port": { "type": "integer" },
+        "remote_user": { "type": "keyword" },
+        "user_agent": { "type": "keyword" },
+        "referrer": { "type": "keyword" },
+        "x_forwarded_for": { "type": "keyword" },
+        "http_version": { "type": "keyword" },
+        "request_time": { "type": "float" },
+        "healthcheck": { "type": "boolean" },
+        "ingest_error": { "type": "text" },
+        "scope": { "type": "keyword" },
+        "subscope": { "type": "keyword" },
+        "thread_id": { "type": "keyword" },
+        "pid": { "type": "integer" },
+        "extras": { "type": "text" }
+      }
+    }
+  }
+}
