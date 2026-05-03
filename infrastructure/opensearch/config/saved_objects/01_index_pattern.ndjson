@@ -1,0 +1,1 @@
+{"attributes":{"title":"logs-homelab-*","timeFieldName":"@timestamp","fields":"[]"},"id":"logs-homelab","references":[],"type":"index-pattern","version":"WzAsMV0="}

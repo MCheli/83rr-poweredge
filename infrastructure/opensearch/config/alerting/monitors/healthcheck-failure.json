@@ -1,0 +1,44 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "healthcheck-failure",
+  "enabled": true,
+  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "healthcheck": true } },
+                { "range": { "@timestamp": { "gte": "now-5m" } } }
+              ],
+              "must_not": [
+                { "term": { "status": 200 } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_service": { "terms": { "field": "container_name", "size": 20 } }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "healthcheck-failed",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

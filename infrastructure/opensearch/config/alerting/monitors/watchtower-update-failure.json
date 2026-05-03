@@ -1,0 +1,42 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "watchtower-update-failure",
+  "enabled": true,
+  "schedule": { "period": { "interval": 1, "unit": "HOURS" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "container_name": "watchtower" } },
+                { "wildcard": { "extras": "*Failed=*" } },
+                { "range": { "@timestamp": { "gte": "now-1h" } } }
+              ],
+              "must_not": [
+                { "wildcard": { "extras": "*Failed=0*" } }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "watchtower-failed",
+      "severity": "3",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}
