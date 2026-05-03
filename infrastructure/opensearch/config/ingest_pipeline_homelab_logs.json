@@ -114,6 +114,23 @@
         "ignore_failure": true
       }
     },
+    {
+      "script": {
+        "if": "ctx.container_name == 'watchtower' && ctx.extras != null",
+        "lang": "painless",
+        "source": "def m1=/Failed=(\\d+)/.matcher(ctx.extras); if(m1.find()){ ctx.wt_failed=Integer.parseInt(m1.group(1)); } def m2=/Updated=(\\d+)/.matcher(ctx.extras); if(m2.find()){ ctx.wt_updated=Integer.parseInt(m2.group(1)); } def m3=/Scanned=(\\d+)/.matcher(ctx.extras); if(m3.find()){ ctx.wt_scanned=Integer.parseInt(m3.group(1)); }",
+        "ignore_failure": true,
+        "description": "Parse Failed=N / Updated=N / Scanned=N from watchtower's extras into integer fields for charting"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.wt_updated != null && ctx.wt_updated > 0",
+        "field": "event_type",
+        "value": "watchtower_image_update",
+        "override": false
+      }
+    },
 
     {
       "grok": {

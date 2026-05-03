@@ -37,7 +37,6 @@ PUBLIC_MONITORS = [
     ("Personal website", "https://www.markcheli.com"),
     ("Cookbook", "https://cookbook.markcheli.com"),
     ("Flask API", "https://flask.markcheli.com/health"),
-    ("Marimo", "https://data.markcheli.com"),
     ("Plex", "https://videos.markcheli.com/identity"),
     ("Seafile", "https://files.markcheli.com"),
     ("Home Assistant", "https://home.markcheli.com"),

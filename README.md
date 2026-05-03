@@ -76,8 +76,6 @@ curl https://flask.markcheli.com/health
 - **Flask API** - https://flask.markcheli.com
   - Python API with weather endpoint and profile data
   - Health check: `/health`
-- **Marimo** - https://data.markcheli.com
-  - Reactive Python notebooks (password-protected)
 - **Plex Media Server** - https://videos.markcheli.com
   - Media streaming for movies, TV shows, and music
   - Personal media library management
