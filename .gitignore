@@ -48,3 +48,6 @@ infrastructure/nginx/.htpasswd
 # OpenClaw (all runtime data — secrets, credentials, workspace, agent state)
 infrastructure/openclaw/openclaw-home/
 infrastructure/openclaw/gogcli/
+
+# ASA — GameUserSettings.ini contains ServerAdminPassword + ServerPassword
+infrastructure/asa/config/GameUserSettings.ini

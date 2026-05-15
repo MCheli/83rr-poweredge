@@ -130,7 +130,7 @@ docker compose down -v
 18. **tallied-db** - PostgreSQL database for Tallied
 19. **tasks** - Cycle-based todo app (image from ghcr.io/mcheli/tasks), Google SSO auth
 20. **tasks-db** - PostgreSQL database for Tasks
-21. **daily-report** - Thermal-printer daily report generator (image from ghcr.io/mcheli/daily-report), prints to LAN printer at 192.168.1.147:9100 once a day at 07:00 ET
+21. **daily-report** - Thermal-printer daily report generator (image from ghcr.io/mcheli/daily-report), prints to LAN printer at 192.168.1.147:9100 once a day at 05:00 ET
 22. **watchtower** - Automatic container updates (monitors ghcr.io images)
 
 ### Service Dependencies
