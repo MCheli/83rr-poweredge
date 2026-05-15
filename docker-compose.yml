@@ -224,6 +224,42 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # ARK: Survival Ascended dedicated server (Wine/Proton via mschnitzer image)
+  # ═════════════════════════════════════════════════════════════════════════════
+  asa:
+    image: mschnitzer/asa-linux-server:1.5.1
+    container_name: asa
+    # On boot: render GameUserSettings.ini from template (substituting password env vars),
+    # chown to the gameserver UID, then exec the upstream start_server.
+    # Template is committed (no secrets); rendered file lives only in the named volume.
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        dst=/home/gameserver/server-files/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini
+        mkdir -p "$$(dirname "$$dst")"
+        sed -e "s|__ADMIN_PASSWORD__|$$ASA_SERVER_ADMIN_PASSWORD|g" \
+            -e "s|__SERVER_PASSWORD__|$$ASA_SERVER_PASSWORD|g" \
+            /opt/asa/GameUserSettings.ini.template > "$$dst"
+        chown 25000:25000 "$$dst"
+        exec /usr/bin/start_server
+    restart: unless-stopped
+    stop_grace_period: 120s
+    logging: *default-logging
+    environment:
+      - ASA_START_PARAMS=TheIsland_WP?listen?Port=7777?RCONPort=11520?RCONEnabled=True -WinLiveMaxPlayers=20 -PublicIPForEpic=173.48.98.211
+      - ENABLE_DEBUG=0
+      - ASA_SERVER_ADMIN_PASSWORD=${ASA_SERVER_ADMIN_PASSWORD}
+      - ASA_SERVER_PASSWORD=${ASA_SERVER_PASSWORD}
+    volumes:
+      - asa_server_files:/home/gameserver/server-files
+      - asa_steam:/home/gameserver/steam
+      - asa_steamcmd:/home/gameserver/steamcmd
+      - asa_cluster_shared:/home/gameserver/cluster-shared
+      - ./infrastructure/asa/config/GameUserSettings.ini.template:/opt/asa/GameUserSettings.ini.template:ro
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Monitoring: Prometheus (Metrics Database)
   # ═════════════════════════════════════════════════════════════════════════════
   prometheus:
@@ -520,7 +556,7 @@ services:
     env_file: .env
     environment:
       - TZ=America/New_York
-      - REPORT_TIMES=07:00
+      - REPORT_TIMES=05:00
       - PROM_URL=http://prometheus:9090
       - DAILY_REPORT_PORT=8080
       - ANTHROPIC_API_KEY=${DAILY_REPORT_ANTHROPIC_API_KEY}
@@ -553,6 +589,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - uptime_kuma_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # for Docker Container monitor type
     networks:
       - infrastructure
     healthcheck:
@@ -758,3 +795,8 @@ volumes:
   energy_monitor_data:
   uptime_kuma_data:
   seafile_db:
+  # ASA — Docker-managed (lives on / since steamcmd is fussy about bind mounts)
+  asa_server_files:
+  asa_steam:
+  asa_steamcmd:
+  asa_cluster_shared:

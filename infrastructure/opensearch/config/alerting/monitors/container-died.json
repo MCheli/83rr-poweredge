@@ -22,7 +22,12 @@
             }
           },
           "aggs": {
-            "by_container": { "terms": { "field": "container_name", "size": 20 } }
+            "by_container": {
+              "terms": { "field": "container_name", "size": 20 },
+              "aggs": {
+                "by_action": { "terms": { "field": "event_type", "size": 5 } }
+              }
+            }
           }
         }
       }
@@ -43,7 +48,7 @@
           "name": "email-mpcheli",
           "destination_id": "cVtg7p0BAgiY_8mBBS8g",
           "message_template": {
-            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] container die/kill/oom event\",\"content\":[{\"type\":\"text/plain\",\"value\":\"One or more containers were killed or died in the last 5 min (excluding watchtower's normal restart cycle and uptime-kuma's own probes). Check `docker ps -a` and `docker logs <name>`.\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] container die/kill/oom: {{ctx.results.0.hits.total.value}} event(s)\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\nWindow: last 5 minutes\\nTotal events: {{ctx.results.0.hits.total.value}}\\n\\n=== By container ===\\n{{#ctx.results.0.aggregations.by_container.buckets}}\\n[{{key}}] {{doc_count}} event(s):{{#by_action.buckets}} {{key}}={{doc_count}}{{/by_action.buckets}}\\n{{/ctx.results.0.aggregations.by_container.buckets}}\\nNote: kill+die in quick succession usually means an operator-initiated restart (docker compose up -d <svc>). A standalone die or oom is more interesting.\\n\\n=== Investigate ===\\n  docker ps -a --filter name=<container>\\n  docker logs --tail 200 <container>\\n  docker inspect <container> | grep -A3 -i exit\\n\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
             "lang": "mustache"
           },
           "throttle_enabled": true,

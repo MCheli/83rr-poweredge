@@ -63,6 +63,11 @@ services:
     volumes:
       - minecraft_data:/data  # Production data volume
 
+  asa:
+    ports:
+      - "7777:7777/udp"               # ASA game traffic (forwarded from WAN)
+      - "127.0.0.1:11520:11520/tcp"   # RCON, LAN-only
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Production Environment Variables
 # Load from .env file in project root on production server

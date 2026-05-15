@@ -20,33 +20,19 @@
           "query": {
             "bool": {
               "must": [
-                {
-                  "term": {
-                    "healthcheck": true
-                  }
-                },
-                {
-                  "range": {
-                    "@timestamp": {
-                      "gte": "now-5m"
-                    }
-                  }
-                }
+                { "term": { "healthcheck": true } },
+                { "range": { "@timestamp": { "gte": "now-5m" } } }
               ],
               "must_not": [
-                {
-                  "term": {
-                    "status": 200
-                  }
-                }
+                { "term": { "status": 200 } }
               ]
             }
           },
           "aggs": {
             "by_service": {
-              "terms": {
-                "field": "container_name",
-                "size": 20
+              "terms": { "field": "container_name", "size": 10 },
+              "aggs": {
+                "by_status": { "terms": { "field": "status", "size": 5 } }
               }
             }
           }
@@ -69,7 +55,7 @@
           "name": "email-mpcheli",
           "destination_id": "cVtg7p0BAgiY_8mBBS8g",
           "message_template": {
-            "source": "{\"personalizations\": [{\"to\": [{\"email\": \"mpcheli7@gmail.com\"}]}], \"from\": {\"email\": \"status@markcheli.com\", \"name\": \"Homelab Alerts\"}, \"subject\": \"[homelab] {{ctx.monitor.name}} ({{ctx.results.0.hits.total.value}} events)\", \"content\": [{\"type\": \"text/plain\", \"value\": \"Monitor: {{ctx.monitor.name}}\\nTrigger: {{ctx.trigger.name}} (severity {{ctx.trigger.severity}})\\nEvent count: {{ctx.results.0.hits.total.value}}\\n\\nDashboards: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\\nDiscover: https://logs.ops.markcheli.com/app/discover\"}], \"tracking_settings\": {\"click_tracking\": {\"enable\": false, \"enable_text\": false}, \"open_tracking\": {\"enable\": false}, \"subscription_tracking\": {\"enable\": false}}}",
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] healthcheck failures: {{ctx.results.0.hits.total.value}} in 5 min\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\nWindow: last 5 minutes\\nTotal non-200 healthchecks: {{ctx.results.0.hits.total.value}}\\n\\n=== By service ===\\n{{#ctx.results.0.aggregations.by_service.buckets}}\\n[{{key}}] {{doc_count}} failure(s):{{#by_status.buckets}} status={{key}}({{doc_count}}){{/by_status.buckets}}\\n{{/ctx.results.0.aggregations.by_service.buckets}}\\n=== Investigate ===\\n  docker ps | grep <service>\\n  docker compose logs --tail 100 <service>\\n  curl -fsS http://<service>:<port>/health\\n\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false,\"enable_text\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
