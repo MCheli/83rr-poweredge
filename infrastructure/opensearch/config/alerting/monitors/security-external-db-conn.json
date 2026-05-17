@@ -1,0 +1,55 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "security-external-db-conn",
+  "enabled": true,
+  "schedule": { "period": { "interval": 10, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 20,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "event_type": "security_external_db_conn" } },
+                { "range": { "@timestamp": { "gte": "now-10m" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_port": {
+              "terms": { "field": "port", "size": 10 },
+              "aggs": { "by_peer": { "terms": { "field": "peer", "size": 10 } } }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "external-connection-to-backend",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] SECURITY: direct connection to a backend port (OpenSearch/Postgres/Grafana)\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\n\\nSomething connected DIRECTLY to a sensitive backend port from a non-loopback, non-docker peer. These should only be reached via the docker network / nginx. A real peer here means the port is exposed past the intended boundary (firewall/NAT gap) or lateral movement.\\n\\n{{#ctx.results.0.aggregations.by_port.buckets}}port {{key}}: {{#by_peer.buckets}}{{key}}({{doc_count}}) {{/by_peer.buckets}}\\n{{/ctx.results.0.aggregations.by_port.buckets}}\\n=== Act ===\\n  - Confirm whether that peer is you/an admin host.\\n  - If not: treat as incident. Check ufw/router NAT for 9200/5432/3000.\\n  - Rebind the service to 127.0.0.1/LAN (security backlog B1).\\n\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": { "value": 60, "unit": "MINUTES" }
+        }
+      ]
+    }
+  ]
+}

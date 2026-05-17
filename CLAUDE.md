@@ -8,7 +8,7 @@ This document provides Claude Code with comprehensive instructions for managing 
 **Reverse Proxy**: NGINX
 **SSL Certificates**: Cloudflare Origin Certificates (15-year validity)
 **DNS Provider**: Cloudflare
-**Container Runtime**: Docker on Ubuntu 22.04 LTS
+**Container Runtime**: Docker on Ubuntu 24.04 LTS
 
 ### Core Principles
 - **Native Docker Compose**: All services deployed via `docker compose` commands
@@ -132,6 +132,8 @@ docker compose down -v
 20. **tasks-db** - PostgreSQL database for Tasks
 21. **daily-report** - Thermal-printer daily report generator (image from ghcr.io/mcheli/daily-report), prints to LAN printer at 192.168.1.147:9100 once a day at 05:00 ET
 22. **watchtower** - Automatic container updates (monitors ghcr.io images)
+23. **openclaw** - Self-hosted agent/automation runtime (image `ghcr.io/openclaw/openclaw:latest`), on its own `openclaw_nginx-openclaw` network; runtime data (secrets, credentials, workspace, agent state) under `infrastructure/openclaw/` (gitignored). Not proxied through the main nginx.
+24. **edge-tts / faster-whisper** - TTS/STT side services (ports 5050 / 5051)
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -159,7 +161,15 @@ Each service can use `.env` files from its infrastructure directory:
 - **minecraft.markcheli.com:25565** - Minecraft server
 
 ### LAN-Only Services (HTTPS with Let's Encrypt)
-- **https://dashboard.ops.markcheli.com** - Grafana dashboards (admin/admin123)
+
+> ⚠️ **"LAN-only" is DNS/proxy convention, NOT enforced isolation.** `*.ops`
+> hostnames resolve to the LAN IP and are not Cloudflare-proxied, but the
+> underlying container/host ports bind to `0.0.0.0` (all interfaces), e.g.
+> OpenSearch `9200/9300`, Postgres `5432`, Grafana `3000`. Actual reachability
+> depends entirely on router NAT + host firewall. Do not assume these are
+> unreachable. See the security backlog (network hardening B1/B2).
+
+- **https://dashboard.ops.markcheli.com** - Grafana dashboards (credential in `${GRAFANA_ADMIN_PASSWORD}` / `.env`; legacy default `admin/admin123` only if that env var is unset)
 - **https://prometheus.ops.markcheli.com** - Prometheus metrics
 - **https://cadvisor.ops.markcheli.com** - Container monitoring
 - **https://logs.ops.markcheli.com** - OpenSearch Dashboards

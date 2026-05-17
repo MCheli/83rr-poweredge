@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** January 4, 2026
+**Last Updated:** May 17, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -269,6 +269,45 @@ python scripts/ssh_manager.py batch "docker ps" "docker stats --no-stream"
 - Log viewing (use `opensearch_diagnostic_ssh.py`)
 
 **Note:** This is a fallback tool. Primary operations should use Docker Compose directly.
+
+---
+
+### 8. `emit_security_telemetry.sh` 🔐 SECURITY TELEMETRY
+
+**Purpose:** Emit host security signals into OpenSearch for alerting
+**Size:** ~3KB
+**Language:** Bash
+
+**Description:**
+Cron collector (every 10 min, as `mcheli`) that ships two signals into
+`logs-homelab-*` so the OpenSearch alerting monitors can fire:
+- `security_unexpected_port` — a TCP port is LISTENing that is not in the
+  script's `ALLOWED_PORTS` allowlist (rogue/new service, bad container publish).
+- `security_external_db_conn` — an ESTABLISHED connection to a sensitive
+  backend port (OpenSearch 9200/9300, Postgres 5432, Grafana 3000) from a
+  non-loopback, non-docker-bridge peer (firewall/NAT gap or lateral movement).
+
+Read-only (`ss`), no sudo. Uses the same in-container OpenSearch `_doc`
+endpoint as `emit_host_metrics.sh` / `backup.sh`. All failures non-fatal.
+
+**Paired monitors** (`infrastructure/opensearch/config/alerting/monitors/`):
+`security-unexpected-listen-port.json`, `security-external-db-conn.json`,
+`docker-exec-into-sock-container.json` — apply via the loop in
+`infrastructure/opensearch/config/alerting/README.md`.
+
+**Usage:**
+```bash
+# Runs from cron; manual run:
+/home/mcheli/83rr-poweredge/scripts/emit_security_telemetry.sh
+```
+
+**When to Use:**
+- Runs automatically; run manually to seed/test telemetry after changes.
+
+**Maintenance:** when you intentionally add a service/port, add the port to
+`ALLOWED_PORTS` or the unexpected-port monitor will alert.
+
+**Referenced in:** CLAUDE.md (security backlog E3)
 
 ---
 

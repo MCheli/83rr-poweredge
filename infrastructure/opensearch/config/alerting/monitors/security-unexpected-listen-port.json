@@ -1,0 +1,50 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "security-unexpected-listen-port",
+  "enabled": true,
+  "schedule": { "period": { "interval": 15, "unit": "MINUTES" } },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["logs-homelab-*"],
+        "query": {
+          "size": 20,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "event_type": "security_unexpected_port" } },
+                { "range": { "@timestamp": { "gte": "now-15m" } } }
+              ]
+            }
+          },
+          "aggs": { "by_port": { "terms": { "field": "port", "size": 20 } } }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "unexpected-listen-port",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "email-mpcheli",
+          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "message_template": {
+            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] SECURITY: unexpected listening port(s)\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}}\\nA TCP port is LISTENing that is not in scripts/emit_security_telemetry.sh ALLOWED_PORTS.\\n\\nPorts: {{#ctx.results.0.aggregations.by_port.buckets}}{{key}}({{doc_count}}) {{/ctx.results.0.aggregations.by_port.buckets}}\\n\\nIf you just added a service, add the port to the allowlist. Otherwise investigate:\\n  sudo ss -tlnp | grep -E ':(PORT) '\\n\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": { "value": 360, "unit": "MINUTES" }
+        }
+      ]
+    }
+  ]
+}
