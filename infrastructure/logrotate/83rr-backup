@@ -1,0 +1,19 @@
+# Caps the 83rr-poweredge backup log so a runaway rsync can never fill the
+# root filesystem again (see 2026-05-17 incident: 51 GB backup.log from an
+# infinite Wine/Proton dosdevices/z: -> / symlink recursion).
+# copytruncate: cron holds the file open via `>>`, so rotate in place.
+#
+# Install:
+#   sudo cp infrastructure/logrotate/83rr-backup /etc/logrotate.d/83rr-backup
+#   sudo logrotate --debug /etc/logrotate.d/83rr-backup   # validate
+/home/mcheli/83rr-poweredge/logs/backup.log {
+    daily
+    rotate 14
+    maxsize 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su mcheli mcheli
+}

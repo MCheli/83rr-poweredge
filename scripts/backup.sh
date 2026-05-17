@@ -68,6 +68,32 @@ success() {
     echo -e "${GREEN}[OK]${NC} $1"
 }
 
+# --- Failure tracking ---------------------------------------------------------
+# Any recorded failure makes the whole run exit non-zero, prints a loud
+# summary, and SUPPRESSES the success heartbeat. The heartbeat is the
+# canonical "backup OK" signal feeding the OpenSearch absence monitor, so
+# suppressing it on failure is what turns a silent partial backup into an
+# alert. (Root cause of the 2026-05-17 host lockup: a partial backup that
+# still reported "completed successfully".)
+BACKUP_FAILURES=0
+FAILED_ITEMS=""
+record_failure() {
+    BACKUP_FAILURES=$((BACKUP_FAILURES + 1))
+    FAILED_ITEMS="${FAILED_ITEMS}"$'\n'"  - $1"
+    error "$1"
+}
+
+# --- Memory-capped rsync ------------------------------------------------------
+# Hard ceiling on virtual memory for any rsync we spawn. A runaway rsync
+# (e.g. following a self-referential Wine/Proton `dosdevices/z: -> /`
+# symlink) builds its in-memory file list until it OOM-kills the host.
+# With this cap it hits ENOMEM and dies in seconds instead. 8 GiB, in KiB.
+# sudo does not reset RLIMIT_AS, so the rsync child inherits this limit.
+RSYNC_VMEM_CAP_KB=8388608
+safe_rsync() {
+    ( ulimit -v "${RSYNC_VMEM_CAP_KB}"; "$@" )
+}
+
 # Check if NAS is mounted
 check_nas_mount() {
     if ! mountpoint -q /mnt/nas; then
@@ -215,14 +241,35 @@ backup_docker_volumes() {
         if [[ -d "${vol_path}" ]] || sudo test -d "${vol_path}" 2>/dev/null; then
             log "  Backing up volume: ${vol}"
             mkdir -p "${dest}"
-            # Retry once on failure (handles transient NAS issues)
-            if ! sudo rsync -aL --delete "${vol_path}/" "${dest}/" 2>&1; then
-                log "  Retrying ${vol}..."
+            # -L derefs symlinks (CIFS can't store them). The ASA volume
+            # carries a Proton/Wine prefix at steamapps/compatdata/<id>/ —
+            # purely regenerable Wine state (registry, fake C: drive, fonts,
+            # system DLLs). With -L its `dosdevices/z: -> /` recursed the
+            # whole filesystem infinitely and OOM-killed the host (incident
+            # 2026-05-17); it also holds hundreds of dangling symlinks that
+            # make rsync exit 23. The real ARK data (ShooterGame/Saved/...)
+            # lives OUTSIDE compatdata, so exclude the whole prefix — same
+            # "regenerable cache" rationale as the other excluded asa_* vols.
+            # --safe-links + the 8 GiB safe_rsync cap are belt-and-suspenders.
+            # NOTE: keep `-aL --delete` as the literal leading args — the
+            # NOPASSWD rule in /etc/sudoers.d/backup matches
+            # `/usr/bin/rsync -aL --delete *`, so any flag inserted before
+            # --delete breaks passwordless sudo for the (mcheli) cron run.
+            local rsync_opts=(-aL --delete --safe-links
+                --exclude 'steamapps/compatdata')
+            # rsync exit 24 = source files vanished mid-copy (benign on live
+            # volumes/DBs). Treat 0 and 24 as success; anything else fails.
+            local rc=0
+            safe_rsync sudo rsync "${rsync_opts[@]}" "${vol_path}/" "${dest}/" 2>&1 || rc=$?
+            if [[ $rc -ne 0 && $rc -ne 24 ]]; then
+                log "  Retrying ${vol} (rsync exit ${rc})..."
                 sleep 5
-                sudo rsync -aL --delete "${vol_path}/" "${dest}/" 2>&1 || {
-                    error "Failed to backup volume: ${vol}"
-                    continue
-                }
+                rc=0
+                safe_rsync sudo rsync "${rsync_opts[@]}" "${vol_path}/" "${dest}/" 2>&1 || rc=$?
+            fi
+            if [[ $rc -ne 0 && $rc -ne 24 ]]; then
+                record_failure "Docker volume: ${vol} (rsync exit ${rc})"
+                continue
             fi
         else
             log "  Volume not found, skipping: ${vol}"
@@ -401,14 +448,14 @@ main() {
     setup_backup_dirs
 
     # Database backups (do these first while services are running)
-    backup_seafile_db || true
-    backup_tallied_db || true
-    backup_tasks_db || true
-    backup_energy_monitor_db || true
+    backup_seafile_db        || record_failure "Seafile DB dump"
+    backup_tallied_db        || record_failure "Tallied DB dump"
+    backup_tasks_db          || record_failure "Tasks DB dump"
+    backup_energy_monitor_db || record_failure "Energy Monitor DB dump"
 
     # File backups
-    backup_configs
-    backup_seafile_data
+    backup_configs       || record_failure "Configuration files"
+    backup_seafile_data  || record_failure "Seafile data"
     backup_docker_volumes
 
     # Create daily snapshot
@@ -429,6 +476,17 @@ main() {
 
     # Report
     report_backup_size
+
+    # Fail loudly: if anything failed, do NOT emit the success heartbeat —
+    # its absence is what trips the OpenSearch alert.
+    if [[ ${BACKUP_FAILURES} -gt 0 ]]; then
+        echo ""
+        log "=========================================="
+        error "Backup completed WITH ${BACKUP_FAILURES} FAILURE(S):${FAILED_ITEMS}"
+        error "Success heartbeat SUPPRESSED — OpenSearch absence monitor will alert."
+        log "=========================================="
+        exit 1
+    fi
 
     # Emit heartbeat (after everything else succeeds)
     emit_heartbeat
