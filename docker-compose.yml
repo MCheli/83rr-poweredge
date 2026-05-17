@@ -125,7 +125,13 @@ services:
   # Note: Using 'latest' because data format requires matching version; pin after fresh install
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch:
-    image: opensearchproject/opensearch:2.19.0  # Pinned for security
+    # 3.2.0: the persistent data volume (opensearch_data) is OpenSearch 3.x
+    # format (Lucene 10.1). 2.19.0 could not load it ("indexCreatedVersion
+    # Major in the future: 10") — that downgrade pin caused the 2026-05-17
+    # outage when the Docker 29 upgrade forced a restart. Keep this in lockstep
+    # with opensearch-dashboards below; deploy via the prod invocation so the
+    # opensearch_data volume (not the dev override's opensearch_data_local) is used.
+    image: opensearchproject/opensearch:3.2.0
     container_name: opensearch
     restart: unless-stopped
     logging: *default-logging
@@ -159,7 +165,7 @@ services:
   # OpenSearch Dashboards (Logging UI)
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.19.0  # Match OpenSearch version
+    image: opensearchproject/opensearch-dashboards:3.2.0  # MUST match opensearch version above
     container_name: opensearch-dashboards
     restart: unless-stopped
     logging: *default-logging
@@ -391,10 +397,15 @@ services:
       - PLEX_CLAIM=${PLEX_CLAIM:-}
       - ALLOWED_NETWORKS=172.24.0.0/16,192.168.1.0/24
     ports:
-      - "32400:32400"
-      - "1900:1900/udp"
-      - "32469:32469"
-      - "5353:5353/udp"
+      - "32400:32400"      # primary Plex API (nginx proxies videos.markcheli.com -> here)
+      - "1900:1900/udp"    # DLNA/SSDP discovery (LAN)
+      - "32469:32469"      # Plex DLNA server
+      # NOTE: do NOT host-publish 5353/udp — it collides with the host
+      # avahi-daemon (mDNS). On a clean boot Docker won the port race; after
+      # a mid-life dockerd restart (e.g. the 2026-05-17 Docker 29 upgrade)
+      # avahi already held 5353 -> plex exit 128 -> nginx hard-failed its
+      # config test on the plex upstream -> full site outage. Plex needs no
+      # host-side Bonjour; remote access is via Cloudflare -> nginx -> 32400.
     volumes:
       - plex_config:/config
       - /storage/media:/data:ro
