@@ -32,7 +32,9 @@ services:
       - "traefik.http.services.opensearch.loadbalancer.server.port=9200"
 
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:latest
+    # Pinned 2026-05-17 — MUST track the opensearch version (currently 2.19.0).
+    # Bump together with the opensearch image; mismatched versions break the UI.
+    image: opensearchproject/opensearch-dashboards:2.19.0
     container_name: opensearch-dashboards
     restart: unless-stopped
     environment:

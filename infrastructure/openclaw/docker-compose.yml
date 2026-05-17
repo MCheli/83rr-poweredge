@@ -5,7 +5,10 @@
 
 services:
   openclaw:
-    image: ghcr.io/openclaw/openclaw:latest
+    # Pinned by digest 2026-05-17 (was :latest) — 3rd-party agent runtime
+    # with access to credentials/agent state; do not auto-update. Bump
+    # deliberately after reviewing upstream release notes.
+    image: ghcr.io/openclaw/openclaw@sha256:dd11fba81ea21ba405c2ca8479610f968e5d3a56455ed173c434aff15fbd615f
     container_name: openclaw
     restart: unless-stopped
     env_file: .env
