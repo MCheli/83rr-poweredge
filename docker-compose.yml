@@ -388,14 +388,21 @@ services:
     # Pinned by digest 2026-05-17 (was :latest). Bump deliberately every few
     # months — Plex refuses very old servers. To update: pull a new
     # plexinc/pms-docker tag, test, then replace this digest.
-    image: plexinc/pms-docker@sha256:9c03c26b9479ba9a09935f3367459bfdc8d21545f42ed2a13258983c5be1b252
+    # 2026-10-18: bumped to 1.43.4.10903 after the incident below. Must stay
+    # >= 1.43.3.10861 (fixes CompanionProxy SSRF + network-writable
+    # transcoder prefs, CVE-2026-96652/96656), which was exploited here.
+    image: plexinc/pms-docker@sha256:e0ab27395614a8e1a4fdf84c6bc60ac664915cfdde70c52d030c7728a1c48e14
     container_name: plex
     restart: unless-stopped
     logging: *default-logging
     environment:
       - TZ=America/New_York
       - PLEX_CLAIM=${PLEX_CLAIM:-}
-      - ALLOWED_NETWORKS=172.24.0.0/16,192.168.1.0/24
+      # Do NOT add the docker network (172.24.0.0/16) here: nginx proxies all
+      # public videos.markcheli.com traffic from that subnet, so trusting it
+      # made the internet "LAN". (Only applies on first run; the live value is
+      # allowedNetworks in Preferences.xml — keep the two in sync.)
+      - ALLOWED_NETWORKS=192.168.1.0/24
     ports:
       - "32400:32400"      # primary Plex API (nginx proxies videos.markcheli.com -> here)
       - "1900:1900/udp"    # DLNA/SSDP discovery (LAN)

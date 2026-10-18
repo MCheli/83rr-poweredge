@@ -46,7 +46,9 @@ class InfrastructureHealthTest:
                 'description': 'Flask API health endpoint'
             },
             'plex': {
-                'url': 'https://videos.markcheli.com',
+                # /web is the public login page; "/" returns 401 since
+                # 2026-10-18 (Plex no longer trusts nginx traffic as LAN).
+                'url': 'https://videos.markcheli.com/web/index.html',
                 'expected_content': 'plex',
                 'description': 'Plex Media Server'
             },
