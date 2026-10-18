@@ -93,7 +93,7 @@ curl https://flask.markcheli.com/health
 
 **LAN-Only Services** (*.ops.markcheli.com):
 - **Grafana** - https://dashboard.ops.markcheli.com
-  - Monitoring dashboards (login: admin/admin123)
+  - Monitoring dashboards (login: admin / `GRAFANA_ADMIN_PASSWORD` in `.env`)
   - 5 provisioned dashboards (System, Infrastructure, Docker, NGINX, Containers)
 - **Prometheus** - https://prometheus.ops.markcheli.com
   - Metrics database with 30-day retention
@@ -266,7 +266,7 @@ OPENWEATHER_API_KEY=your_openweather_key
 - **Grafana Dashboard**: https://dashboard.ops.markcheli.com
   - Pre-configured Prometheus datasource
   - 5 provisioned dashboards: Infrastructure Overview, System, Docker Services, Containers, NGINX
-  - Login: admin/admin123
+  - Login: admin / `GRAFANA_ADMIN_PASSWORD` in `.env`
 - **Prometheus**: https://prometheus.ops.markcheli.com
   - 30-day metric retention
   - Scrapes: cAdvisor, Node Exporter, NGINX Exporter

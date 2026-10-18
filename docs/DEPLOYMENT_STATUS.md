@@ -37,7 +37,7 @@
 7. **Grafana** - Monitoring dashboards ✅
    - Version: 11.5.2
    - Endpoint: dashboard.ops.markcheli.com
-   - Login: admin/admin123
+   - Login: admin / `GRAFANA_ADMIN_PASSWORD` in `.env`
    - Dashboards: 5 provisioned (System, Infrastructure, Docker, NGINX, Containers)
 
 8. **Prometheus** - Metrics database ✅

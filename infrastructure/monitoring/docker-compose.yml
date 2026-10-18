@@ -39,7 +39,7 @@ services:
     restart: unless-stopped
     user: "0"  # Run as root to fix permission issues
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=https://dashboard.ops.markcheli.com
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
