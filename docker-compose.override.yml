@@ -29,14 +29,14 @@ services:
   # In this stack, they use the same pre-built images as production
   personal-website:
     ports:
-      - "3000:3000"  # Direct access for development
+      - "127.0.0.1:3000:3000"  # Direct access for development (localhost only; nginx uses the container name)
 
   flask-api:
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
     ports:
-      - "5001:5000"  # Direct access for development
+      - "127.0.0.1:5001:5000"  # Direct access for development (localhost only; nginx uses the container name)
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Development Services with Direct Port Access

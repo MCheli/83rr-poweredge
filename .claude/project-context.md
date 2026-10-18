@@ -68,7 +68,7 @@
 - **Grafana**: https://grafana-local.ops.markcheli.com (LAN-only)
   - Container: grafana
   - Port: 3000
-  - Login: admin/admin123
+  - Login: admin / `GRAFANA_ADMIN_PASSWORD` in `.env`
   - Version: 12.3.1
 - **Prometheus**: https://prometheus-local.ops.markcheli.com (LAN-only)
   - Container: prometheus

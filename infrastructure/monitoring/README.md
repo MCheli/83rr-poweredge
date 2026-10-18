@@ -113,7 +113,7 @@ make health
 
 - **URL**: https://grafana-local.ops.markcheli.com
 - **Username**: admin
-- **Password**: admin123 (or `$GRAFANA_ADMIN_PASSWORD` in production)
+- **Password**: `$GRAFANA_ADMIN_PASSWORD` from `.env` (no default)
 
 ### Dashboard Provisioning
 

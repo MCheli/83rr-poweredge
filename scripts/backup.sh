@@ -103,6 +103,13 @@ check_nas_mount() {
             error "Failed to mount NAS. Backup aborted."
             exit 1
         }
+        # mount can exit 0 even when mount.cifs fails (2026-10-18: "mount
+        # error(113)" then a false "[OK] NAS mounted" and a confusing mkdir
+        # failure). Trust the mount table, not the exit code.
+        if ! mountpoint -q /mnt/nas; then
+            error "NAS still not mounted after mount attempt (NAS down?). Backup aborted."
+            exit 1
+        fi
     fi
     success "NAS mounted"
 }

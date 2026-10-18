@@ -167,9 +167,11 @@ Each service can use `.env` files from its infrastructure directory:
 > underlying container/host ports bind to `0.0.0.0` (all interfaces), e.g.
 > OpenSearch `9200/9300`, Postgres `5432`, Grafana `3000`. Actual reachability
 > depends entirely on router NAT + host firewall. Do not assume these are
-> unreachable. See the security backlog (network hardening B1/B2).
+> unreachable. The `*.ops` vhosts share nginx's public :443 listener, so every
+> `*.ops` server block MUST carry `allow 192.168.1.0/24; deny all;` (enforced
+> since 2026-10-18). Security backlog: **`docs/SECURITY_PLAN.md`**.
 
-- **https://dashboard.ops.markcheli.com** - Grafana dashboards (credential in `${GRAFANA_ADMIN_PASSWORD}` / `.env`; legacy default `admin/admin123` only if that env var is unset)
+- **https://dashboard.ops.markcheli.com** - Grafana dashboards (user `admin`, password in `.env` as `GRAFANA_ADMIN_PASSWORD`; rotated 2026-10-18, compose refuses to start without it)
 - **https://prometheus.ops.markcheli.com** - Prometheus metrics
 - **https://cadvisor.ops.markcheli.com** - Container monitoring
 - **https://logs.ops.markcheli.com** - OpenSearch Dashboards
@@ -273,7 +275,7 @@ openssl s_client -connect www.markcheli.com:443 -servername www.markcheli.com
 
 ### Access Monitoring Dashboards
 **Grafana**: https://dashboard.ops.markcheli.com
-- **Login**: admin / admin123
+- **Login**: admin / `GRAFANA_ADMIN_PASSWORD` from `.env`
 - **Pre-configured datasource**: Prometheus
 - **Recommended dashboards**: 193, 1860, 14282 (Docker monitoring)
 

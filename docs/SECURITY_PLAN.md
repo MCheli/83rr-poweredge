@@ -37,7 +37,7 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
 
 ## Phase 0 — urgent, quick (internet-reachable now)
 
-- [ ] **P0-1 Grafana** reachable from internet via Host header with
+- [x] **P0-1 Grafana** *(done 2026-10-18: every `*.ops` block now `allow 192.168.1.0/24; deny all;` — verified 403 from non-LAN; flask-dev.ops removed; password rotated to 32-char random in `.env`, compose now `${GRAFANA_ADMIN_PASSWORD:?}`. Caveat: Grafana doesn't log successful logins, so prior use of admin123 can't be ruled out — review users/API keys/datasources at next session.)* reachable from internet via Host header with
   `admin/admin123` (verified). Rotate (`docker exec grafana grafana-cli admin
   reset-admin-password …` — env var only applies on first init), move to
   `${GRAFANA_ADMIN_PASSWORD}` in compose (currently hardcoded
@@ -54,7 +54,7 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
   remote tenant (`tld_*`) needs it → restrict lines to those roles + reject
   tallied/tallied_app from non-docker, or drop/bind the port; set
   `log_connections=on`. **[me]** — *open question: who needs remote 5432?*
-- [ ] **P0-4 Backups**: 10-18 02:00 run failed (NAS was off). Fix
+- [~] **P0-4 Backups** *(2026-10-18: NAS back online + remounted; backup.sh now re-checks `mountpoint` after mounting; fresh backup run. Remaining: fstab by IP + automount [sudo].)*: 10-18 02:00 run failed (NAS was off). Fix
   `backup.sh` false "[OK] NAS mounted" (add `mountpoint -q /mnt/nas || exit 1`
   after the mount) **[me]**; `/etc/fstab`: NAS by IP not `MarksNAS`, add
   `x-systemd.automount,x-systemd.mount-timeout=30` **[sudo]**; take a fresh
@@ -63,10 +63,10 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
   `sudo systemctl disable --now webmin && sudo apt purge webmin`, or bind
   192.168.1.179 + `allow=192.168.1.0/24` in miniserv.conf. Check
   `/var/webmin/miniserv.log` for non-LAN logins first. **[sudo]**
-- [ ] **P0-6 Bind internal ports** to 127.0.0.1/LAN in compose: 3000
+- [~] **P0-6 Bind internal ports** *(3000/5001 → 127.0.0.1 done 2026-10-18. Remaining 5050/5051/32400/32469/1900 deliberately left: LAN IP is DHCP-dynamic, binding to it risks containers failing at boot — Plex failing breaks nginx. Do a DHCP reservation (or netplan static) first. No global IPv6 on host, so `[::]` is not internet-exposed today.)* to 127.0.0.1/LAN in compose: 3000
   (personal-website), 5001 (flask-api), 5050 edge-tts + 5051 faster-whisper
   (no auth), 32469, 1900/udp → LAN IP. **[me]**
-- [ ] **P0-7 File perms**: `chmod 600` `infrastructure/nginx/certs/*.key`
+- [x] **P0-7 File perms** *(done 2026-10-18)*: `chmod 600` `infrastructure/nginx/certs/*.key`
   (wildcard + letsencrypt-ops are 644), `infrastructure/openclaw/.env` (664),
   openclaw `gogcli/token.json`. **[me]**
 
