@@ -768,7 +768,9 @@ services:
   # Monitors ghcr.io images and auto-deploys when new versions are pushed
   # ═════════════════════════════════════════════════════════════════════════════
   watchtower:
-    image: containrrr/watchtower:latest
+    # containrrr/watchtower is abandoned and too old for the Docker 29 API
+    # (min API 1.40); migrated to the maintained nicholas-fedor fork 2026-08-05.
+    image: ghcr.io/nicholas-fedor/watchtower:latest
     container_name: watchtower
     restart: unless-stopped
     logging: *default-logging
@@ -776,7 +778,10 @@ services:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=300
       - WATCHTOWER_LABEL_ENABLE=true
-      - WATCHTOWER_ROLLING_RESTART=true
+      # Rolling restart disabled: the nicholas-fedor fork rejects it when a
+      # dependency chain exists (tallied-scheduler -> tallied-db). Without it,
+      # watchtower honors depends_on ordering when recreating containers.
+      - WATCHTOWER_ROLLING_RESTART=false
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_NOTIFICATIONS=shoutrrr
       - WATCHTOWER_NOTIFICATION_URL=logger://
