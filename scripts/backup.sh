@@ -41,6 +41,13 @@ TASKS_DB_PASS="${TASKS_DB_PASSWORD:-}"
 DAILY_KEEP=7
 WEEKLY_KEEP=4
 MONTHLY_KEEP=3
+# Database dumps: newest N compressed dumps kept PER SERVICE (seafile, tallied,
+# tasks, energy_monitor, ...). Count-based on purpose: a long run of failed
+# backups can never prune away the last good dumps.
+DB_DUMPS_KEEP_PER_SERVICE=14
+# Uncompressed *.sql files only exist when a dump failed midway (gzip never
+# ran). Keep them this many days for forensics, then remove.
+DB_PARTIAL_KEEP_DAYS=2
 
 # Colors for output
 RED='\033[0;31m'
@@ -378,22 +385,55 @@ create_snapshot() {
 cleanup_old_backups() {
     log "Cleaning up old backups..."
 
+    local dbdir="${BACKUP_ROOT}/databases"
+
     if [[ "$DRY_RUN" == true ]]; then
-        echo "  Would remove backups older than retention policy"
+        echo "  Would remove snapshots older than ${DAILY_KEEP}d daily / $((WEEKLY_KEEP * 7))d weekly / $((MONTHLY_KEEP * 30))d monthly"
+        echo "  Would keep the newest ${DB_DUMPS_KEEP_PER_SERVICE} dumps per service and remove *.sql partials older than ${DB_PARTIAL_KEEP_DAYS}d"
         return
     fi
 
-    # Cleanup daily backups
-    find "${BACKUP_ROOT}/daily" -maxdepth 1 -type d -mtime +${DAILY_KEEP} -exec rm -rf {} \; 2>/dev/null || true
+    # Snapshots. Note on find semantics: -mtime +N matches only entries at least
+    # N+1 full days old, so on disk you will see N+1 to N+2 snapshots per tier.
+    # Errors are logged (not silenced) but never abort the run.
+    local tier keep_days
+    for tier in daily weekly monthly; do
+        case "$tier" in
+            daily)   keep_days=${DAILY_KEEP} ;;
+            weekly)  keep_days=$((WEEKLY_KEEP * 7)) ;;
+            monthly) keep_days=$((MONTHLY_KEEP * 30)) ;;
+        esac
+        if ! find "${BACKUP_ROOT}/${tier}" -mindepth 1 -maxdepth 1 -type d -mtime +"${keep_days}" \
+                -print -exec rm -rf {} + ; then
+            error "Snapshot cleanup reported errors in ${tier}/ (continuing)"
+        fi
+    done
 
-    # Cleanup weekly backups
-    find "${BACKUP_ROOT}/weekly" -maxdepth 1 -type d -mtime +$((WEEKLY_KEEP * 7)) -exec rm -rf {} \; 2>/dev/null || true
+    # Database dumps: keep the newest DB_DUMPS_KEEP_PER_SERVICE per service.
+    # Service name = filename minus the trailing _YYYY-MM-DD_HH-MM-SS.sql.gz.
+    if [[ -d "${dbdir}" ]]; then
+        local svc f removed=0
+        while IFS= read -r svc; do
+            [[ -n "$svc" ]] || continue
+            while IFS= read -r f; do
+                [[ -n "$f" ]] || continue
+                if rm -f -- "$f"; then
+                    removed=$((removed + 1))
+                else
+                    error "Could not remove old dump $(basename "$f") (continuing)"
+                fi
+            done < <(find "${dbdir}" -maxdepth 1 -type f -name "${svc}_*.sql.gz" -printf '%T@ %p\n' \
+                        | sort -rn | tail -n +$((DB_DUMPS_KEEP_PER_SERVICE + 1)) | cut -d' ' -f2-)
+        done < <(find "${dbdir}" -maxdepth 1 -type f -name '*.sql.gz' -printf '%f\n' \
+                    | sed -E 's/_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}\.sql\.gz$//' | sort -u)
+        log "  Removed ${removed} old compressed dump(s); keeping newest ${DB_DUMPS_KEEP_PER_SERVICE} per service"
 
-    # Cleanup monthly backups
-    find "${BACKUP_ROOT}/monthly" -maxdepth 1 -type d -mtime +$((MONTHLY_KEEP * 30)) -exec rm -rf {} \; 2>/dev/null || true
-
-    # Cleanup old database dumps (keep last 7)
-    ls -t "${BACKUP_ROOT}/databases/"*.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
+        # Partial (uncompressed) dumps left by failed runs
+        if ! find "${dbdir}" -maxdepth 1 -type f -name '*.sql' -mtime +"$((DB_PARTIAL_KEEP_DAYS - 1))" \
+                -print -delete ; then
+            error "Could not remove some partial *.sql dumps (continuing)"
+        fi
+    fi
 
     success "Old backups cleaned up"
 }

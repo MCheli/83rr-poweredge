@@ -12,6 +12,8 @@ procedure*. If they disagree, read the script.
 **Schedule**: cron at `0 2 * * *` (daily 02:00 ET).
 **Destination**: NAS at `//MarksNAS/Performance/83rr-backup/` (CIFS mount at `/mnt/nas`).
 **Retention** (set in `backup.sh`): 7 daily / 4 weekly / 3 monthly snapshots, hardlinked.
+Pruning uses `find -mtime +N`, which only matches entries at least N+1 full days old, so
+on disk you will normally see 8–9 daily, 5 weekly and 3–4 monthly snapshots. That is expected.
 
 ### Database dumps — `/mnt/nas/83rr-backup/databases/*.sql.gz`
 
@@ -25,8 +27,12 @@ below are a hot copy of the data dirs and may not be crash-consistent.
 | Tasks (PostgreSQL) | `tasks_<ts>.sql.gz` | `tasks-db` | `pg_dump tasks` |
 | Energy Monitor (PostgreSQL) | `energy_monitor_<ts>.sql.gz` | `energy-monitor-db` | `pg_dump panel_tool` |
 
-The `cleanup_old_backups` step keeps the newest 14 dump files per service (set in
-`backup.sh:304`).
+The `cleanup_old_backups` step keeps the newest `DB_DUMPS_KEEP_PER_SERVICE` (14) compressed
+dumps **per service**, derived from the filename prefix, so a new service is covered
+automatically. It is count-based on purpose: a long streak of failed backups can never
+prune away the last good dumps. Uncompressed `*.sql` files only appear when a dump failed
+before gzip; they are kept `DB_PARTIAL_KEEP_DAYS` (2) days for forensics, then removed.
+Dumps of a retired service (no new files) keep their newest 14 forever; delete those by hand.
 
 ### File mirrors — `/mnt/nas/83rr-backup/latest/`
 
