@@ -296,7 +296,13 @@ services:
   # Monitoring: Grafana (Visualization Dashboards)
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
-    image: grafana/grafana:11.5.2
+    # 12.4.14: fixes CVE-2026-17183 (Unified Alerting datasource authz bypass,
+    # fixed in 12.4.9) plus CVE-2026-100105, -88858 and -88967 (12.4.14),
+    # and the 11.x CVEs in docs/SECURITY_PLAN.md P2-2. All provisioned
+    # dashboards use timeseries/stat/gauge/table panels (no Angular), so the
+    # 12.x Angular removal does not affect them. Back up grafana_data first:
+    # the SQLite schema migration is one-way.
+    image: grafana/grafana:12.4.14
     container_name: grafana
     restart: unless-stopped
     logging: *default-logging
@@ -712,12 +718,14 @@ services:
   # (the self-hosted ntfy below) is configured via the in-app Settings UI.
   # ═════════════════════════════════════════════════════════════════════════════
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    # 2.x pinned by digest 2026-10-31 (was :1, Node 18 EOL, no fix for
+    # CVE-2026-111497 Brotli). This digest runs Node 22.23.4. 1.x -> 2.x
+    # migrates the SQLite DB one-way: back up 83rr-poweredge_uptime_kuma_data
+    # before the first start. Not watchtower-managed; bump deliberately.
+    image: louislam/uptime-kuma:2@sha256:e88415a90dd2f7efecdbc18de0490aff292764a3ac471531bf1d0481725591bd
     container_name: uptime-kuma
     restart: unless-stopped
     logging: *default-logging
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - uptime_kuma_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro  # for Docker Container monitor type
