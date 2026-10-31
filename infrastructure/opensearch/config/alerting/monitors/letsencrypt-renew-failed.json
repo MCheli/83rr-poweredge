@@ -56,10 +56,10 @@
       },
       "actions": [
         {
-          "name": "email-mpcheli",
-          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] Let's Encrypt renewal failed\",\"content\":[{\"type\":\"text/plain\",\"value\":\"renew-letsencrypt-certs.sh exited non-zero. Certs auto-renew at 30 days before expiry, so we have time, but investigate now: ssh in and run /home/mcheli/83rr-poweredge/scripts/renew-letsencrypt-certs.sh manually. Likely cause: Cloudflare API token rotated, or rate limited.\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] Let's Encrypt renewal failed\", \"message\": \"renew-letsencrypt-certs.sh exited non-zero. Certs auto-renew at 30 days before expiry, so we have time, but investigate now: ssh in and run /home/mcheli/83rr-poweredge/scripts/renew-letsencrypt-certs.sh manually. Likely cause: Cloudflare API token rotated, or rate limited.\", \"priority\": 5, \"tags\": [\"rotating_light\"]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,

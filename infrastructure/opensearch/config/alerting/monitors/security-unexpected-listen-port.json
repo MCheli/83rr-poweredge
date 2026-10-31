@@ -35,10 +35,10 @@
       },
       "actions": [
         {
-          "name": "email-mpcheli",
-          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] SECURITY: unexpected listening port(s)\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}}\\nA TCP port is LISTENing that is not in scripts/emit_security_telemetry.sh ALLOWED_PORTS.\\n\\nPorts: {{#ctx.results.0.aggregations.by_port.buckets}}{{key}}({{doc_count}}) {{/ctx.results.0.aggregations.by_port.buckets}}\\n\\nIf you just added a service, add the port to the allowlist. Otherwise investigate:\\n  sudo ss -tlnp | grep -E ':(PORT) '\\n\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] SECURITY: unexpected listening port(s)\", \"message\": \"Monitor: {{ctx.monitor.name}}\\nA TCP port is LISTENing that is not in scripts/emit_security_telemetry.sh ALLOWED_PORTS.\\n\\nPorts: {{#ctx.results.0.aggregations.by_port.buckets}}{{key}}({{doc_count}}) {{/ctx.results.0.aggregations.by_port.buckets}}\\n\\nIf you just added a service, add the port to the allowlist. Otherwise investigate:\\n  sudo ss -tlnp | grep -E ':(PORT) '\\n\", \"priority\": 4, \"tags\": [\"rotating_light\"]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,

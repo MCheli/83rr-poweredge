@@ -56,10 +56,10 @@
       },
       "actions": [
         {
-          "name": "email-mpcheli",
-          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] BACKUP STALE \u2014 no successful backup in 26h\",\"content\":[{\"type\":\"text/plain\",\"value\":\"No backup_completed heartbeat seen in OpenSearch for 26 hours.\\n\\nLast resort: ssh to host, run /home/mcheli/83rr-poweredge/scripts/backup.sh manually and inspect ~/83rr-poweredge/logs/backup.log for what's wrong (NAS unmounted, DB unreachable, etc.).\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] BACKUP STALE \u2014 no successful backup in 26h\", \"message\": \"No backup_completed heartbeat seen in OpenSearch for 26 hours.\\n\\nLast resort: ssh to host, run /home/mcheli/83rr-poweredge/scripts/backup.sh manually and inspect ~/83rr-poweredge/logs/backup.log for what's wrong (NAS unmounted, DB unreachable, etc.).\", \"priority\": 5, \"tags\": [\"rotating_light\"]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
