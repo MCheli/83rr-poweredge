@@ -381,21 +381,16 @@ create_snapshot() {
     fi
 }
 
-# Cleanup old backups based on retention policy
-cleanup_old_backups() {
-    log "Cleaning up old backups..."
-
+# Print every path the retention policy would prune, one per line.
+# cleanup_old_backups uses this for both the real run and --dry-run, so the
+# dry run always shows exactly what a real run would delete.
+# Listing errors are logged, never fatal, and never add paths to the list.
+list_prunable_backups() {
     local dbdir="${BACKUP_ROOT}/databases"
-
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  Would remove snapshots older than ${DAILY_KEEP}d daily / $((WEEKLY_KEEP * 7))d weekly / $((MONTHLY_KEEP * 30))d monthly"
-        echo "  Would keep the newest ${DB_DUMPS_KEEP_PER_SERVICE} dumps per service and remove *.sql partials older than ${DB_PARTIAL_KEEP_DAYS}d"
-        return
-    fi
+    local ts_re='[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}'
 
     # Snapshots. Note on find semantics: -mtime +N matches only entries at least
     # N+1 full days old, so on disk you will see N+1 to N+2 snapshots per tier.
-    # Errors are logged (not silenced) but never abort the run.
     local tier keep_days
     for tier in daily weekly monthly; do
         case "$tier" in
@@ -403,39 +398,76 @@ cleanup_old_backups() {
             weekly)  keep_days=$((WEEKLY_KEEP * 7)) ;;
             monthly) keep_days=$((MONTHLY_KEEP * 30)) ;;
         esac
-        if ! find "${BACKUP_ROOT}/${tier}" -mindepth 1 -maxdepth 1 -type d -mtime +"${keep_days}" \
-                -print -exec rm -rf {} + ; then
-            error "Snapshot cleanup reported errors in ${tier}/ (continuing)"
-        fi
+        [[ -d "${BACKUP_ROOT}/${tier}" ]] || continue
+        find "${BACKUP_ROOT}/${tier}" -mindepth 1 -maxdepth 1 -type d -mtime +"${keep_days}" -print \
+            || error "Could not list ${tier}/ snapshots (continuing)"
     done
+
+    [[ -d "${dbdir}" ]] || return 0
 
     # Database dumps: keep the newest DB_DUMPS_KEEP_PER_SERVICE per service.
     # Service name = filename minus the trailing _YYYY-MM-DD_HH-MM-SS.sql.gz.
-    if [[ -d "${dbdir}" ]]; then
-        local svc f removed=0
-        while IFS= read -r svc; do
-            [[ -n "$svc" ]] || continue
-            while IFS= read -r f; do
-                [[ -n "$f" ]] || continue
-                if rm -f -- "$f"; then
-                    removed=$((removed + 1))
-                else
-                    error "Could not remove old dump $(basename "$f") (continuing)"
-                fi
-            done < <(find "${dbdir}" -maxdepth 1 -type f -name "${svc}_*.sql.gz" -printf '%T@ %p\n' \
-                        | sort -rn | tail -n +$((DB_DUMPS_KEEP_PER_SERVICE + 1)) | cut -d' ' -f2-)
-        done < <(find "${dbdir}" -maxdepth 1 -type f -name '*.sql.gz' -printf '%f\n' \
-                    | sed -E 's/_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}\.sql\.gz$//' | sort -u)
-        log "  Removed ${removed} old compressed dump(s); keeping newest ${DB_DUMPS_KEEP_PER_SERVICE} per service"
+    # The exact-name regex means a service never counts another service's
+    # dumps (e.g. "tasks" vs a future "tasks_archive"), and hand-named files
+    # such as seafile_before-upgrade.sql.gz are never touched.
+    local svc
+    while IFS= read -r svc; do
+        [[ -n "$svc" ]] || continue
+        find "${dbdir}" -maxdepth 1 -type f -regextype posix-extended \
+                -regex ".*/${svc}_${ts_re}\.sql\.gz" -printf '%T@ %p\n' \
+            | sort -rn | tail -n +$((DB_DUMPS_KEEP_PER_SERVICE + 1)) | cut -d' ' -f2- \
+            || error "Could not list ${svc} dumps (continuing)"
+    done < <(find "${dbdir}" -maxdepth 1 -type f -regextype posix-extended \
+                -regex ".*/[A-Za-z0-9_]+_${ts_re}\.sql\.gz" -printf '%f\n' \
+                | sed -E "s/_${ts_re}\.sql\.gz\$//" | sort -u)
 
-        # Partial (uncompressed) dumps left by failed runs
-        if ! find "${dbdir}" -maxdepth 1 -type f -name '*.sql' -mtime +"$((DB_PARTIAL_KEEP_DAYS - 1))" \
-                -print -delete ; then
-            error "Could not remove some partial *.sql dumps (continuing)"
+    # Partial (uncompressed) dumps left by failed runs
+    find "${dbdir}" -maxdepth 1 -type f -name '*.sql' -mtime +"$((DB_PARTIAL_KEEP_DAYS - 1))" -print \
+        || error "Could not list partial *.sql dumps (continuing)"
+
+    return 0
+}
+
+# Cleanup old backups based on retention policy
+cleanup_old_backups() {
+    log "Cleaning up old backups..."
+    log "  Policy: snapshots older than ${DAILY_KEEP}d daily / $((WEEKLY_KEEP * 7))d weekly / $((MONTHLY_KEEP * 30))d monthly; newest ${DB_DUMPS_KEEP_PER_SERVICE} dumps per service; *.sql partials older than ${DB_PARTIAL_KEEP_DAYS}d"
+
+    local -a prunable=()
+    mapfile -t prunable < <(list_prunable_backups)
+
+    local p rel count=0 failed=0
+    for p in "${prunable[@]}"; do
+        [[ -n "$p" ]] || continue
+        rel="${p#"${BACKUP_ROOT}"/}"
+        # Belt and braces: never rm -rf anything outside the backup root.
+        if [[ "$p" != "${BACKUP_ROOT}/"* || "$rel" == "$p" || -z "$rel" ]]; then
+            error "Refusing to remove path outside ${BACKUP_ROOT}: ${p}"
+            failed=$((failed + 1))
+            continue
         fi
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  Would remove ${rel}"
+            count=$((count + 1))
+        elif rm -rf -- "$p"; then
+            log "  Removed ${rel}"
+            count=$((count + 1))
+        else
+            error "Could not remove ${rel} (continuing)"
+            failed=$((failed + 1))
+        fi
+    done
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would remove ${count} item(s) in total"
+        return
     fi
 
-    success "Old backups cleaned up"
+    if [[ "$failed" -gt 0 ]]; then
+        error "Cleanup removed ${count} item(s); ${failed} could not be removed"
+    else
+        success "Old backups cleaned up (${count} item(s) removed)"
+    fi
 }
 
 # Emit a heartbeat doc to OpenSearch so we can alert on its absence.
