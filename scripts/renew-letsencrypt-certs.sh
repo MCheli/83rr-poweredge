@@ -38,7 +38,8 @@ certbot renew \
     --logs-dir "$LETSENCRYPT_DIR/logs" \
     --quiet
 
-# Copy renewed certificates to NGINX directory
+# Copy renewed certificates to NGINX directory. These files are gitignored on
+# purpose (renewal rewrites them), so this never creates git drift.
 cp "$LETSENCRYPT_DIR/config/live/$DOMAIN/fullchain.pem" \
    "$PROJECT_ROOT/infrastructure/nginx/certs/letsencrypt-ops-markcheli.crt"
 
