@@ -58,7 +58,7 @@ function, so the list is what a real run would delete.
 |---|---|---|
 | `83rr-poweredge_grafana_data` | 42 M | Dashboards, datasources, users |
 | `83rr-poweredge_prometheus_data` | 3.4 G | Metrics history (~30 days TSDB retention) |
-| `83rr-poweredge_minecraft_data` | 405 M | World saves |
+| `83rr-poweredge_minecraft_data_local` | 366 M | World saves (the live volume: `docker-compose.override.yml` mounts `minecraft_data_local`; until 2026-10-31 backups copied the stale `minecraft_data` from January instead) |
 | `83rr-poweredge_plex_config` | 312 M | Plex's metadata DB only — *not media* |
 | `83rr-poweredge_tallied_db_data` | 81 M | Postgres data dir (use `.sql.gz` for restore) |
 | `83rr-poweredge_tasks_db_data` | 47 M | Postgres data dir (use `.sql.gz` for restore) |
@@ -180,7 +180,7 @@ For each volume in `backup.sh:backup_docker_volumes()`:
 
 ```bash
 for vol in 83rr-poweredge_grafana_data 83rr-poweredge_prometheus_data \
-           83rr-poweredge_minecraft_data 83rr-poweredge_plex_config \
+           83rr-poweredge_minecraft_data_local 83rr-poweredge_plex_config \
            83rr-poweredge_tallied_db_data 83rr-poweredge_tasks_db_data \
            83rr-poweredge_energy_monitor_db_data 83rr-poweredge_energy_monitor_data; do
   docker volume create "$vol"
