@@ -469,6 +469,7 @@ services:
       - FINANCE_DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_BASE_URL=https://money.markcheli.com
       - FINANCE_DEV_MODE=false
+      - FINANCE_CREDENTIAL_KEY=${TALLIED_CREDENTIAL_KEY}
     networks:
       - infrastructure
     healthcheck:
@@ -498,6 +499,7 @@ services:
       - FINANCE_DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_BASE_URL=https://money.markcheli.com
       - FINANCE_DEV_MODE=false
+      - FINANCE_CREDENTIAL_KEY=${TALLIED_CREDENTIAL_KEY}
     networks:
       - infrastructure
     healthcheck:
