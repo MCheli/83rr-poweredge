@@ -64,6 +64,8 @@ function, so the list is what a real run would delete.
 | `83rr-poweredge_tasks_db_data` | 47 M | Postgres data dir (use `.sql.gz` for restore) |
 | `83rr-poweredge_energy_monitor_db_data` | 47 M | Postgres data dir (use `.sql.gz` for restore) |
 | `83rr-poweredge_energy_monitor_data` | small | Snapshots and logs from the panel-tool app |
+| `83rr-poweredge_uptime_kuma_data` | 666 M | Uptime Kuma monitors, notifications, status page, heartbeat history (SQLite; copied live, WAL files included) |
+| `83rr-poweredge_ntfy_data` | <1 M | ntfy users, access rules and tokens (`user.db`); message cache |
 
 ---
 
@@ -182,10 +184,13 @@ For each volume in `backup.sh:backup_docker_volumes()`:
 for vol in 83rr-poweredge_grafana_data 83rr-poweredge_prometheus_data \
            83rr-poweredge_minecraft_data_local 83rr-poweredge_plex_config \
            83rr-poweredge_tallied_db_data 83rr-poweredge_tasks_db_data \
-           83rr-poweredge_energy_monitor_db_data 83rr-poweredge_energy_monitor_data; do
+           83rr-poweredge_energy_monitor_db_data 83rr-poweredge_energy_monitor_data \
+           83rr-poweredge_asa_server_files \
+           83rr-poweredge_uptime_kuma_data 83rr-poweredge_ntfy_data; do
   docker volume create "$vol"
+  # Docker's data root on this host is /data/docker, not /var/lib/docker; ask Docker for the path.
   sudo rsync -aL "/mnt/nas/83rr-backup/latest/docker-volumes/$vol/" \
-                 "/var/lib/docker/volumes/$vol/_data/"
+                 "$(docker volume inspect -f '{{.Mountpoint}}' "$vol")/"
 done
 ```
 
