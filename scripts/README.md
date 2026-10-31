@@ -342,6 +342,99 @@ out of credits) and nothing noticed.
 
 ---
 
+### 10. `sbom-scan.sh` 🔐 SBOM / CVE SCAN
+
+**Purpose:** Nightly SBOM of every running container, uploaded to Dependency-Track
+**Size:** ~17KB
+**Language:** Bash (+ python3 for JSON)
+
+**Description:**
+For each running container: resolves image ID, tag and registry digest, makes
+a CycloneDX SBOM of that exact image with Syft (`~/.local/bin/syft`), and
+uploads it to Dependency-Track as project `<container>`, version
+`<tag>@<digest12>`, marked latest. Existing versions are skipped (idempotent);
+when an image changes, the previous latest is cloned first so old findings
+and audit decisions carry over and only new findings alert. Keeps 2 versions
+per container. Talks to `deptrack-apiserver` on the docker bridge (no nginx),
+reads `DT_API_KEY` / `NTFY_PUBLISH_TOKEN` from `.env`, logs to
+`logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) only on failure.
+No sudo; needs the docker group.
+
+**Usage:**
+```bash
+scripts/sbom-scan.sh                  # what cron runs (03:30)
+scripts/sbom-scan.sh --dry-run        # list what would be uploaded
+scripts/sbom-scan.sh --only plex      # one container
+scripts/sbom-scan.sh --force          # re-upload unchanged images too
+```
+
+**When to Use:**
+- Runs from mcheli's crontab: `30 3 * * * /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1`
+- Manually after bumping an image, to see its findings before the next night.
+
+**Referenced in:** docs/dependency-track.md
+
+---
+
+### 11. `install-syft.sh` 🔐 SUPPLY CHAIN
+
+**Purpose:** Install the pinned, verified Syft release used by `sbom-scan.sh`
+**Size:** ~4KB
+**Language:** Bash
+
+**Description:**
+Downloads `syft_<ver>_linux_amd64.tar.gz` and checks it against the sha256
+pinned in the script (taken from the release's `checksums.txt` after its
+Sigstore signature was verified with cosign). Also checks the published
+checksums file agrees, and re-verifies the signature when cosign is
+installed. Installs to `~/.local/bin/syft`; no-op if that version is already
+there. Trivy is intentionally not used (March 2026 release compromise).
+
+**Usage:**
+```bash
+scripts/install-syft.sh            # install / no-op
+scripts/install-syft.sh --force    # reinstall
+```
+
+**When to Use:**
+- Once at deploy; again after bumping `SYFT_VERSION` + `SYFT_SHA256` (steps in the script header).
+
+**Referenced in:** docs/dependency-track.md
+
+---
+
+### 12. `deptrack-setup.sh` 🏗️ DEPLOYMENT
+
+**Purpose:** First boot and idempotent configuration of Dependency-Track
+**Size:** ~18KB
+**Language:** Bash (+ python3 for JSON)
+
+**Description:**
+`init-admin` replaces the default admin/admin password with a random one in a
+0600 file (for 1Password). `apply` sets the base URL, enables OSV + NVD
+(GitHub Advisories only with `DT_GITHUB_TOKEN`) and starts mirrors, stores the
+ntfy token as a DT secret, installs the `ntfy` webhook publisher with
+`infrastructure/dependency-track/ntfy-template.peb`, configures the alert rule
+(NEW_VULNERABILITY / NEW_VULNERABLE_DEPENDENCY, severity >= HIGH or KEV;
+created disabled), and creates team `sbom-scanner` with an API key written to
+`.env` as `DT_API_KEY`. Every step checks state first; re-running is safe.
+
+**Usage:**
+```bash
+scripts/deptrack-setup.sh init-admin
+scripts/deptrack-setup.sh apply
+scripts/deptrack-setup.sh status        # mirrors, projects, alerts on/off
+scripts/deptrack-setup.sh alerts on|off
+scripts/deptrack-setup.sh test-alert    # test push, verified in ntfy's cache
+```
+
+**When to Use:**
+- Deploy (see the runbook in docs/dependency-track.md), and after rotating the ntfy token or scanner key.
+
+**Referenced in:** docs/dependency-track.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -354,6 +447,9 @@ scripts/
 ├── opensearch_diagnostic_ssh.py     # 📊 Log diagnostics
 ├── renew-letsencrypt-certs.sh       # 🔐 SSL renewal (automated)
 ├── alert-test.sh                    # 🚀 Weekly alert path check (ntfy)
+├── sbom-scan.sh                     # 🔐 Nightly container SBOMs -> Dependency-Track
+├── install-syft.sh                  # 🔐 Pinned, verified Syft install
+├── deptrack-setup.sh                # 🏗️ Dependency-Track first boot / config
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
 ├── one-time/                        # One-time setup scripts
 │   ├── README.md

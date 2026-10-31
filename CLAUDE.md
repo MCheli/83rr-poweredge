@@ -135,6 +135,7 @@ docker compose down -v
 23. **openclaw** - Self-hosted agent/automation runtime (image `ghcr.io/openclaw/openclaw:latest`), on its own `openclaw_nginx-openclaw` network; runtime data (secrets, credentials, workspace, agent state) under `infrastructure/openclaw/` (gitignored). Not proxied through the main nginx.
 24. **edge-tts / faster-whisper** - TTS/STT side services (ports 5050 / 5051)
 25. **ntfy** - Push notifications for homelab alerts (ntfy.markcheli.com, deny-all auth). OpenSearch alerting + Uptime Kuma publish to topic `homelab`; replaced SendGrid 2026-10-31. Setup: `infrastructure/opensearch/config/alerting/README.md`
+26. **deptrack-apiserver / deptrack-frontend / deptrack-db** - OWASP Dependency-Track v5 (LAN-only, deptrack.ops.markcheli.com): CVE tracking of every running container's SBOM. `scripts/sbom-scan.sh` (Syft, cron 03:30) uploads nightly; new HIGH/CRITICAL findings go to ntfy. Images pinned by digest, not watchtower-managed. Docs + runbook: `docs/dependency-track.md`
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -179,6 +180,7 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://logs.ops.markcheli.com** - OpenSearch Dashboards
 - **https://opensearch.ops.markcheli.com** - OpenSearch API
 - **https://report.ops.markcheli.com** - Daily report HTML preview + ad-hoc trigger API (LAN-only, bearer token required for `/trigger`)
+- **https://deptrack.ops.markcheli.com** - Dependency-Track (own login: admin password in 1Password; scanner key `DT_API_KEY` in `.env`)
 
 ### NGINX Routing
 All HTTPS traffic is handled by NGINX:

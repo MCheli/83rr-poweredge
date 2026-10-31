@@ -820,6 +820,89 @@ services:
       start_period: 15s
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Dependency-Track v5 (CVE tracking for what's actually running)
+  # LAN-only at deptrack.ops.markcheli.com; nginx proxies / -> frontend and
+  # /api -> apiserver. No host ports. scripts/sbom-scan.sh uploads a Syft SBOM
+  # of every running container nightly; new HIGH/CRITICAL findings go to ntfy.
+  # Images are pinned by digest and NOT watchtower-managed: bump deliberately
+  # (schema migrations are one-way, back up deptrack-db first).
+  # Docs + first boot: docs/dependency-track.md
+  # ═════════════════════════════════════════════════════════════════════════════
+  deptrack-db:
+    image: postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    container_name: deptrack-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=dtrack
+      - POSTGRES_PASSWORD=${DEPTRACK_DB_PASSWORD:?set DEPTRACK_DB_PASSWORD in .env}
+      - POSTGRES_DB=dtrack
+    volumes:
+      - deptrack_db_data:/var/lib/postgresql/data
+    networks:
+      - deptrack
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dtrack -d dtrack"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  deptrack-apiserver:
+    image: ghcr.io/dependencytrack/apiserver:5.2.1@sha256:a7ce7a42928c6c03e94e8255e2ee871f5268f55b638a69729cae7afc47ef43b8
+    container_name: deptrack-apiserver
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      deptrack-db:
+        condition: service_healthy
+    environment:
+      - DT_DATASOURCE_URL=jdbc:postgresql://deptrack-db:5432/dtrack
+      - DT_DATASOURCE_USERNAME=dtrack
+      - DT_DATASOURCE_PASSWORD=${DEPTRACK_DB_PASSWORD:?set DEPTRACK_DB_PASSWORD in .env}
+      - DT_TELEMETRY_SUBMISSION_DEFAULT_ENABLED=false
+      # Outbound allowlist: the internet (vuln mirrors) plus the ntfy container
+      # for alerts. Default is external,private, which would let a webhook
+      # reach every service on the docker network.
+      - DT_OUTBOUND_ALLOWED_DESTINATIONS=external,ntfy
+    # JVM heap = 80% of this limit (image default MaxRAMPercentage=80), ~4.8 GB.
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+    volumes:
+      # HOME=/data: holds the secret-management KEK keyset
+      # (.dependency-track/keys/), without which secrets stored in the DB
+      # (the ntfy token) can't be decrypted. Backed up by backup.sh.
+      - deptrack_data:/data
+    networks:
+      - infrastructure
+      - deptrack
+    healthcheck:
+      # Management port 9000 (not proxied). First boot runs migrations.
+      test: ["CMD-SHELL", "wget -q -Y off -T 3 -O /dev/null http://127.0.0.1:9000/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+
+  deptrack-frontend:
+    image: ghcr.io/dependencytrack/frontend:5.2.1@sha256:1c0f63b083af8e89ff4ede5e7ed5cfc4e23ab871fa140ed101e8dc56f53eb51c
+    container_name: deptrack-frontend
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      # Same origin: nginx serves the SPA and proxies /api to the apiserver.
+      - API_BASE_URL=https://deptrack.ops.markcheli.com
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -T 3 -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Seafile (Dropbox Replacement)
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
@@ -960,6 +1043,9 @@ networks:
   tasks-demo:
     # Only the Tasks demo app and its database; the demo can't reach tasks-db
     internal: true
+  deptrack:
+    # Only the Dependency-Track apiserver and its database
+    internal: true
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Volumes
@@ -977,6 +1063,8 @@ volumes:
   tasks_demo_db_data:
   energy_monitor_db_data:
   energy_monitor_data:
+  deptrack_db_data:
+  deptrack_data:
   uptime_kuma_data:
   ntfy_data:
   seafile_db:

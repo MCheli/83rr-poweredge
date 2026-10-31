@@ -1,0 +1,34 @@
+{#- Dependency-Track -> ntfy (topic homelab). Pebble template of the "ntfy"
+    webhook publisher, installed by scripts/deptrack-setup.sh. Renders an
+    ntfy JSON publish (https://docs.ntfy.sh/publish/#publish-as-json).
+    Field names are the protobuf getters (vulnId, isKev, vulnerabilitiesList),
+    see docs "Templating" + "Notification schema" for DT v5.
+    Keep every JSON string on ONE line: a raw newline would break the JSON. -#}
+{%- if notification.group == "GROUP_NEW_VULNERABILITY" -%}
+{%- set v = subject.vulnerability -%}
+{
+  "topic": "homelab",
+  "title": "{{ v.severity | escape(strategy="json") }} {{ v.vulnId | escape(strategy="json") }} in {{ subject.project.name | escape(strategy="json") }}",
+  "message": "{{ subject.component | summarize | escape(strategy="json") }}{% if v.cvssV3 > 0 %}\nCVSS {{ v.cvssV3 }}{% endif %}{% if v.isKev %}\nKNOWN EXPLOITED (KEV){% endif %}{% if v.title is not empty %}\n{{ v.title | escape(strategy="json") }}{% endif %}\nProject: {{ subject.project | summarize | escape(strategy="json") }}",
+  "priority": {% if v.isKev %}5{% elseif v.severity == "CRITICAL" %}4{% else %}3{% endif %},
+  "tags": ["{% if v.isKev or v.severity == "CRITICAL" %}rotating_light{% else %}warning{% endif %}", "dependency-track"],
+  "click": "{{ baseUrl }}/vulnerabilities/{{ v.source | escape(strategy="json") }}/{{ v.vulnId | escape(strategy="json") }}"
+}
+{%- elseif notification.group == "GROUP_NEW_VULNERABLE_DEPENDENCY" -%}
+{
+  "topic": "homelab",
+  "title": "Vulnerable dependency added to {{ subject.project.name | escape(strategy="json") }}",
+  "message": "{{ subject.component | summarize | escape(strategy="json") }}{% for v in subject.vulnerabilitiesList %}{% if v.isKev or v.severity == "CRITICAL" or v.severity == "HIGH" %}\n{{ v.severity | escape(strategy="json") }} {{ v.vulnId | escape(strategy="json") }}{% if v.isKev %} (KEV){% endif %}{% endif %}{% endfor %}\nProject: {{ subject.project | summarize | escape(strategy="json") }}",
+  "priority": 4,
+  "tags": ["warning", "dependency-track"],
+  "click": "{{ baseUrl }}/projects/{{ subject.project.uuid | escape(strategy="json") }}"
+}
+{%- else -%}
+{
+  "topic": "homelab",
+  "title": "Dependency-Track: {{ notification.title | escape(strategy="json") }}",
+  "message": "{{ notification.content | escape(strategy="json") }}",
+  "priority": 3,
+  "tags": ["dependency-track"]
+}
+{%- endif -%}
