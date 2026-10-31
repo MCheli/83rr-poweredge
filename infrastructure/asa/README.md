@@ -8,7 +8,7 @@ Self-hosted dedicated server, migrated from Nitrado in May 2026.
 - **Entrypoint:** `/usr/bin/start_server` (Ruby/Bash script bundled in the image). Downloads SteamCMD on first run, pulls ASA app 2430930, fetches GE-Proton 10-17 via wget, launches `ArkAscendedServer.exe` under Proton
 - **Port:** UDP 7777 forwarded WAN → `192.168.1.179` via UniFi
 - **RCON:** TCP 11520 bound to `127.0.0.1` only (LAN admin)
-- **DNS:** `ark.markcheli.com` → `173.48.98.211` (unproxied)
+- **DNS:** `ark.markcheli.com` → `173.48.155.66` (unproxied)
 - **Volumes (named, Docker-managed):** `asa_server_files`, `asa_steam`, `asa_steamcmd`, `asa_cluster_shared`. Live in `/var/lib/docker/volumes/` on root partition. **Do NOT use bind mounts** — SteamCMD's 32-bit self-update fails when the host directory is owned by a UID not present in `/etc/passwd` inside the container (it can't `setuid` to a "real user" for sandboxed writes, so cache-dir creation returns `EACCES`)
 - **Restart policy:** `unless-stopped`
 - **Stop grace period:** 120 s (lets ASA save world cleanly on shutdown — default 10 s is too short)

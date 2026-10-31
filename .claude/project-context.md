@@ -6,7 +6,7 @@
 - **OS**: Ubuntu Server 24.04.3 LTS
 - **Hostname**: 83rr-poweredge
 - **Local IP**: 192.168.1.179
-- **Public IP**: 173.48.98.211
+- **Public IP**: 173.48.155.66
 - **User**: mcheli
 - **Docker**: Latest with Docker Compose
 - **Management**: Native Docker Compose (no web UI)
