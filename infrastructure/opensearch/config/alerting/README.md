@@ -10,10 +10,12 @@ OpenSearch ───query───▶ Monitor ──fires─▶ Trigger ──se
                        (5 min)         (threshold)         (email / webhook)
 ```
 
-- **Monitors** in `monitors/` — one JSON file per monitor.
-- **Destinations** are configured per-environment (need API keys), so
-  they're created via API after deploy, not stored in this repo.
-- **Channel notes** below cover SendGrid + Uptime Kuma webhook.
+- **Monitors** in `monitors/` — one JSON file per monitor. Their actions
+  publish to the notification channel `ntfy-homelab` (see "ntfy" below).
+- **Destinations** hold a token, so they're created via API after deploy
+  (`wire-ntfy.py`), not stored in this repo.
+- **Channel notes** below cover ntfy (current), the retired SendGrid setup,
+  and the Uptime Kuma push-webhook idea.
 
 ## Apply monitors
 
@@ -33,7 +35,53 @@ To update an existing monitor, use `PUT /_plugins/_alerting/monitors/<id>`.
 
 ## Destinations
 
-### SendGrid email (status@markcheli.com)
+### ntfy push (current, since 2026-10-31)
+
+OpenSearch and Uptime Kuma both alert through the self-hosted ntfy service
+(`ntfy` in `docker-compose.yml`, config `infrastructure/ntfy/server.yml`),
+public at `https://ntfy.markcheli.com` so phones can subscribe. Everything
+publishes to topic **`homelab`**.
+
+Auth is deny-all; users and tokens live in `user.db` in the `ntfy_data` volume:
+
+| User | Access | Used by |
+|---|---|---|
+| `alerts` | write-only `homelab` | its token is `NTFY_PUBLISH_TOKEN` in `.env`; OpenSearch + Kuma send `Authorization: Bearer <token>` |
+| `mark` | read-only `homelab` | the ntfy app on Mark's phone (server `https://ntfy.markcheli.com`, subscribe to `homelab`) |
+
+```bash
+docker exec ntfy ntfy user list                 # users + access
+docker exec -it ntfy ntfy user add mark         # prompts for a password
+docker exec ntfy ntfy access mark homelab ro
+docker exec ntfy ntfy token list alerts         # rotate: token add / token remove, then update .env and re-run both wire steps
+```
+
+**OpenSearch:** `python3 infrastructure/opensearch/config/alerting/wire-ntfy.py`
+(re-runnable) creates/updates channel `ntfy-homelab` (webhook `http://ntfy/`
+on the infrastructure network, Bearer token read from `.env`) and rewrites any
+action still in SendGrid mail JSON into an ntfy JSON publish:
+`{"topic":"homelab","title":…,"message":…,"priority":…}`. Priority follows the
+trigger severity (1→5 … 5→1). `--dry-run` shows the plan; `--test` /
+`--test-only` fire a one-off monitor through the channel. (OpenSearch's own
+"Send test message" button can't work here: its body isn't ntfy JSON.)
+
+**Uptime Kuma:** notification "ntfy → homelab" (type ntfy, server `http://ntfy`,
+access-token auth), linked to every monitor that had the SendGrid notification
+and set as the default for new monitors. `infrastructure/ntfy/kuma-ntfy.js`
+does this from inside the container (`wire`, token on stdin) and sends a test
+through Kuma's own ntfy provider (`test`).
+
+**Weekly proof it still works:** `scripts/alert-test.sh` sends one test via each
+path and checks both landed in ntfy's cache. The Mac mini's weekly homelab
+check runs it every week (`act.sh alert-test`) and reports a failure as
+"alerting broken".
+
+### SendGrid email (retired 2026-10-31)
+
+Every alert from 2026-09-04 to 2026-10-31 failed with HTTP 401 "Maximum
+credits exceeded": the account is on SendGrid's retired free plan, which has
+0 send credits. The API key itself was valid. The old webhook channel
+`sendgrid-mail` is still defined but no monitor uses it. Kept below for reference.
 
 Once you have a SendGrid API key with **Full Access** scope and a verified
 sender for `status@markcheli.com`:
@@ -115,5 +163,7 @@ docker exec opensearch curl -s -X POST "http://localhost:9200/_plugins/_alerting
 | `healthcheck-failure.json` | healthcheck:true AND status != 200, any in 5 min | 2 |
 | `watchtower-update-failure.json` | watchtower Failed != 0 in last 1h | 3 |
 
-After import, point each monitor's trigger `actions[].destination_id` at
-the SendGrid + Kuma destinations created above.
+The files' actions already point at `ntfy-homelab`; run `wire-ntfy.py` once
+after a fresh deploy so the channel exists. Live today: 9 of the 12 files
+(`docker-exec-into-sock-container`, `security-external-db-conn` and
+`security-unexpected-listen-port` are not applied).

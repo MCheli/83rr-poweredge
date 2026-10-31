@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** October 18, 2026
+**Last Updated:** October 31, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -311,6 +311,37 @@ endpoint as `emit_host_metrics.sh` / `backup.sh`. All failures non-fatal.
 
 ---
 
+### 9. `alert-test.sh` 🚀 ALERT PATH CHECK
+
+**Purpose:** Prove that OpenSearch alerting and Uptime Kuma can still reach ntfy
+**Size:** ~2KB
+**Language:** Bash
+
+**Description:**
+Sends one test alert through OpenSearch alerting (a one-off monitor run via
+`infrastructure/opensearch/config/alerting/wire-ntfy.py --test-only`, the same
+path a real alert takes) and one through Uptime Kuma's own ntfy provider
+(`infrastructure/ntfy/kuma-ntfy.js test`), then checks that both landed in
+ntfy's message cache (topic `homelab`). Prints `ALERT TEST OK` / `ALERT TEST
+FAILED` and exits non-zero on failure. Reads no secrets itself. Each run sends
+two pushes to Mark's phone.
+
+Exists because alerting silently failed from 2026-09-04 to 2026-10-31 (SendGrid
+out of credits) and nothing noticed.
+
+**Usage:**
+```bash
+~/83rr-poweredge/scripts/alert-test.sh
+```
+
+**When to Use:**
+- Weekly: the Mac mini's homelab-weekly-check runs it (`act.sh alert-test`).
+- After touching ntfy, the `ntfy-homelab` channel, monitors or Kuma notifications.
+
+**Referenced in:** infrastructure/opensearch/config/alerting/README.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -322,6 +353,7 @@ scripts/
 ├── cloudflare_dns_manager.py        # 🌐 DNS management
 ├── opensearch_diagnostic_ssh.py     # 📊 Log diagnostics
 ├── renew-letsencrypt-certs.sh       # 🔐 SSL renewal (automated)
+├── alert-test.sh                    # 🚀 Weekly alert path check (ntfy)
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
 ├── one-time/                        # One-time setup scripts
 │   ├── README.md
