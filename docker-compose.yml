@@ -470,6 +470,7 @@ services:
       - FINANCE_BASE_URL=https://money.markcheli.com
       - FINANCE_DEV_MODE=false
       - FINANCE_CREDENTIAL_KEY=${TALLIED_CREDENTIAL_KEY}
+      - FINANCE_DEMO_URL=https://money-demo.markcheli.com
     networks:
       - infrastructure
     healthcheck:
@@ -508,6 +509,60 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # Tallied public demo (money-demo.markcheli.com): the same image in demo mode on its OWN
+  # database holding only the Claudius Banks seed; read-only, reseeded on every start (cron
+  # restarts it nightly). Never give it env_file: .env or the production database: startup
+  # refuses AI/Google secrets and any database with real users.
+  tallied-demo-db:
+    image: postgres:16-alpine
+    container_name: tallied-demo-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=tallied_demo
+      - POSTGRES_PASSWORD=${TALLIED_DEMO_DB_PASSWORD}
+      - POSTGRES_DB=tallied_demo
+    volumes:
+      - tallied_demo_db_data:/var/lib/postgresql/data
+    networks:
+      - tallied-demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tallied_demo -d tallied_demo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tallied-demo:
+    image: ghcr.io/mcheli/tallied:latest
+    container_name: tallied-demo
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      tallied-demo-db:
+        condition: service_healthy
+    environment:
+      - APP_ROLE=web
+      - DATABASE_URL=postgresql://tallied_demo:${TALLIED_DEMO_DB_PASSWORD}@tallied-demo-db:5432/tallied_demo
+      - FINANCE_DATABASE_URL=postgresql://tallied_demo:${TALLIED_DEMO_DB_PASSWORD}@tallied-demo-db:5432/tallied_demo
+      - FINANCE_DEMO_MODE=true
+      - FINANCE_DEV_MODE=false
+      - FINANCE_BASE_URL=https://money-demo.markcheli.com
+      - FINANCE_CORS_ORIGINS=["https://money-demo.markcheli.com"]
+      - FINANCE_SECRET_KEY=${TALLIED_DEMO_SECRET_KEY}
+      - FINANCE_API_KEY_PEPPER=${TALLIED_DEMO_API_KEY_PEPPER}
+      - FINANCE_CREDENTIAL_KEY=${TALLIED_DEMO_CREDENTIAL_KEY}
+    networks:
+      - infrastructure
+      - tallied-demo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Tasks (Cycle-based Todo App)
@@ -808,6 +863,9 @@ networks:
   voice-services:
     # LAN-only network for voice AI services (EdgeTTS, faster-whisper)
     driver: bridge
+  tallied-demo:
+    # Only the Tallied demo app and its database; the demo can't reach tallied-db
+    internal: true
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Volumes
@@ -820,6 +878,7 @@ volumes:
   grafana_data:
   plex_config:
   tallied_db_data:
+  tallied_demo_db_data:
   tasks_db_data:
   energy_monitor_db_data:
   energy_monitor_data:
