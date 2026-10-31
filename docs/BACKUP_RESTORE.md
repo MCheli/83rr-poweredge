@@ -33,6 +33,12 @@ automatically. It is count-based on purpose: a long streak of failed backups can
 prune away the last good dumps. Uncompressed `*.sql` files only appear when a dump failed
 before gzip; they are kept `DB_PARTIAL_KEEP_DAYS` (2) days for forensics, then removed.
 Dumps of a retired service (no new files) keep their newest 14 forever; delete those by hand.
+Only files named exactly `<service>_YYYY-MM-DD_HH-MM-SS.sql.gz` are counted or pruned, so a
+hand-made dump such as `seafile_before-upgrade.sql.gz` is never touched.
+
+To see exactly what the next run would prune (snapshots, dumps and partials, one line each),
+run `./scripts/backup.sh --dry-run`. The dry run and the real run share one selection
+function, so the list is what a real run would delete.
 
 ### File mirrors — `/mnt/nas/83rr-backup/latest/`
 
