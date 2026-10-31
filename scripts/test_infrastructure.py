@@ -65,7 +65,7 @@ class InfrastructureHealthTest:
             'tallied': {
                 # App UI is Google SSO; the unauthenticated API health endpoint
                 # is the meaningful liveness check.
-                'url': 'https://money.markcheli.com/api/health',
+                'url': 'https://money.markcheli.com/api/v1/health',
                 'expected_content': '"status":"ok"',
                 'description': 'Tallied personal finance API health'
             },
