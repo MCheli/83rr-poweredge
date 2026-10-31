@@ -803,7 +803,9 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql://panel_tool:${ENERGY_MONITOR_DB_PASSWORD}@energy-monitor-db:5432/panel_tool
+      # Explicit +psycopg2: SQLAlchemy 2.1 made psycopg (v3) the default for
+      # postgresql://, and the image only ships psycopg2-binary.
+      - DATABASE_URL=postgresql+psycopg2://panel_tool:${ENERGY_MONITOR_DB_PASSWORD}@energy-monitor-db:5432/panel_tool
       - SECRET_KEY=${ENERGY_MONITOR_SECRET_KEY}
       - PANEL_TOOL_DATA_DIR=/data
     volumes:
