@@ -261,7 +261,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Content-Encoding: br' -d x \
 
 From outside the LAN (phone hotspot), the same URL against the public IP
 must give 403:
-`curl -sk -o /dev/null -w '%{http_code}\n' --resolve deptrack.ops.markcheli.com:443:173.48.155.66 https://deptrack.ops.markcheli.com/`.
+`curl -sk -o /dev/null -w '%{http_code}\n' --resolve deptrack.ops.markcheli.com:443:<public-ip> https://deptrack.ops.markcheli.com/`
+(`<public-ip>`: the server's current public IP; don't commit it here).
 
 ### 5. Admin password and configuration
 
