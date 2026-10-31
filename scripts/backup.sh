@@ -220,6 +220,35 @@ backup_energy_monitor_db() {
     success "Energy Monitor database backed up: ${dump_file}.gz"
 }
 
+# Dump Dependency-Track PostgreSQL database (all DT state: projects,
+# findings, audit decisions, alert rules, encrypted secrets). The KEK that
+# decrypts those secrets is in the deptrack_data volume, backed up below.
+backup_deptrack_db() {
+    log "Backing up Dependency-Track database..."
+    local dump_file="${BACKUP_ROOT}/databases/deptrack_${TIMESTAMP}.sql"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would dump Dependency-Track PostgreSQL to ${dump_file}"
+        return
+    fi
+
+    # Not deployed yet (or removed): nothing to dump, not a failure. A
+    # container that exists but is stopped still fails the dump below.
+    if ! docker inspect deptrack-db >/dev/null 2>&1; then
+        log "  deptrack-db container not found, skipping"
+        return 0
+    fi
+
+    docker exec deptrack-db pg_dump -U dtrack dtrack \
+        > "${dump_file}" 2>/dev/null || {
+        error "Failed to dump Dependency-Track database"
+        return 1
+    }
+
+    gzip -f "${dump_file}"
+    success "Dependency-Track database backed up: ${dump_file}.gz"
+}
+
 # Backup Docker volumes
 backup_docker_volumes() {
     log "Backing up Docker volumes..."
@@ -238,6 +267,7 @@ backup_docker_volumes() {
         "83rr-poweredge_asa_server_files"
         "83rr-poweredge_uptime_kuma_data"       # monitors, notifications, status page (SQLite)
         "83rr-poweredge_ntfy_data"              # ntfy users, access rules, tokens (user.db)
+        "83rr-poweredge_deptrack_data"          # Dependency-Track KEK keyset (decrypts DB secrets) + file storage
     )
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -533,6 +563,7 @@ main() {
     backup_tallied_db        || record_failure "Tallied DB dump"
     backup_tasks_db          || record_failure "Tasks DB dump"
     backup_energy_monitor_db || record_failure "Energy Monitor DB dump"
+    backup_deptrack_db       || record_failure "Dependency-Track DB dump"
 
     # File backups
     backup_configs       || record_failure "Configuration files"

@@ -26,6 +26,7 @@ below are a hot copy of the data dirs and may not be crash-consistent.
 | Tallied (PostgreSQL) | `tallied_<ts>.sql.gz` | `tallied-db` | `pg_dump tallied` |
 | Tasks (PostgreSQL) | `tasks_<ts>.sql.gz` | `tasks-db` | `pg_dump tasks` |
 | Energy Monitor (PostgreSQL) | `energy_monitor_<ts>.sql.gz` | `energy-monitor-db` | `pg_dump panel_tool` |
+| Dependency-Track (PostgreSQL) | `deptrack_<ts>.sql.gz` | `deptrack-db` | `pg_dump dtrack` (its data dir is not rsynced: the dump is authoritative and the mirrored NVD/OSV data makes the dir large). Skipped, not failed, while the `deptrack-db` container doesn't exist |
 
 The `cleanup_old_backups` step keeps the newest `DB_DUMPS_KEEP_PER_SERVICE` (14) compressed
 dumps **per service**, derived from the filename prefix, so a new service is covered
@@ -66,6 +67,7 @@ function, so the list is what a real run would delete.
 | `83rr-poweredge_energy_monitor_data` | small | Snapshots and logs from the panel-tool app |
 | `83rr-poweredge_uptime_kuma_data` | 666 M | Uptime Kuma monitors, notifications, status page, heartbeat history (SQLite; copied live, WAL files included) |
 | `83rr-poweredge_ntfy_data` | <1 M | ntfy users, access rules and tokens (`user.db`); message cache |
+| `83rr-poweredge_deptrack_data` | small | Dependency-Track's KEK keyset (`.dependency-track/keys/`). **Restore it together with the `deptrack_*.sql.gz` dump**: without it the secrets stored in the DB (ntfy token, GitHub token) can't be decrypted and must be re-entered (`scripts/deptrack-setup.sh apply`) |
 
 ---
 
@@ -227,6 +229,13 @@ gunzip -c /mnt/nas/83rr-backup/databases/tasks_<ts>.sql.gz | \
 # Energy Monitor
 gunzip -c /mnt/nas/83rr-backup/databases/energy_monitor_<ts>.sql.gz | \
   docker exec -i energy-monitor-db psql -U panel_tool panel_tool
+
+# Dependency-Track: restore into an EMPTY database with the apiserver
+# stopped, restore the deptrack_data volume first, then start the apiserver
+# (same or newer DT version; it runs migrations). See docs/dependency-track.md.
+docker compose stop deptrack-apiserver
+gunzip -c /mnt/nas/83rr-backup/databases/deptrack_<ts>.sql.gz | \
+  docker exec -i deptrack-db psql -U dtrack dtrack
 ```
 
 The Postgres targets need the database to exist (it will, from the volume restore) —
