@@ -1,0 +1,22 @@
+# ntfy server config (ntfy.markcheli.com). Mounted read-only at /etc/ntfy/server.yml.
+# Users, access rules and tokens are NOT here: they live in user.db in the
+# ntfy_data volume and are managed with `docker exec ntfy ntfy user|access|token ...`.
+# See infrastructure/opensearch/config/alerting/README.md ("ntfy").
+
+base-url: "https://ntfy.markcheli.com"
+listen-http: ":80"
+behind-proxy: true
+
+cache-file: "/var/lib/ntfy/cache.db"
+cache-duration: "72h"
+
+# Nothing is readable or writable without logging in.
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+enable-signup: false
+enable-login: true
+
+# iOS can't keep a connection to a self-hosted server, so ntfy asks ntfy.sh to
+# send an APNs wake-up. ntfy.sh only gets a poll request carrying the message ID;
+# the app then fetches the message itself from this server.
+upstream-base-url: "https://ntfy.sh"

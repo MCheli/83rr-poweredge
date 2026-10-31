@@ -52,10 +52,10 @@
       },
       "actions": [
         {
-          "name": "email-mpcheli",
-          "destination_id": "cVtg7p0BAgiY_8mBBS8g",
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"personalizations\":[{\"to\":[{\"email\":\"mpcheli7@gmail.com\"}]}],\"from\":{\"email\":\"status@markcheli.com\",\"name\":\"Homelab Alerts\"},\"subject\":\"[homelab] healthcheck failures: {{ctx.results.0.hits.total.value}} in 5 min\",\"content\":[{\"type\":\"text/plain\",\"value\":\"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\nWindow: last 5 minutes\\nTotal non-200 healthchecks: {{ctx.results.0.hits.total.value}}\\n\\n=== By service ===\\n{{#ctx.results.0.aggregations.by_service.buckets}}\\n[{{key}}] {{doc_count}} failure(s):{{#by_status.buckets}} status={{key}}({{doc_count}}){{/by_status.buckets}}\\n{{/ctx.results.0.aggregations.by_service.buckets}}\\n=== Investigate ===\\n  docker ps | grep <service>\\n  docker compose logs --tail 100 <service>\\n  curl -fsS http://<service>:<port>/health\\n\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}],\"tracking_settings\":{\"click_tracking\":{\"enable\":false,\"enable_text\":false},\"open_tracking\":{\"enable\":false},\"subscription_tracking\":{\"enable\":false}}}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] healthcheck failures: {{ctx.results.0.hits.total.value}} in 5 min\", \"message\": \"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\nWindow: last 5 minutes\\nTotal non-200 healthchecks: {{ctx.results.0.hits.total.value}}\\n\\n=== By service ===\\n{{#ctx.results.0.aggregations.by_service.buckets}}\\n[{{key}}] {{doc_count}} failure(s):{{#by_status.buckets}} status={{key}}({{doc_count}}){{/by_status.buckets}}\\n{{/ctx.results.0.aggregations.by_service.buckets}}\\n=== Investigate ===\\n  docker ps | grep <service>\\n  docker compose logs --tail 100 <service>\\n  curl -fsS http://<service>:<port>/health\\n\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 4, \"tags\": [\"rotating_light\"]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,

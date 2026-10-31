@@ -134,6 +134,7 @@ docker compose down -v
 22. **watchtower** - Automatic container updates (monitors ghcr.io images)
 23. **openclaw** - Self-hosted agent/automation runtime (image `ghcr.io/openclaw/openclaw:latest`), on its own `openclaw_nginx-openclaw` network; runtime data (secrets, credentials, workspace, agent state) under `infrastructure/openclaw/` (gitignored). Not proxied through the main nginx.
 24. **edge-tts / faster-whisper** - TTS/STT side services (ports 5050 / 5051)
+25. **ntfy** - Push notifications for homelab alerts (ntfy.markcheli.com, deny-all auth). OpenSearch alerting + Uptime Kuma publish to topic `homelab`; replaced SendGrid 2026-10-31. Setup: `infrastructure/opensearch/config/alerting/README.md`
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -158,6 +159,7 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://home.markcheli.com** - Home Assistant smart home platform
 - **https://money.markcheli.com** - Tallied personal finance dashboard (Google SSO)
 - **https://tasks.markcheli.com** - Tasks cycle-based todo app (Google SSO)
+- **https://ntfy.markcheli.com** - ntfy push alerts (deny-all; publish token `NTFY_PUBLISH_TOKEN` in `.env`)
 - **minecraft.markcheli.com:25565** - Minecraft server
 
 ### LAN-Only Services (HTTPS with Let's Encrypt)
