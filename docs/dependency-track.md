@@ -186,12 +186,13 @@ cd ~/83rr-poweredge
 crontab -l | grep -v 'scripts/sbom-scan.sh' | crontab -       # stop the nightly scan
 docker compose -f docker-compose.yml -f docker-compose.prod.yml stop deptrack-frontend deptrack-apiserver deptrack-db
 docker compose -f docker-compose.yml -f docker-compose.prod.yml rm -f deptrack-frontend deptrack-apiserver deptrack-db
-git revert <merge commit of the Dependency-Track PR>          # removes services, vhost, backup step, scripts
+# Revert through a PR on GitHub (don't commit on the server), then on the server:
+git pull                                                      # removes services, vhost, backup step, scripts
 docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
 ```
 
-`git revert` also removes the `backup_deptrack_db` step; without it, the
-nightly backup would report a failure once `deptrack-db` is gone. Data stays
+The revert also removes the `backup_deptrack_db` step. That step already
+skips a missing `deptrack-db`, so the backup stays green either way. Data stays
 in the two volumes. To delete it for good (only after a final backup, and
 only with Mark's OK): `docker volume rm 83rr-poweredge_deptrack_db_data
 83rr-poweredge_deptrack_data`, and remove `DEPTRACK_DB_PASSWORD` / `DT_API_KEY`
@@ -207,8 +208,14 @@ anything unexpected; don't improvise around a 4xx/5xx.
 
 Use `DC="docker compose -f docker-compose.yml -f docker-compose.prod.yml"`.
 
-**Timing:** finish at least step 4 before 02:00, or that night's `backup.sh`
-reports a failure (no `deptrack-db` to dump) and suppresses its heartbeat.
+**Timing:** do step 1 right after `git pull`. Until `DEPTRACK_DB_PASSWORD`
+is in `.env`, every `docker compose` command in this directory fails on the
+`:?` check (the same as `GRAFANA_ADMIN_PASSWORD`), for every service.
+`backup.sh` skips the Dependency-Track dump while `deptrack-db` doesn't
+exist. But once the container exists it must be running at 02:00, or that
+night's backup records a failure and suppresses its heartbeat. So if you
+stop mid-deploy, either finish before 02:00 or remove the containers
+(`$DC rm -sf deptrack-frontend deptrack-apiserver deptrack-db`).
 
 ### 1. Pull and prepare `.env`
 
@@ -237,7 +244,9 @@ openssl x509 -in infrastructure/nginx/certs/letsencrypt-ops-markcheli.crt -noout
 ```bash
 $DC pull deptrack-db deptrack-apiserver deptrack-frontend
 $DC up -d deptrack-db deptrack-apiserver deptrack-frontend
-watch -n 10 'docker ps --filter name=deptrack --format "{{.Names}} {{.Status}}"'
+for i in $(seq 1 40); do                      # up to ~7 min
+  [ "$(docker ps --filter name=deptrack --filter health=healthy -q | wc -l)" -eq 3 ] && break; sleep 10
+done; docker ps --filter name=deptrack --format '{{.Names}} {{.Status}}'
                                               # all three "(healthy)"; apiserver can take ~3 min
 $DC logs --tail 100 deptrack-apiserver | grep -iE 'error|exception' || echo NO_ERRORS
 docker exec deptrack-apiserver wget -qO- http://127.0.0.1:9000/health/ready   # "UP"
@@ -301,9 +310,9 @@ scripts/sbom-scan.sh --no-notify          # rerun: "0 uploaded, N unchanged" (id
 
 Large images (plex, faster-whisper, asa) take the longest. Any failures are
 listed in `logs/sbom-scan.log`; report them rather than skipping.
-In the UI, open a couple of projects (uptime-kuma, openclaw, nginx) and check
-the components/findings look sane (expect the Node / libbrotli findings from
-the 2026-10-31 sweep, if those images haven't been bumped yet).
+In the UI, open a few projects and check that the components and findings
+look sane. The findings should match what the latest security sweep found
+for images that haven't been bumped yet.
 
 ### 8. Alerts
 
@@ -342,7 +351,11 @@ Next morning: `tail -20 logs/sbom-scan.log` shows the 03:30 run, and
 
 ### Rollback during deploy
 
-Anything wrong before step 9: `$DC stop deptrack-frontend deptrack-apiserver deptrack-db`,
-then follow **Rollback / removal** above (cron line, `git revert`, nginx
-reload). Restore `.env` from the `.env.<date>-pre-deptrack.bak` copy if needed.
+Anything wrong before step 9:
+`$DC rm -sf deptrack-frontend deptrack-apiserver deptrack-db` (stop and remove
+them, so the 02:00 backup skips the dump instead of failing on a stopped DB;
+the volumes stay). If the change has to come out entirely, follow
+**Rollback / removal** above: the cron line, a revert PR + `git pull`, and an
+nginx reload. Until the revert lands, nginx keeps the vhost; it just returns
+502 for deptrack.ops because of the variable `proxy_pass`. Restore `.env` from the `.env.<date>-pre-deptrack.bak` copy if needed.
 No other service is touched by this change, so nothing else needs restarting.

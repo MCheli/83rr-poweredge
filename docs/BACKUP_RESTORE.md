@@ -26,7 +26,7 @@ below are a hot copy of the data dirs and may not be crash-consistent.
 | Tallied (PostgreSQL) | `tallied_<ts>.sql.gz` | `tallied-db` | `pg_dump tallied` |
 | Tasks (PostgreSQL) | `tasks_<ts>.sql.gz` | `tasks-db` | `pg_dump tasks` |
 | Energy Monitor (PostgreSQL) | `energy_monitor_<ts>.sql.gz` | `energy-monitor-db` | `pg_dump panel_tool` |
-| Dependency-Track (PostgreSQL) | `deptrack_<ts>.sql.gz` | `deptrack-db` | `pg_dump dtrack` (its data dir is not rsynced: the dump is authoritative and the mirrored NVD/OSV data makes the dir large) |
+| Dependency-Track (PostgreSQL) | `deptrack_<ts>.sql.gz` | `deptrack-db` | `pg_dump dtrack` (its data dir is not rsynced: the dump is authoritative and the mirrored NVD/OSV data makes the dir large). Skipped, not failed, while the `deptrack-db` container doesn't exist |
 
 The `cleanup_old_backups` step keeps the newest `DB_DUMPS_KEEP_PER_SERVICE` (14) compressed
 dumps **per service**, derived from the filename prefix, so a new service is covered
