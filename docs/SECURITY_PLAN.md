@@ -137,35 +137,6 @@ an outage (c538355); `/storage` mount race mitigated by
 - [ ] **P3-6 Don't bake secrets into images**: `infrastructure/nginx/Dockerfile`
   COPYs `certs/` and `.htpasswd` — mount at runtime instead; never push that image.
 
-## CVE sweep (2026-10-31)
-
-Repo-side fixes are on branch `security/2026-10-31-sweep`: Grafana 12.4.9
-(CVE-2026-17183), the nginx base pinned to 1.30.6-alpine (CVE-2026-15176/-97629),
-a `Content-Encoding: br` request-body 415 on every :443 vhost (interim fix for
-CVE-2026-111497, the Brotli decoder bug), and script deps bumped.
-Still open:
-
-- [ ] **S-1 Rebuild + redeploy nginx**: prod runs `ghcr.io/mcheli/nginx:latest`,
-  and no CI in this repo builds it, so its nginx version is unknown. Rebuild it
-  from the pinned Dockerfile, or point prod at `build:` (see P3-6: it bakes in
-  certs/.htpasswd, so never push it publicly). Then `nginx -t` + reload. **[me]**
-- [ ] **S-2 Uptime Kuma `:1`** is on an EOL Node (18-era) with no Brotli fix,
-  and it is public (status.markcheli.com). Migrate it to `:2` (DB migration;
-  see the upstream "Migration From v1 To v2" guide) and pin by digest, together with P1-2. **[me]**
-- [ ] **S-3 App images**: check the Node/Python runtimes in personal-website,
-  cookbook, flask-api, tallied, tasks, daily-report, panel-tool and openclaw
-  against the fixed versions (Node 22.23.4 / 24.22.1 / 26.12.1; PyPI
-  brotli/brotlicffi >= 1.2.1). Those images are built in their own repos. **[me]**
-- [ ] **S-4 Host kernel** (Fragnesia, CVE-2026-46300): needs
-  6.8.0-124.124 (GA) or 6.17.0-35.35~24.04.1 (HWE), plus libbrotli
-  1.1.0-2ubuntu0.1. No active container is `privileged` or has
-  NET_ADMIN/SYS_ADMIN, but the docker.sock mounts (watchtower rw, plus
-  uptime-kuma and fluent-bit) are already root-equivalent, see P2-3. **[sudo]**
-- [ ] **S-5 Delete `infrastructure/monitoring/docker-compose.yml`**: it's a
-  dead Traefik-era stack (privileged cadvisor, root Grafana 10.2.0,
-  Prometheus 2.48) that nothing references. If someone runs it by mistake,
-  it starts insecure duplicates. **[me]**
-
 ## Open questions for the owner
 
 1. Does anything off-host need Postgres 5432 (the `tld_*` tenant roles)?
