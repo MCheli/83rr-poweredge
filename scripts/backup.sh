@@ -229,7 +229,7 @@ backup_docker_volumes() {
     local volumes=(
         "83rr-poweredge_grafana_data"
         "83rr-poweredge_prometheus_data"
-        "83rr-poweredge_minecraft_data"
+        "83rr-poweredge_minecraft_data_local"   # the live world: docker-compose.override.yml mounts minecraft_data_local
         "83rr-poweredge_plex_config"
         "83rr-poweredge_tallied_db_data"
         "83rr-poweredge_tasks_db_data"
