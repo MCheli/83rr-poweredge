@@ -232,6 +232,13 @@ backup_deptrack_db() {
         return
     fi
 
+    # Not deployed yet (or removed): nothing to dump, not a failure. A
+    # container that exists but is stopped still fails the dump below.
+    if ! docker inspect deptrack-db >/dev/null 2>&1; then
+        log "  deptrack-db container not found, skipping"
+        return 0
+    fi
+
     docker exec deptrack-db pg_dump -U dtrack dtrack \
         > "${dump_file}" 2>/dev/null || {
         error "Failed to dump Dependency-Track database"
