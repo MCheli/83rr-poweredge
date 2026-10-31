@@ -236,6 +236,8 @@ backup_docker_volumes() {
         "83rr-poweredge_energy_monitor_db_data"
         "83rr-poweredge_energy_monitor_data"
         "83rr-poweredge_asa_server_files"
+        "83rr-poweredge_uptime_kuma_data"       # monitors, notifications, status page (SQLite)
+        "83rr-poweredge_ntfy_data"              # ntfy users, access rules, tokens (user.db)
     )
 
     if [[ "$DRY_RUN" == true ]]; then
