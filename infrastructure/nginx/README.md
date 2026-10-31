@@ -32,8 +32,10 @@ nginx/
 ├── certs/               # SSL certificates (production)
 │   ├── wildcard-markcheli.crt      # Cloudflare Origin Cert (*.markcheli.com)
 │   ├── wildcard-markcheli.key      # Private key
-│   ├── letsencrypt-ops-markcheli.crt  # Let's Encrypt (*.ops.markcheli.com)
-│   └── letsencrypt-ops-markcheli.key  # Private key
+│   ├── letsencrypt-ops-markcheli.crt  # Let's Encrypt (*.ops.markcheli.com), not in git
+│   ├── letsencrypt-ops-markcheli.key  # Private key, not in git
+│   ├── letsencrypt-status.crt         # Let's Encrypt (status.markcheli.com), not in git
+│   └── letsencrypt-status.key         # Private key, not in git
 ├── dev-certs/           # Self-signed certificates (development)
 └── logs/                # NGINX logs (legacy, now uses stdout)
 ```
@@ -81,8 +83,12 @@ The following upstreams are defined in `conf.d/production.conf`:
 ### Let's Encrypt Certificates (LAN Services)
 - **Validity**: 90 days (auto-renewal)
 - **Challenge**: DNS-01 via Cloudflare API
-- **Files**: `letsencrypt-ops-markcheli.crt`, `letsencrypt-ops-markcheli.key`
-- **Renewal**: Daily cron job at 3:00 AM
+- **Files**: `letsencrypt-ops-markcheli.crt`/`.key` and `letsencrypt-status.crt`/`.key`
+- **Renewal**: Daily cron job at 3:00 AM (`scripts/renew-letsencrypt-certs.sh`) copies renewed
+  certs from `~/letsencrypt` into `certs/` and reloads NGINX
+- **Not in git**: these files are gitignored because renewal rewrites them in place. To rebuild
+  a checkout, copy them from `~/letsencrypt/config/live/` (or the NAS backup under
+  `latest/config/letsencrypt/`) using the same mapping as the renewal script
 
 ## Management Commands
 

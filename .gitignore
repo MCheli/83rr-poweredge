@@ -12,6 +12,13 @@ secrets/
 *.p12
 *.keystore
 
+# Let's Encrypt certs are renewed in place on the server by
+# scripts/renew-letsencrypt-certs.sh, so tracking them made every renewal show
+# up as drift. The source of truth is ~/letsencrypt on the server; backup.sh
+# copies both it and these files to the NAS nightly. Their keys (*.key) were
+# never tracked, so a fresh clone already needed restoring from there.
+infrastructure/nginx/certs/letsencrypt-*.crt
+
 # Python
 venv/
 *.pyc
