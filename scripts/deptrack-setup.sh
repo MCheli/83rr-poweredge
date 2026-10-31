@@ -105,6 +105,12 @@ expect() {  # expect "<what>" <code> <ok codes...>
     for ok in "$@"; do [[ "$code" == "$ok" ]] && return 0; done
     die "${what}: HTTP ${code} $(head -c 400 "${WORK}/resp")"
 }
+# secret_file NAME VALUE -> path of a 0600 file holding VALUE (no newline), for
+# curl's --data-urlencode name@file: keeps passwords out of argv (ps-visible).
+secret_file() {
+    ( umask 077; printf '%s' "$2" > "${WORK}/sec-$1" )
+    echo "${WORK}/sec-$1"
+}
 urlenc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
 
 wait_for_api() {
@@ -120,7 +126,8 @@ wait_for_api() {
 login() {  # login USER PASSWORD -> writes bearer auth header file
     local code
     rm -f "${WORK}/auth-hdr"
-    code=$(api POST /api/v1/user/login --data-urlencode "username=$1" --data-urlencode "password=$2")
+    code=$(api POST /api/v1/user/login --data-urlencode "username=$1" \
+        --data-urlencode "password@$(secret_file login-pw "$2")")
     [[ "$code" == 200 ]] || return 1
     umask 077
     printf 'Authorization: Bearer %s\n' "$(cat "${WORK}/resp")" > "${WORK}/auth-hdr"
@@ -140,8 +147,8 @@ init_admin() {
     local pw code
     pw=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
     code=$(api POST /api/v1/user/forceChangePassword --data-urlencode username=admin \
-        --data-urlencode password=admin --data-urlencode "newPassword=${pw}" \
-        --data-urlencode "confirmPassword=${pw}")
+        --data-urlencode password=admin --data-urlencode "newPassword@$(secret_file new-pw "$pw")" \
+        --data-urlencode "confirmPassword@$(secret_file new-pw "$pw")")
     expect "change default admin password (already changed? then use the password from 1Password)" "$code" 200
     mkdir -p "$(dirname "$ADMIN_PW_FILE")"
     ( umask 077; printf '%s\n' "$pw" > "$ADMIN_PW_FILE" )
@@ -356,9 +363,9 @@ EOF
         code=$(api PUT "/api/v1/team/${team_uuid}/key")
         expect "create API key" "$code" 201
         key=$(json "d['key']")
-        python3 - "$ENV_FILE" "$key" <<'EOF'
+        DT_NEW_KEY_="$key" python3 - "$ENV_FILE" <<'EOF'
 import os, sys
-path, key = sys.argv[1], sys.argv[2]
+path, key = sys.argv[1], os.environ["DT_NEW_KEY_"]
 lines = open(path).read().splitlines() if os.path.exists(path) else []
 lines = [l for l in lines if not l.startswith("DT_API_KEY=")] + [f"DT_API_KEY={key}"]
 tmp = path + ".tmp"
@@ -383,6 +390,8 @@ test_alert() {
     log "test notification dispatched; checking ntfy's cache..."
     sleep 10
     docker cp -q ntfy:/var/lib/ntfy/cache.db "${WORK}/cache.db" || die "cannot read ntfy cache"
+    # If the cache runs in WAL mode, the newest messages are still in the -wal file.
+    docker cp -q ntfy:/var/lib/ntfy/cache.db-wal "${WORK}/cache.db-wal" 2>/dev/null || true
     python3 - "${WORK}/cache.db" "$start" <<'EOF'
 import sqlite3, sys
 c = sqlite3.connect(sys.argv[1])
