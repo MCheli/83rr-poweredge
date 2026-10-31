@@ -19,12 +19,16 @@
 #        3. secret NTFY_AUTH_HEADER = "Bearer $NTFY_PUBLISH_TOKEN"
 #        4. publisher "ntfy" (webhook + infrastructure/dependency-track/ntfy-template.peb)
 #        5. alert "ntfy: new HIGH/CRITICAL vulnerabilities" (NEW_VULNERABILITY,
-#           NEW_VULNERABLE_DEPENDENCY, severity >= HIGH or known-exploited)
+#           NEW_VULNERABLE_DEPENDENCY, severity >= HIGH or known-exploited).
+#           Created DISABLED (keeps its on/off state on re-runs), so the
+#           first scan doesn't push every existing finding.
 #        6. team "sbom-scanner" + API key -> DT_API_KEY in .env (only when the
 #           current DT_API_KEY doesn't work)
 #
-#   scripts/deptrack-setup.sh test-alert
-#       Sends the alert's test notification and checks it reached ntfy.
+#   scripts/deptrack-setup.sh status        mirror runs, project count, alert state
+#   scripts/deptrack-setup.sh alerts on|off turn the ntfy alert rule on/off
+#   scripts/deptrack-setup.sh test-alert    send the rule's test notification
+#                                           and check it reached ntfy
 #
 # Talks to the apiserver container on the docker bridge (DT_URL overrides).
 # =============================================================================
@@ -50,8 +54,10 @@ OSV_ECOSYSTEMS='["Alpine", "Debian", "Ubuntu", "npm", "PyPI", "Go", "Maven", "cr
 FILTER_EXPRESSION='group == Group.GROUP_NEW_VULNERABILITY ? (subject.vulnerability.severity in ["CRITICAL", "HIGH"] || subject.vulnerability.is_kev) : subject.vulnerabilities.exists(v, v.severity in ["CRITICAL", "HIGH"] || v.is_kev)'
 
 cmd="${1:-}"
-[[ "$cmd" == init-admin || "$cmd" == apply || "$cmd" == test-alert ]] || {
-    sed -n '2,31p' "$0"; exit 2; }
+case "$cmd" in
+    init-admin|apply|alerts|status|test-alert) ;;
+    *) sed -n '2,34p' "$0"; exit 2 ;;
+esac
 
 log() { echo "[deptrack-setup] $*"; }
 die() { echo "[deptrack-setup] ERROR: $*" >&2; exit 1; }
@@ -199,10 +205,68 @@ print(json.dumps({"config": cur}))' "${WORK}/resp" "$patch" > "${WORK}/cfg.json"
     esac
 }
 
+write_rule() {  # write_rule UUID true|false  (full update of the alert rule)
+    local code
+    python3 - "$1" "$2" "$RULE_NAME" "$FILTER_EXPRESSION" "$SECRET_NAME" > "${WORK}/rule.json" <<'EOF'
+import json, sys
+uuid, enabled, name, expr, secret = sys.argv[1:6]
+print(json.dumps({
+    "uuid": uuid, "name": name, "scope": "PORTFOLIO", "level": "INFORMATIONAL",
+    "enabled": enabled == "true", "logSuccessfulPublish": True, "notifyChildren": True,
+    "notifyOn": ["NEW_VULNERABILITY", "NEW_VULNERABLE_DEPENDENCY"],
+    "filterExpression": expr,
+    # authHeaderValue is a secret *reference* (x-secret-ref): the secret's name.
+    "publisherConfig": json.dumps({"destinationUrl": "http://ntfy/",
+                                   "authHeaderName": "Authorization",
+                                   "authHeaderValue": secret}),
+}))
+EOF
+    code=$(api POST /api/v1/notification/rule -H 'Content-Type: application/json' -d @"${WORK}/rule.json")
+    expect "configure rule" "$code" 200 304
+}
+
+find_rule() {  # -> rule uuid or dies
+    local code uuid
+    code=$(api GET /api/v1/notification/rule)
+    expect "list rules" "$code" 200
+    uuid=$(json "next((r['uuid'] for r in d if r['name'] == '''${RULE_NAME}'''), None)")
+    [[ -n "$uuid" ]] || die "rule '${RULE_NAME}' not found; run apply first"
+    echo "$uuid"
+}
+
+alerts() {  # alerts on|off
+    [[ "${1:-}" == on || "${1:-}" == off ]] || die "usage: $0 alerts on|off"
+    wait_for_api
+    admin_login
+    local rule_uuid
+    rule_uuid=$(find_rule)
+    write_rule "$rule_uuid" "$([[ "$1" == on ]] && echo true || echo false)"
+    log "alert rule '${RULE_NAME}' is now $1"
+}
+
+status() {
+    wait_for_api
+    admin_login
+    local src code
+    for src in osv nvd github; do
+        code=$(api GET "/api/v2/vuln-data-sources/${src}/mirror-runs/latest")
+        if [[ "$code" == 200 ]]; then
+            log "mirror ${src}: $(json "d.get('status')") $(json "d.get('failure_reason') or ''")"
+        else
+            log "mirror ${src}: no run (HTTP ${code})"
+        fi
+    done
+    code=$(api GET /api/v1/project -G --data-urlencode pageSize=500)
+    expect "list projects" "$code" 200
+    log "projects: $(json "len(d)") ($(json "sum(1 for p in d if p.get('isLatest'))") latest versions)"
+    code=$(api GET /api/v1/notification/rule)
+    log "alert rule enabled: $(json "next((r.get('enabled') for r in d if r['name'] == '''${RULE_NAME}'''), 'missing')")"
+}
+
 apply() {
     wait_for_api
     admin_login
-    local ntfy_token github_token code pub_uuid rule_uuid team_uuid key perm
+    local ntfy_token github_token code pub_uuid rule_uuid team_uuid key perm enabled
 
     # 1. Base URL
     set_config_property general base.url "$BASE_URL"
@@ -259,25 +323,15 @@ EOF
             -d "{\"name\": \"${RULE_NAME}\", \"scope\": \"PORTFOLIO\", \"level\": \"INFORMATIONAL\", \"publisher\": {\"uuid\": \"${pub_uuid}\"}}")
         expect "create rule" "$code" 201
         rule_uuid=$(json "d['uuid']")
-        log "alert rule created"
+        # Created OFF: the first scan would otherwise push every existing
+        # HIGH finding. Turn on with `alerts on` after the first scan.
+        enabled=false
+        log "alert rule created (disabled until 'alerts on')"
+    else
+        enabled=$(json "next((str(r.get('enabled', False)).lower() for r in d if r['uuid'] == '${rule_uuid}'), 'false')")
     fi
-    python3 - "$rule_uuid" "$RULE_NAME" "$FILTER_EXPRESSION" "$SECRET_NAME" > "${WORK}/rule.json" <<'EOF'
-import json, sys
-uuid, name, expr, secret = sys.argv[1:5]
-print(json.dumps({
-    "uuid": uuid, "name": name, "scope": "PORTFOLIO", "level": "INFORMATIONAL",
-    "enabled": True, "logSuccessfulPublish": True, "notifyChildren": True,
-    "notifyOn": ["NEW_VULNERABILITY", "NEW_VULNERABLE_DEPENDENCY"],
-    "filterExpression": expr,
-    # authHeaderValue is a secret *reference* (x-secret-ref): the secret's name.
-    "publisherConfig": json.dumps({"destinationUrl": "http://ntfy/",
-                                   "authHeaderName": "Authorization",
-                                   "authHeaderValue": secret}),
-}))
-EOF
-    code=$(api POST /api/v1/notification/rule -H 'Content-Type: application/json' -d @"${WORK}/rule.json")
-    expect "configure rule" "$code" 200 304
-    log "alert rule '${RULE_NAME}' -> http://ntfy/ (topic homelab), groups NEW_VULNERABILITY + NEW_VULNERABLE_DEPENDENCY"
+    write_rule "$rule_uuid" "$enabled"
+    log "alert rule '${RULE_NAME}' -> http://ntfy/ (topic homelab), NEW_VULNERABILITY + NEW_VULNERABLE_DEPENDENCY, enabled=${enabled}"
 
     # 6. Scanner team + key
     code=$(api GET /api/v1/team)
@@ -322,10 +376,7 @@ test_alert() {
     wait_for_api
     admin_login
     local code rule_uuid start
-    code=$(api GET /api/v1/notification/rule)
-    expect "list rules" "$code" 200
-    rule_uuid=$(json "next((r['uuid'] for r in d if r['name'] == '''${RULE_NAME}'''), None)")
-    [[ -n "$rule_uuid" ]] || die "rule '${RULE_NAME}' not found; run apply first"
+    rule_uuid=$(find_rule)
     start=$(date +%s)
     code=$(api POST "/api/v1/notification/publisher/test/${rule_uuid}")
     expect "send test notification" "$code" 200
@@ -345,5 +396,7 @@ EOF
 case "$cmd" in
     init-admin) init_admin ;;
     apply)      apply ;;
+    alerts)     alerts "${2:-}" ;;
+    status)     status ;;
     test-alert) test_alert ;;
 esac
