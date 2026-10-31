@@ -122,7 +122,7 @@ curl https://flask.markcheli.com/health
 - **OS**: Ubuntu Server 24.04.3 LTS
 - **User**: mcheli
 - **Local IP**: 192.168.1.179
-- **Public IP**: 173.48.98.211
+- **Public IP**: 173.48.155.66
 - **Management**: Docker Compose (native)
 
 ## Architecture

@@ -233,13 +233,13 @@ docker compose exec nginx nginx -s reload
 DNS records can be managed two ways: via the Cloudflare Dashboard (for one-offs / proxied flag changes) or via `scripts/cloudflare_dns_manager.py` (preferred for adding LAN-only `*.ops.markcheli.com` records — the script defaults to `proxied: false`, which matches the existing LAN pattern).
 
 **Public Services** (proxied through Cloudflare):
-- `www.markcheli.com` → A record → `173.48.98.211` (public IP)
-- `flask.markcheli.com` → A record → `173.48.98.211`
-- `videos.markcheli.com` → A record → `173.48.98.211`
-- `files.markcheli.com` → A record → `173.48.98.211`
-- `home.markcheli.com` → A record → `173.48.98.211`
-- `tasks.markcheli.com` → A record → `173.48.98.211`
-- `minecraft.markcheli.com` → A record → `173.48.98.211`
+- `www.markcheli.com` → A record → `173.48.155.66` (public IP)
+- `flask.markcheli.com` → A record → `173.48.155.66`
+- `videos.markcheli.com` → A record → `173.48.155.66`
+- `files.markcheli.com` → A record → `173.48.155.66`
+- `home.markcheli.com` → A record → `173.48.155.66`
+- `tasks.markcheli.com` → A record → `173.48.155.66`
+- `minecraft.markcheli.com` → A record → `173.48.155.66`
 
 **LAN Services** (DNS-only, not proxied):
 - `*.ops.markcheli.com` → A record → `192.168.1.179` (LAN IP)

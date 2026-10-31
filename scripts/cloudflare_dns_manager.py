@@ -286,15 +286,15 @@ class CloudflareDNSManager:
         # Note: ops.markcheli.com records are managed as subdomains of markcheli.com
         infrastructure_records = {
             'markcheli.com': {
-                'public_ip': '173.48.98.211',  # Update with actual public IP
+                'public_ip': '173.48.155.66',  # Update with actual public IP
                 'records': [
                     # Public services
-                    ('www', 'A', '173.48.98.211'),
-                    ('flask', 'A', '173.48.98.211'),
-                    ('data', 'A', '173.48.98.211'),
-                    ('home', 'A', '173.48.98.211'),
-                    ('videos', 'A', '173.48.98.211'),
-                    ('files', 'A', '173.48.98.211'),
+                    ('www', 'A', '173.48.155.66'),
+                    ('flask', 'A', '173.48.155.66'),
+                    ('data', 'A', '173.48.155.66'),
+                    ('home', 'A', '173.48.155.66'),
+                    ('videos', 'A', '173.48.155.66'),
+                    ('files', 'A', '173.48.155.66'),
                     # LAN services (*.ops.markcheli.com as subdomains)
                     ('traefik-local.ops', 'A', '192.168.1.179'),
                     ('portainer-local.ops', 'A', '192.168.1.179'),
