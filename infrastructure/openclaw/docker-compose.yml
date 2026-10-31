@@ -8,7 +8,9 @@ services:
     # Pinned by digest 2026-05-17 (was :latest) — 3rd-party agent runtime
     # with access to credentials/agent state; do not auto-update. Bump
     # deliberately after reviewing upstream release notes.
-    image: ghcr.io/openclaw/openclaw@sha256:dd11fba81ea21ba405c2ca8479610f968e5d3a56455ed173c434aff15fbd615f
+    # 2026.10.9 / Node 24.22.1 (bumped 2026-10-31 from 2026.4.11 / Node
+    # 24.14.0 for CVE-2026-111497, Brotli decoder).
+    image: ghcr.io/openclaw/openclaw@sha256:1a2a3ce113e435039dbeac5ae261759bb4759908563d91c81059e896b38c5d98
     container_name: openclaw
     restart: unless-stopped
     env_file: .env
