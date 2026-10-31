@@ -132,7 +132,7 @@ infrastructure/minecraft/
 ## 🌐 DNS Configuration
 
 The server requires DNS configuration for `minecraft.markcheli.com`:
-- **A Record**: Points to server IP address (173.48.98.211)
+- **A Record**: Points to server IP address (173.48.155.66)
 - **SRV Record** (optional): `_minecraft._tcp.minecraft.markcheli.com`
 
 ## 🚨 Troubleshooting

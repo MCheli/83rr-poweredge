@@ -252,7 +252,7 @@ services:
     stop_grace_period: 120s
     logging: *default-logging
     environment:
-      - ASA_START_PARAMS=TheIsland_WP?listen?Port=7777?RCONPort=11520?RCONEnabled=True -WinLiveMaxPlayers=20 -PublicIPForEpic=173.48.98.211
+      - ASA_START_PARAMS=TheIsland_WP?listen?Port=7777?RCONPort=11520?RCONEnabled=True -WinLiveMaxPlayers=20 -PublicIPForEpic=173.48.155.66
       - ENABLE_DEBUG=0
       - ASA_SERVER_ADMIN_PASSWORD=${ASA_SERVER_ADMIN_PASSWORD}
       - ASA_SERVER_PASSWORD=${ASA_SERVER_PASSWORD}
