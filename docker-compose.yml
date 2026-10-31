@@ -611,6 +611,7 @@ services:
       - TASKS_API_KEY_PEPPER=${TASKS_API_KEY_PEPPER}
       - TASKS_TEST_USER_EMAIL=${TASKS_TEST_USER_EMAIL}
       - TASKS_TEST_USER_PASSWORD=${TASKS_TEST_USER_PASSWORD}
+      - TASKS_DEMO_URL=https://tasks-demo.markcheli.com
     networks:
       - infrastructure
     healthcheck:
@@ -619,6 +620,58 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # Tasks public demo (tasks-demo.markcheli.com): the same image in demo mode, read-only, on its
+  # own database holding only the made-up Claudius Banks seed (rebuilt on every start; cron
+  # restarts it nightly). Never give it env_file: .env or the production database: startup
+  # refuses Google/test-user secrets and any database with real users.
+  tasks-demo-db:
+    image: postgres:16-alpine
+    container_name: tasks-demo-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=tasks_demo
+      - POSTGRES_PASSWORD=${TASKS_DEMO_DB_PASSWORD}
+      - POSTGRES_DB=tasks_demo
+    volumes:
+      - tasks_demo_db_data:/var/lib/postgresql/data
+    networks:
+      - tasks-demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasks_demo -d tasks_demo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tasks-demo:
+    image: ghcr.io/mcheli/tasks:latest
+    container_name: tasks-demo
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      tasks-demo-db:
+        condition: service_healthy
+    environment:
+      - TASKS_ENV=production
+      - TASKS_ENABLE_DOCS=true
+      - TASKS_DEMO_MODE=true
+      - TASKS_DATABASE_URL=postgresql+asyncpg://tasks_demo:${TASKS_DEMO_DB_PASSWORD}@tasks-demo-db:5432/tasks_demo
+      - TASKS_JWT_SECRET=${TASKS_DEMO_JWT_SECRET}
+      - TASKS_API_KEY_PEPPER=${TASKS_DEMO_API_KEY_PEPPER}
+      - TASKS_COOKIE_SECURE=true
+      - TASKS_ALLOWED_ORIGINS=https://tasks-demo.markcheli.com
+    networks:
+      - infrastructure
+      - tasks-demo
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Daily Report (thermal-printer report generator)
@@ -894,6 +947,9 @@ networks:
   tallied-demo:
     # Only the Tallied demo app and its database; the demo can't reach tallied-db
     internal: true
+  tasks-demo:
+    # Only the Tasks demo app and its database; the demo can't reach tasks-db
+    internal: true
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Volumes
@@ -908,6 +964,7 @@ volumes:
   tallied_db_data:
   tallied_demo_db_data:
   tasks_db_data:
+  tasks_demo_db_data:
   energy_monitor_db_data:
   energy_monitor_data:
   uptime_kuma_data:
