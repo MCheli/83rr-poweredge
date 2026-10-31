@@ -10,6 +10,10 @@ services:
     # deliberately after reviewing upstream release notes.
     # 2026.10.9 / Node 24.22.1 (bumped 2026-10-31 from 2026.4.11 / Node
     # 24.14.0 for CVE-2026-111497, Brotli decoder).
+    # Upgrade gotcha: OpenClaw won't skip versions. To jump from anything
+    # older than 2026.9.7, first back up ./openclaw-home, then run the
+    # 2026.9.7 image's `doctor --fix` against that state, and only then
+    # start the new digest.
     image: ghcr.io/openclaw/openclaw@sha256:1a2a3ce113e435039dbeac5ae261759bb4759908563d91c81059e896b38c5d98
     container_name: openclaw
     restart: unless-stopped
