@@ -81,7 +81,8 @@ check runs it every week (`act.sh alert-test`) and reports a failure as
 Every alert from 2026-09-04 to 2026-10-31 failed with HTTP 401 "Maximum
 credits exceeded": the account is on SendGrid's retired free plan, which has
 0 send credits. The API key itself was valid. The old webhook channel
-`sendgrid-mail` is still defined but no monitor uses it. Kept below for reference.
+`sendgrid-mail`, Kuma's SendGrid notification and `SENDGRID_API_KEY` were
+removed the same day. Kept below for reference only.
 
 Once you have a SendGrid API key with **Full Access** scope and a verified
 sender for `status@markcheli.com`:

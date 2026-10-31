@@ -194,6 +194,11 @@ Alertmanager (or via OpenSearch's Prometheus integration if simpler).
 OpenSearch's built-in destinations: Slack, Microsoft Teams, custom webhook,
 Amazon Chime, email (via SMTP).
 
+**Current (2026-10-31):** alerts are push notifications via the self-hosted
+ntfy (`ntfy.markcheli.com`, topic `homelab`), not email. See
+`infrastructure/opensearch/config/alerting/README.md`. SendGrid was used
+until its free plan ran out of credits; the notes below are historical.
+
 For email from `status@markcheli.com`, you need an outbound SMTP relay.
 Options the operator has called out (see status-page setup below):
 - **Resend** — recommended. Configure with API key + verified domain.

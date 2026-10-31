@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Bootstrap Uptime Kuma: create admin if needed, add monitors, wire SendGrid
-notification, build a public status page. Idempotent — safe to re-run.
+"""Bootstrap Uptime Kuma: create admin if needed, add monitors, wire the ntfy
+notification (self-hosted ntfy, topic homelab), build a public status page. Idempotent — safe to re-run.
 
 Reads creds from ~/83rr-poweredge/.env. Talks to Kuma over Socket.IO via
 the uptime-kuma-api package.
@@ -9,7 +9,6 @@ Run after `docker compose up -d uptime-kuma`. Requires:
     source venv/bin/activate
     pip install uptime-kuma-api  # already installed in the project venv
 """
-import json
 import os
 import sys
 import time
@@ -47,8 +46,8 @@ PUBLIC_MONITORS = [
 # External SaaS dependencies — failing one of these means our alerts may not
 # arrive even if the homelab is fine. Probed at the public API endpoint.
 SAAS_MONITORS = [
-    # SendGrid scopes endpoint requires Bearer auth and confirms our key works
-    ("SendGrid API", "https://api.sendgrid.com/v3/scopes"),
+    # ntfy.sh relays the APNs wake-ups our self-hosted ntfy uses for iOS pushes
+    ("ntfy.sh (iOS push relay)", "https://ntfy.sh/v1/health"),
 ]
 
 # LAN monitors probe the *backend* over the docker bridge so we bypass
@@ -75,7 +74,7 @@ def main() -> int:
     pw = env.get("UPTIME_KUMA_ADMIN_PASSWORD") or sys.exit(
         "UPTIME_KUMA_ADMIN_PASSWORD not in .env"
     )
-    sg_key = env.get("SENDGRID_API_KEY") or sys.exit("SENDGRID_API_KEY not in .env")
+    ntfy_token = env.get("NTFY_PUBLISH_TOKEN") or sys.exit("NTFY_PUBLISH_TOKEN not in .env")
 
     # Talk to Kuma directly on the docker bridge so we don't depend on
     # nginx / DNS being healthy (this script is the bootstrap, after all).
@@ -104,30 +103,21 @@ def main() -> int:
     api.login(user, pw)
     print("login: ok")
 
-    # SendGrid notification — the email channel doesn't exist directly in
-    # Kuma; we use the SMTP type with SendGrid's relay creds.
+    # Alerts go to the self-hosted ntfy (replaced SendGrid on 2026-10-31, which
+    # had run out of credits). Kuma reaches it over the docker network and
+    # authenticates with the write-only "alerts" user's token.
     existing = {n["name"]: n for n in api.get_notifications()}
-    sg_name = "SendGrid → mpcheli7@gmail.com"
+    sg_name = "ntfy → homelab"
     sg_payload = {
-        "type": NotificationType.SMTP,
+        "type": NotificationType.NTFY,
         "name": sg_name,
         "isDefault": True,
         "applyExisting": True,
-        "smtpHost": "smtp.sendgrid.net",
-        "smtpPort": 587,
-        "smtpSecure": False,
-        "smtpIgnoreTLSError": False,
-        "smtpDkimDomain": "",
-        "smtpDkimKeySelector": "",
-        "smtpDkimPrivateKey": "",
-        "smtpDkimHashAlgo": "",
-        "smtpDkimheaderFieldNames": "",
-        "smtpDkimskipFields": "",
-        "smtpUsername": "apikey",
-        "smtpPassword": sg_key,
-        "customSubject": "[homelab] {{NAME}} {{STATUS}}",
-        "smtpFrom": "status@markcheli.com",
-        "smtpTo": "mpcheli7@gmail.com",
+        "ntfyserverurl": "http://ntfy",
+        "ntfytopic": "homelab",
+        "ntfyPriority": 4,
+        "ntfyAuthenticationMethod": "accessToken",
+        "ntfyaccesstoken": ntfy_token,
     }
     if sg_name in existing:
         api.edit_notification(existing[sg_name]["id"], **sg_payload)
@@ -214,13 +204,7 @@ def main() -> int:
     print("saas monitors:")
     saas_ids = []
     for n, u in SAAS_MONITORS:
-        if n == "SendGrid API":
-            saas_ids.append(upsert_monitor_authed(
-                n, u, tag_ids["saas"],
-                json.dumps({"Authorization": f"Bearer {sg_key}"}),
-            ))
-        else:
-            saas_ids.append(upsert_monitor(n, u, tag_ids["saas"]))
+        saas_ids.append(upsert_monitor(n, u, tag_ids["saas"]))
 
     # Public status page bundling all monitors.
     sp_slug = "homelab"
