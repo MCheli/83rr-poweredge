@@ -22,7 +22,7 @@ Main testing script that validates all infrastructure components. Should be run 
 - DNS resolution for every public and `*.ops` hostname; `*.ops` records must point at `LOCAL_IP` (.env)
 - Docker container status for all compose services (+ `healthy` where a healthcheck exists)
 - OpenSearch cluster health, log indices, today's log ingestion
-- SSL certificate validation, HTTP status, expected content and response time for public services (website, flask, cookbook, plex, seafile + `/notification/ping`, home assistant, tallied/tasks `/api/health`, uptime-kuma status page) and LAN services (grafana, daily-report, energy-monitor, openclaw, edge-tts/faster-whisper on localhost:5050/5051)
+- SSL certificate validation, HTTP status, expected content and response time for public services (website, flask, cookbook, plex, seafile + `/notification/ping`, home assistant, tallied/tasks `/api/health`, uptime-kuma status page) and LAN services (grafana, daily-report, energy-monitor, openclaw)
 - nginx basic-auth gate (`auth_basic "Ops Services"`) on logs/opensearch/prometheus/cadvisor `.ops` vhosts: without credentials, PASS only on a genuine nginx `401` + `WWW-Authenticate: Basic realm="Ops Services"` (labelled "Auth-gated"); set `OPS_BASIC_AUTH_USER` / `OPS_BASIC_AUTH_PASSWORD` in `.env` to test the upstreams end-to-end (expects 200 + content)
 - Minecraft server TCP connection
 - Backups: NAS mounted at `/mnt/nas` (WARN) and last `backup-heartbeat` from `backup.sh` in OpenSearch within 26h (FAIL otherwise)
@@ -369,11 +369,13 @@ scripts/sbom-scan.sh --dry-run        # list what would be uploaded
 scripts/sbom-scan.sh --only plex      # one container
 scripts/sbom-scan.sh --force          # re-upload unchanged images too
 scripts/sbom-scan.sh --deactivate-superseded-only [--dry-run]   # no scan: deactivate all non-latest versions
+scripts/sbom-scan.sh --deactivate-missing [--dry-run]            # no scan: deactivate projects whose container is gone (after removing a service; not in cron)
 ```
 
 **When to Use:**
 - Runs from mcheli's crontab: `30 3 * * * /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1`
 - Manually after bumping an image, to see its findings before the next night.
+- `--deactivate-missing` once, by hand, after removing a service: sets `active=false` on every version of each `sbom-scan`-tagged project whose name matches no running container (refuses if `docker ps` is empty). If the container returns, the nightly run reactivates its version as latest.
 
 **Referenced in:** docs/dependency-track.md
 

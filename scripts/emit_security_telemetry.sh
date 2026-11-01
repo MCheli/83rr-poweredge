@@ -27,7 +27,7 @@ set -uo pipefail
 # Known-good LISTEN ports. Everything here is an intentionally-running
 # service (see CLAUDE.md / docker-compose). A port NOT in this set fires
 # the unexpected-port alert. Update deliberately when adding a service.
-ALLOWED_PORTS=" 22 53 80 139 443 445 1900 3000 5001 5050 5051 5353 5432 7777 9200 9300 9600 9650 10000 11520 25565 32400 32410 32412 32413 32414 32469 32919 137 138 "
+ALLOWED_PORTS=" 22 53 80 139 443 445 1900 3000 5001 5353 5432 7777 9200 9300 9600 9650 10000 11520 25565 32400 32410 32412 32413 32414 32469 32919 137 138 "
 
 SENSITIVE_PORTS="9200 9300 5432 3000"
 
