@@ -49,7 +49,7 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
   show `(WAN)` exploitation straight to it, bypassing nginx). Remove the
   forward + disable Remote Access/manual mapping **[router]**; bind compose
   port to `192.168.1.179:32400:32400` **[me]**.
-- [ ] **P0-3 Postgres (tallied-db) 5432** on 0.0.0.0, `pg_hba.conf:17-18`
+- [~] **P0-3 Postgres (tallied-db) 5432** *(2026-11-01: 5432 stays public for `tld_*` roles; superuser `tallied` now rejected from non-Docker addresses, PR `tallied-db/hba-no-remote-superuser`. Remaining: `tallied_app` still matches the public lines; `log_connections=on`.)* on 0.0.0.0, `pg_hba.conf:17-18`
   `hostssl all all 0.0.0.0/0` + `::/0` (matches superuser too). Decide if any
   remote tenant (`tld_*`) needs it → restrict lines to those roles + reject
   tallied/tallied_app from non-docker, or drop/bind the port; set
