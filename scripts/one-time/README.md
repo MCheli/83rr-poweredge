@@ -10,6 +10,13 @@ This directory contains scripts that are designed to be run once during initial 
 - **`restart_and_verify_docker.sh`** - Restart services after Docker migration
 - **`cleanup_docker_backup.sh`** - Clean up Docker backup directories after migration
 
+### Seafile Upgrade
+- **`seafile_conf_migrate.py`**: edits `seahub_settings.py` / `seafile.conf` for one hop of the
+  11.0 → 12.0 → 13.0 Docker upgrade (`--step 12`, `--step 13`). It shows a diff with secrets masked and
+  writes nothing without `--apply`. With `--apply` it keeps a `<file>.pre-<step>` copy. Idempotent. Run it only
+  as part of `docs/seafile-upgrade-2026-11.md`:
+  `sudo python3 scripts/one-time/seafile_conf_migrate.py --step 12 [--apply]`
+
 ## Usage Warning
 
 ⚠️ **These scripts are for one-time use only!** Running them multiple times could cause issues or data loss.

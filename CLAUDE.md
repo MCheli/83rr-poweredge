@@ -117,7 +117,7 @@ docker compose down -v
 4. **flask-api** - Python Flask REST API (image from ghcr.io/mcheli/flask-api)
 6. **minecraft** - Minecraft Java Edition server
 7. **plex** - Plex Media Server for streaming movies/TV/music
-8. **seafile** - Self-hosted file sync and share (Dropbox alternative)
+8. **seafile** - Self-hosted file sync and share (Dropbox alternative). 13.0 Docker layout (env-driven config) with `seafile-db` (MariaDB 10.11), `seafile-redis` (cache) and `seafile-notification` (desktop sync push, edge-routed at `/notification`); digest-pinned, not watchtower-managed. Upgrades: `docs/seafile-upgrade-2026-11.md`
 9. **opensearch** - Log aggregation and search
 10. **opensearch-dashboards** - OpenSearch visualization
 11. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
