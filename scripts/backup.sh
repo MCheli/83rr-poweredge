@@ -339,6 +339,10 @@ backup_configs() {
 
     # Project directory (excludes node_modules, venv, etc.)
     # Use -L to follow symlinks (CIFS doesn't support symlinks)
+    # openclaw's plugin-skills/ holds absolute symlinks into the container
+    # (/app/dist/..., /home/node/...). They dangle on the host, so -L fails
+    # them with code 23, which also makes rsync skip --delete. The links
+    # point at image/plugin files, so nothing there needs backing up.
     rsync -aL --delete \
         --exclude 'node_modules' \
         --exclude 'venv' \
@@ -347,6 +351,7 @@ backup_configs() {
         --exclude '*.pyc' \
         --exclude '.nuxt' \
         --exclude '.output' \
+        --exclude '/infrastructure/openclaw/openclaw-home/plugin-skills/' \
         "${PROJECT_DIR}/" "${config_dir}/83rr-poweredge/"
 
     # Let's Encrypt certificates
