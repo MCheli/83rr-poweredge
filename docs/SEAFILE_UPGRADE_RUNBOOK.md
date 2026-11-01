@@ -1,5 +1,10 @@
 # Seafile Upgrade Runbook — 11.0.13 → 12.0.14 → 13.0.21
 
+> **Superseded (2026-11-01) by [`seafile-upgrade-2026-11.md`](seafile-upgrade-2026-11.md).**
+> This draft predates the 12.0/13.0 config changes (env-driven config, separate
+> notification server, redis) and its rollback leaves migrated tables behind.
+> Don't follow it. Kept for history only.
+
 **Status:** planned change, not yet executed. Schedule a maintenance window
 (~30–60 min, files.markcheli.com down during it).
 

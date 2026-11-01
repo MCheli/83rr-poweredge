@@ -57,6 +57,11 @@ class InfrastructureHealthTest:
                 'expected_content': 'seafile',
                 'description': 'Seafile file sync and share'
             },
+            'seafile-notification': {
+                'url': 'https://files.markcheli.com/notification/ping',
+                'expected_content': 'pong',
+                'description': 'Seafile notification server (desktop sync push)'
+            },
             'home-assistant': {
                 'url': 'https://home.markcheli.com',
                 'expected_content': 'Home Assistant',
@@ -197,9 +202,11 @@ class InfrastructureHealthTest:
             'minecraft': {'status': 'running', 'health': 'healthy'},
             'asa': {'status': 'running', 'health': None},
             'plex': {'status': 'running', 'health': 'healthy'},
-            'seafile': {'status': 'running', 'health': None},
+            'seafile': {'status': 'running', 'health': 'healthy'},
             'seafile-db': {'status': 'running', 'health': None},
             'seafile-memcached': {'status': 'running', 'health': None},
+            'seafile-redis': {'status': 'running', 'health': None},
+            'seafile-notification': {'status': 'running', 'health': None},
             'grafana': {'status': 'running', 'health': 'healthy'},
             'prometheus': {'status': 'running', 'health': 'healthy'},
             'cadvisor': {'status': 'running', 'health': 'healthy'},
