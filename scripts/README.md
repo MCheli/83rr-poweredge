@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** October 31, 2026
+**Last Updated:** November 1, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -22,7 +22,7 @@ Main testing script that validates all infrastructure components. Should be run 
 - DNS resolution for every public and `*.ops` hostname; `*.ops` records must point at `LOCAL_IP` (.env)
 - Docker container status for all compose services (+ `healthy` where a healthcheck exists)
 - OpenSearch cluster health, log indices, today's log ingestion
-- SSL certificate validation, HTTP status, expected content and response time for public services (website, flask, cookbook, plex, seafile, home assistant, tallied/tasks `/api/health`, uptime-kuma status page) and LAN services (grafana, daily-report, energy-monitor, openclaw, edge-tts/faster-whisper on localhost:5050/5051)
+- SSL certificate validation, HTTP status, expected content and response time for public services (website, flask, cookbook, plex, seafile + `/notification/ping`, home assistant, tallied/tasks `/api/health`, uptime-kuma status page) and LAN services (grafana, daily-report, energy-monitor, openclaw, edge-tts/faster-whisper on localhost:5050/5051)
 - nginx basic-auth gate (`auth_basic "Ops Services"`) on logs/opensearch/prometheus/cadvisor `.ops` vhosts: without credentials, PASS only on a genuine nginx `401` + `WWW-Authenticate: Basic realm="Ops Services"` (labelled "Auth-gated"); set `OPS_BASIC_AUTH_USER` / `OPS_BASIC_AUTH_PASSWORD` in `.env` to test the upstreams end-to-end (expects 200 + content)
 - Minecraft server TCP connection
 - Backups: NAS mounted at `/mnt/nas` (WARN) and last `backup-heartbeat` from `backup.sh` in OpenSearch within 26h (FAIL otherwise)
@@ -456,7 +456,8 @@ scripts/
 │   ├── setup_data_disk.sh
 │   ├── migrate_docker_to_data_disk.sh
 │   ├── restart_and_verify_docker.sh
-│   └── cleanup_docker_backup.sh
+│   ├── cleanup_docker_backup.sh
+│   └── seafile_conf_migrate.py      # Seafile 11→12→13 config edits (docs/seafile-upgrade-2026-11.md)
 └── archive/                         # Obsolete/migration scripts
     ├── (18 archived scripts from Phase 5 migration)
     └── README.md

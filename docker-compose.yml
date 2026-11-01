@@ -904,6 +904,12 @@ services:
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Seafile (Dropbox Replacement)
+  # 13.0 Docker layout (env-driven config, separate notification server, redis
+  # cache). Upgraded 11.0.13 -> 12.0.14 -> 13.0.28 per
+  # docs/seafile-upgrade-2026-11.md. Images are pinned by digest and NOT
+  # watchtower-managed: majors run one-way DB migrations, so bump deliberately
+  # after a backup. SEAFILE_IMAGE / SEAFILE_NOTIFICATION_IMAGE exist only so the
+  # runbook can run the intermediate 12.0 hop; leave them unset in .env.
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
     image: mariadb:10.11
@@ -918,6 +924,9 @@ services:
     networks:
       - infrastructure
 
+  # Only needed for the 12.0 hop (12.0 seahub still reads CACHES from
+  # seahub_settings.py). 13.0 uses seafile-redis. Remove this service in a
+  # follow-up once 13.0 has been stable for two weeks (runbook step 6).
   seafile-memcached:
     image: memcached:1.6
     container_name: seafile-memcached
@@ -927,25 +936,91 @@ services:
     networks:
       - infrastructure
 
+  seafile-redis:
+    image: redis:7.4.12-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
+    container_name: seafile-redis
+    restart: unless-stopped
+    logging: *default-logging
+    # Pure cache: no persistence, password because the network is shared.
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --save "" --appendonly no
+    environment:
+      - REDIS_PASSWORD=${SEAFILE_REDIS_PASSWORD:?set SEAFILE_REDIS_PASSWORD in .env}
+    networks:
+      - infrastructure
+
   seafile:
-    image: seafileltd/seafile-mc:11.0.13  # Pinned for security
+    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.28@sha256:b0c90832126bf432db908449f1bb450211e6bbf75a2193bab3399e2a9636eccf}
     container_name: seafile
     restart: unless-stopped
     logging: *default-logging
     depends_on:
       - seafile-db
       - seafile-memcached
+      - seafile-redis
     environment:
-      - DB_HOST=seafile-db
-      - DB_ROOT_PASSWD=${SEAFILE_DB_ROOT_PASSWORD}
-      - SEAFILE_ADMIN_EMAIL=${SEAFILE_ADMIN_EMAIL}
-      - SEAFILE_ADMIN_PASSWORD=${SEAFILE_ADMIN_PASSWORD}
+      - SEAFILE_MYSQL_DB_HOST=seafile-db
+      - SEAFILE_MYSQL_DB_PORT=3306
+      - SEAFILE_MYSQL_DB_USER=seafile
+      - SEAFILE_MYSQL_DB_PASSWORD=${SEAFILE_DB_PASSWORD:?set SEAFILE_DB_PASSWORD in .env}
+      - SEAFILE_MYSQL_DB_CCNET_DB_NAME=ccnet_db
+      - SEAFILE_MYSQL_DB_SEAFILE_DB_NAME=seafile_db
+      - SEAFILE_MYSQL_DB_SEAHUB_DB_NAME=seahub_db
+      - TIME_ZONE=Etc/UTC
+      # TLS terminates at the edge nginx; protocol here only builds URLs.
       - SEAFILE_SERVER_HOSTNAME=files.markcheli.com
-      - SEAFILE_SERVER_LETSENCRYPT=false
-      - SEAFILE_SERVICE_URL=https://files.markcheli.com
-      - SEAFILE_FILE_SERVER_ROOT=https://files.markcheli.com/seafhttp
+      - SEAFILE_SERVER_PROTOCOL=https
+      - SITE_ROOT=/
+      - NON_ROOT=false
+      - JWT_PRIVATE_KEY=${SEAFILE_JWT_PRIVATE_KEY:?set SEAFILE_JWT_PRIVATE_KEY in .env}
+      # File logs under /shared/seafile/logs are tailed by fluent-bit.
+      - SEAFILE_LOG_TO_STDOUT=false
+      - ENABLE_GO_FILESERVER=true
+      # No SeaDoc / AI / metadata server deployed.
+      - ENABLE_SEADOC=false
+      - ENABLE_SEAFILE_AI=false
+      - ENABLE_FACE_RECOGNITION=false
+      # 13.0 only (12.0 ignores these and uses seahub_settings.py/seafile.conf)
+      - CACHE_PROVIDER=redis
+      - REDIS_HOST=seafile-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${SEAFILE_REDIS_PASSWORD:?set SEAFILE_REDIS_PASSWORD in .env}
+      - ENABLE_NOTIFICATION_SERVER=true
+      - INNER_NOTIFICATION_SERVER_URL=http://seafile-notification:8083
+      - NOTIFICATION_SERVER_URL=https://files.markcheli.com/notification
     volumes:
       - /storage/seafile:/shared
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:80/api2/ping/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Real-time sync notifications for desktop/web clients (own image since 12.0).
+  # Edge nginx routes files.markcheli.com/notification here.
+  seafile-notification:
+    image: ${SEAFILE_NOTIFICATION_IMAGE:-seafileltd/notification-server:13.0.21@sha256:1cac4101d0f4527ad08c00b5452ceb05d790db95d6c8ab6bbace82429c1e5217}
+    container_name: seafile-notification
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      - seafile-db
+      - seafile
+    environment:
+      - SEAFILE_MYSQL_DB_HOST=seafile-db
+      - SEAFILE_MYSQL_DB_PORT=3306
+      - SEAFILE_MYSQL_DB_USER=seafile
+      - SEAFILE_MYSQL_DB_PASSWORD=${SEAFILE_DB_PASSWORD:?set SEAFILE_DB_PASSWORD in .env}
+      - SEAFILE_MYSQL_DB_CCNET_DB_NAME=ccnet_db
+      - SEAFILE_MYSQL_DB_SEAFILE_DB_NAME=seafile_db
+      - JWT_PRIVATE_KEY=${SEAFILE_JWT_PRIVATE_KEY:?set SEAFILE_JWT_PRIVATE_KEY in .env}
+      - SEAFILE_LOG_TO_STDOUT=true
+      - NOTIFICATION_SERVER_LOG_LEVEL=info
     networks:
       - infrastructure
 
