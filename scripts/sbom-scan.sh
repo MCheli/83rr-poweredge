@@ -30,6 +30,12 @@
 #   scripts/sbom-scan.sh --deactivate-superseded-only [--dry-run]
 #                                         # no scanning: deactivate every non-latest
 #                                         # version of every project (one-time cleanup)
+#   scripts/sbom-scan.sh --deactivate-missing [--dry-run]
+#                                         # no scanning: deactivate every version of every
+#                                         # sbom-scan project whose name matches no existing
+#                                         # container (after removing a service). Not in cron.
+#                                         # If the container comes back, the next nightly
+#                                         # run reactivates its version as latest.
 #
 # Cron (mcheli's crontab, 03:30 — after backup.sh at 02:00):
 #   30 3 * * * /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1
@@ -51,6 +57,7 @@ FORCE=false
 NOTIFY=true
 ONLY=""
 DEACTIVATE_ONLY=false
+DEACTIVATE_MISSING=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)   DRY_RUN=true ;;
@@ -58,7 +65,8 @@ while [[ $# -gt 0 ]]; do
         --no-notify) NOTIFY=false ;;
         --only)      ONLY="${2:?--only needs a container name}"; shift ;;
         --deactivate-superseded-only) DEACTIVATE_ONLY=true ;;
-        -h|--help)   sed -n '2,37p' "$0"; exit 0 ;;
+        --deactivate-missing) DEACTIVATE_ONLY=true; DEACTIVATE_MISSING=true ;;
+        -h|--help)   sed -n '2,43p' "$0"; exit 0 ;;
         *)           echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
@@ -144,7 +152,9 @@ EOF
 }
 
 finish() {
-    if [[ "$DEACTIVATE_ONLY" == true ]]; then
+    if [[ "$DEACTIVATE_MISSING" == true ]]; then
+        log "done: ${DEACTIVATED} version(s) of removed containers $( [[ "$DRY_RUN" == true ]] && echo 'to deactivate' || echo 'deactivated'), ${#FAILURES[@]} failed"
+    elif [[ "$DEACTIVATE_ONLY" == true ]]; then
         log "done: ${DEACTIVATED} superseded version(s) $( [[ "$DRY_RUN" == true ]] && echo 'to deactivate' || echo 'deactivated'), ${#FAILURES[@]} failed"
     else
         log "done: ${UPLOADED} uploaded, ${SKIPPED} unchanged, ${DEACTIVATED} superseded deactivated, ${#FAILURES[@]} failed, ${TOTAL} containers"
@@ -161,7 +171,13 @@ DEACTIVATED=0
 CAN_DEACTIVATE=true
 
 log "=========================================="
-log "sbom-scan starting$( [[ "$DEACTIVATE_ONLY" == true ]] && echo ': deactivate superseded versions only')$( [[ "$DRY_RUN" == true ]] && echo ' (dry run)')"
+MODE=""
+if [[ "$DEACTIVATE_MISSING" == true ]]; then
+    MODE=": deactivate projects of removed containers"
+elif [[ "$DEACTIVATE_ONLY" == true ]]; then
+    MODE=": deactivate superseded versions only"
+fi
+log "sbom-scan starting${MODE}$( [[ "$DRY_RUN" == true ]] && echo ' (dry run)')"
 
 # --- preflight -------------------------------------------------------------
 if [[ "$DEACTIVATE_ONLY" == false && ! -x "$SYFT" ]]; then
@@ -481,6 +497,62 @@ deactivate_superseded() {
     done < "${WORK}/superseded"
 }
 
+# missing RUNNING_NAMES_FILE -> "uuid name version" for every active version of
+# every sbom-scan project whose name is not an existing container.
+missing() {
+    python3 - "${WORK}/projects.json" "$1" <<'EOF'
+import json, sys
+running = set(open(sys.argv[2]).read().split())
+for p in sorted(json.load(open(sys.argv[1])), key=lambda p: (p.get("name", ""), p.get("version", ""))):
+    tags = {t.get("name") for t in p.get("tags") or []}
+    if "sbom-scan" in tags and p.get("name") not in running and p.get("active", True):
+        print(p["uuid"], p.get("name"), p.get("version", ""))
+EOF
+}
+
+# deactivate_missing -> active=false on every version of every project whose
+# container is gone (a removed service). Deactivated, not deleted; if the
+# container comes back, scan_container's rollback path reactivates its version.
+deactivate_missing() {
+    local err code uuid pname ver
+    if [[ "$CAN_DEACTIVATE" == false ]]; then
+        fail "cannot deactivate: DT_API_KEY's team lacks PORTFOLIO_MANAGEMENT"
+        return
+    fi
+    # -a: a stopped container (mid-upgrade, crashed) still exists; only a
+    # removed one counts as missing.
+    docker ps -a --format '{{.Names}}' > "${WORK}/running" || { fail "docker ps failed"; return; }
+    # Never read "no containers" as "every container was removed".
+    if [[ ! -s "${WORK}/running" ]]; then
+        fail "docker ps -a returned no containers (docker group / daemon?); nothing deactivated"
+        return
+    fi
+    if ! err=$(list_projects); then
+        fail "could not list projects (${err})"
+        return
+    fi
+    missing "${WORK}/running" > "${WORK}/missing" || { fail "could not read the project list"; return; }
+    while read -r uuid pname ver; do
+        [[ -n "$uuid" ]] || continue
+        if [[ "$DRY_RUN" == true ]]; then
+            log "  ${pname}: would deactivate ${ver} (no such container)"
+            DEACTIVATED=$((DEACTIVATED + 1))
+            continue
+        fi
+        code=$(dt PATCH "/api/v1/project/${uuid}" -H 'Content-Type: application/json' -d '{"active": false}')
+        if [[ "$code" == 200 || "$code" == 304 ]]; then
+            log "  ${pname}: deactivated ${ver} (no such container)"
+            DEACTIVATED=$((DEACTIVATED + 1))
+        else
+            fail "${pname}: could not deactivate ${ver} (HTTP ${code}: $(head -c 200 "${WORK}/resp"))"
+        fi
+    done < "${WORK}/missing"
+}
+
+if [[ "$DEACTIVATE_MISSING" == true ]]; then
+    deactivate_missing
+    finish
+fi
 if [[ "$DEACTIVATE_ONLY" == true ]]; then
     deactivate_superseded
     finish

@@ -1054,56 +1054,6 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # Voice AI Services (LAN-only, for HeyClawy ESP32 devices)
-  # Consumers reach them over the LAN by host IP + port: the HeyClawy firmware
-  # (SECRETS_TTS_HOST/PORT, SECRETS_STT_HOST/PORT) and Home Assistant (edge-tts).
-  # Published on LOCAL_IP (the server's LAN address, from .env) instead of
-  # 0.0.0.0, so they no longer listen on IPv6 ([::]) or other interfaces. No
-  # auth on either: never port-forward 5050/5051 on the router.
-  # ═════════════════════════════════════════════════════════════════════════════
-  edge-tts:
-    # Pinned by digest 2026-05-17 (was :latest) — 3rd-party, auto-pulled.
-    image: travisvn/openai-edge-tts@sha256:af8df8fb39719623cb6c3dbcba87ab65813030d97e20ae436d3161a53d41d72a
-    container_name: edge-tts
-    restart: unless-stopped
-    logging: *default-logging
-    ports:
-      - "${LOCAL_IP:?set LOCAL_IP in .env}:5050:5050"
-    environment:
-      - DEFAULT_VOICE=en-US-AndrewNeural
-      - DEFAULT_LANGUAGE=en-US
-      - REQUIRE_API_KEY=false
-    networks:
-      - voice-services
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5050/v1/models')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  faster-whisper:
-    # Pinned by digest 2026-05-17 (was :latest-cuda) — 3rd-party, auto-pulled.
-    image: fedirz/faster-whisper-server@sha256:0b64050ad0b9244745746b652473ee42a8d5454d501877a252c3e65f631ffc99
-    container_name: faster-whisper
-    restart: unless-stopped
-    logging: *default-logging
-    ports:
-      - "${LOCAL_IP:?set LOCAL_IP in .env}:5051:8000"
-    environment:
-      - WHISPER__MODEL=Systran/faster-whisper-small
-      - WHISPER__DEVICE=cpu
-      - WHISPER__COMPUTE_TYPE=int8
-    networks:
-      - voice-services
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ═════════════════════════════════════════════════════════════════════════════
   # Watchtower (Automatic Container Updates)
   # Monitors ghcr.io images and auto-deploys when new versions are pushed
   # ═════════════════════════════════════════════════════════════════════════════
@@ -1143,9 +1093,6 @@ networks:
     # Created by infrastructure/openclaw/docker-compose.yml
     external: true
     name: openclaw_nginx-openclaw
-  voice-services:
-    # LAN-only network for voice AI services (EdgeTTS, faster-whisper)
-    driver: bridge
   tallied-demo:
     # Only the Tallied demo app and its database; the demo can't reach tallied-db
     internal: true

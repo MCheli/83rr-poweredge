@@ -230,9 +230,9 @@ the portfolio, most of them in stale third-party images. Changes in this round:
   dump/restore), ntfy `v2.36.0`, OpenSearch + Dashboards `3.9.0`, Prometheus
   `v3.13.5` (LTS), node-exporter `v1.12.1`, nginx-exporter `1.5.3`, cAdvisor
   `v0.60.6` (now from `ghcr.io/google/cadvisor`), Fluent Bit `5.1.5`.
-* **edge-tts / faster-whisper** publish on the LAN address (`LOCAL_IP` in
-  `.env`) instead of `0.0.0.0`; the HeyClawy devices and Home Assistant use
-  them over the LAN.
+* **edge-tts / faster-whisper** published on the LAN address (`LOCAL_IP` in
+  `.env`) instead of `0.0.0.0`. Both were removed on 2026-11-01 (unused);
+  `scripts/sbom-scan.sh --deactivate-missing` deactivated their projects.
 * **Alerts:** the push rule no longer fires on every new HIGH/CRITICAL
   finding (about 13 pushes a day); it now fires only on the alert policy
   (above), and a weekly digest covers the rest.
@@ -241,7 +241,6 @@ the portfolio, most of them in stale third-party images. Changes in this round:
   key.
 
 Still open (tracked in the weekly sweep): Seafile 11 → 13 (separate change),
-faster-whisper → a maintained image (speaches), edge-tts upstream rebuild,
 mariadb/memcached/watchtower re-pins, and the curl/toolchain clean-up in our
 own images.
 
@@ -374,7 +373,7 @@ scripts/deptrack-setup.sh status          # projects: N (N latest versions)
 scripts/sbom-scan.sh --no-notify          # rerun: "0 uploaded, N unchanged" (idempotent)
 ```
 
-Large images (plex, faster-whisper, asa) take the longest. Any failures are
+Large images (plex, asa) take the longest. Any failures are
 listed in `logs/sbom-scan.log`; report them rather than skipping.
 In the UI, open a few projects and check that the components and findings
 look sane. The findings should match what the latest security sweep found

@@ -63,9 +63,8 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
   `sudo systemctl disable --now webmin && sudo apt purge webmin`, or bind
   192.168.1.179 + `allow=192.168.1.0/24` in miniserv.conf. Check
   `/var/webmin/miniserv.log` for non-LAN logins first. **[sudo]**
-- [~] **P0-6 Bind internal ports** *(3000/5001 → 127.0.0.1 done 2026-10-18. 5050/5051 → `LOCAL_IP` (.env) 2026-11-01: LAN consumers (HeyClawy firmware, Home Assistant) already hard-depend on the same address, and a failed bind only takes down the two voice services, so the DHCP reservation below is still recommended. Remaining 32400/32469/1900 deliberately left: LAN IP is DHCP-dynamic, binding to it risks containers failing at boot — Plex failing breaks nginx. Do a DHCP reservation (or netplan static) first. No global IPv6 on host, so `[::]` is not internet-exposed today.)* to 127.0.0.1/LAN in compose: 3000
-  (personal-website), 5001 (flask-api), 5050 edge-tts + 5051 faster-whisper
-  (no auth), 32469, 1900/udp → LAN IP. **[me]**
+- [~] **P0-6 Bind internal ports** *(3000/5001 → 127.0.0.1 done 2026-10-18. 5050/5051 closed 2026-11-01: edge-tts and faster-whisper removed (unused). Remaining 32400/32469/1900 deliberately left: LAN IP is DHCP-dynamic, binding to it risks containers failing at boot — Plex failing breaks nginx. Do a DHCP reservation (or netplan static) first. No global IPv6 on host, so `[::]` is not internet-exposed today.)* to 127.0.0.1/LAN in compose: 3000
+  (personal-website), 5001 (flask-api), 32469, 1900/udp → LAN IP. **[me]**
 - [x] **P0-7 File perms** *(done 2026-10-18)*: `chmod 600` `infrastructure/nginx/certs/*.key`
   (wildcard + letsencrypt-ops are 644), `infrastructure/openclaw/.env` (664),
   openclaw `gogcli/token.json`. **[me]**
@@ -114,8 +113,8 @@ an outage (c538355); `/storage` mount race mitigated by
 - [ ] **P2-2 Image batch, pin by digest**: postgres 16.10 → latest 16.x (all
   three DBs; ~9 CVEs), Grafana 11.5.2 → 12.x (CVE-2025-4123/3580/3415/6023),
   prometheus v3.2.1, node-exporter v1.8.2, cadvisor v0.52.1, fluent-bit 3.2 →
-  4.1, opensearch 3.2.0, openclaw 2026.4.11 (review advisories),
-  faster-whisper → speaches. **[me]**
+  4.1, opensearch 3.2.0, openclaw 2026.4.11 (review advisories).
+  (faster-whisper → speaches dropped: removed 2026-11-01.) **[me]**
 - [ ] **P2-3 Docker socket**: socket-proxy (tecnativa) for uptime-kuma,
   fluent-bit (`:ro` doesn't restrict the API); cadvisor mounts all of
   `/var/run` rw → socket only; pin watchtower by digest. **[me]**
