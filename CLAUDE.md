@@ -133,7 +133,7 @@ docker compose down -v
 21. **daily-report** - Thermal-printer daily report generator (image from ghcr.io/mcheli/daily-report), prints to LAN printer at 192.168.1.147:9100 once a day at 05:00 ET
 22. **watchtower** - Automatic container updates (monitors ghcr.io images)
 23. **openclaw** - Self-hosted agent/automation runtime (image `ghcr.io/openclaw/openclaw:latest`), on its own `openclaw_nginx-openclaw` network; runtime data (secrets, credentials, workspace, agent state) under `infrastructure/openclaw/` (gitignored). Not proxied through the main nginx.
-24. **edge-tts / faster-whisper** - TTS/STT side services (ports 5050 / 5051)
+24. **edge-tts / faster-whisper** - TTS/STT side services (ports 5050 / 5051, published on `LOCAL_IP` from `.env`, not 0.0.0.0; used by HeyClawy devices and Home Assistant)
 25. **ntfy** - Push notifications for homelab alerts (ntfy.markcheli.com, deny-all auth). OpenSearch alerting + Uptime Kuma publish to topic `homelab`; replaced SendGrid 2026-10-31. Setup: `infrastructure/opensearch/config/alerting/README.md`
 26. **deptrack-apiserver / deptrack-frontend / deptrack-db** - OWASP Dependency-Track v5 (LAN-only, deptrack.ops.markcheli.com): CVE tracking of every running container's SBOM. `scripts/sbom-scan.sh` (Syft, cron 03:30) uploads nightly; new HIGH/CRITICAL findings go to ntfy. Images pinned by digest, not watchtower-managed. Docs + runbook: `docs/dependency-track.md`
 

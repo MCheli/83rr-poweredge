@@ -297,7 +297,7 @@ minutes and verifies the most-likely-to-corrupt path (Postgres dumps).
    # Spin up an isolated Postgres just for this test
    docker run -d --name restore-test-pg \
      -e POSTGRES_USER=tallied -e POSTGRES_PASSWORD=test \
-     -e POSTGRES_DB=tallied -p 25432:5432 postgres:16-alpine
+     -e POSTGRES_DB=tallied -p 25432:5432 postgres:16.15-alpine
 
    # Wait for it to be ready, then load the latest dump
    until docker exec restore-test-pg pg_isready -U tallied; do sleep 1; done

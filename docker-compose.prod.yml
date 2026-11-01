@@ -23,14 +23,10 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   # Tallied - Production Images
   # ═════════════════════════════════════════════════════════════════════════════
-  tallied-db:
-    image: postgres:16-alpine
+  # tallied-db / tasks-db: image comes from the base file (pinned postgres16 anchor).
 
   tallied:
     image: ghcr.io/mcheli/tallied:latest
-
-  tasks-db:
-    image: postgres:16-alpine
 
   tasks:
     image: ghcr.io/mcheli/tasks:latest
