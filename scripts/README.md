@@ -375,7 +375,7 @@ scripts/sbom-scan.sh --deactivate-missing [--dry-run]            # no scan: deac
 **When to Use:**
 - Runs from mcheli's crontab: `30 3 * * * /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1`
 - Manually after bumping an image, to see its findings before the next night.
-- `--deactivate-missing` once, by hand, after removing a service: sets `active=false` on every version of each `sbom-scan`-tagged project whose name matches no running container (refuses if `docker ps` is empty). If the container returns, the nightly run reactivates its version as latest.
+- `--deactivate-missing` once, by hand, after removing a service: sets `active=false` on every version of each `sbom-scan`-tagged project whose name matches no existing container, running or stopped (refuses if `docker ps -a` is empty). If the container returns, the nightly run reactivates its version as latest.
 
 **Referenced in:** docs/dependency-track.md
 

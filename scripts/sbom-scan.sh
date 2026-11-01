@@ -32,7 +32,7 @@
 #                                         # version of every project (one-time cleanup)
 #   scripts/sbom-scan.sh --deactivate-missing [--dry-run]
 #                                         # no scanning: deactivate every version of every
-#                                         # sbom-scan project whose name matches no running
+#                                         # sbom-scan project whose name matches no existing
 #                                         # container (after removing a service). Not in cron.
 #                                         # If the container comes back, the next nightly
 #                                         # run reactivates its version as latest.
@@ -498,7 +498,7 @@ deactivate_superseded() {
 }
 
 # missing RUNNING_NAMES_FILE -> "uuid name version" for every active version of
-# every sbom-scan project whose name is not a running container.
+# every sbom-scan project whose name is not an existing container.
 missing() {
     python3 - "${WORK}/projects.json" "$1" <<'EOF'
 import json, sys
@@ -519,10 +519,12 @@ deactivate_missing() {
         fail "cannot deactivate: DT_API_KEY's team lacks PORTFOLIO_MANAGEMENT"
         return
     fi
-    docker ps --format '{{.Names}}' > "${WORK}/running" || { fail "docker ps failed"; return; }
+    # -a: a stopped container (mid-upgrade, crashed) still exists; only a
+    # removed one counts as missing.
+    docker ps -a --format '{{.Names}}' > "${WORK}/running" || { fail "docker ps failed"; return; }
     # Never read "no containers" as "every container was removed".
     if [[ ! -s "${WORK}/running" ]]; then
-        fail "docker ps returned no running containers (docker group / daemon?); nothing deactivated"
+        fail "docker ps -a returned no containers (docker group / daemon?); nothing deactivated"
         return
     fi
     if ! err=$(list_projects); then
@@ -533,13 +535,13 @@ deactivate_missing() {
     while read -r uuid pname ver; do
         [[ -n "$uuid" ]] || continue
         if [[ "$DRY_RUN" == true ]]; then
-            log "  ${pname}: would deactivate ${ver} (no running container)"
+            log "  ${pname}: would deactivate ${ver} (no such container)"
             DEACTIVATED=$((DEACTIVATED + 1))
             continue
         fi
         code=$(dt PATCH "/api/v1/project/${uuid}" -H 'Content-Type: application/json' -d '{"active": false}')
         if [[ "$code" == 200 || "$code" == 304 ]]; then
-            log "  ${pname}: deactivated ${ver} (no running container)"
+            log "  ${pname}: deactivated ${ver} (no such container)"
             DEACTIVATED=$((DEACTIVATED + 1))
         else
             fail "${pname}: could not deactivate ${ver} (HTTP ${code}: $(head -c 200 "${WORK}/resp"))"
