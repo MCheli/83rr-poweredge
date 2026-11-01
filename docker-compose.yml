@@ -240,7 +240,10 @@ services:
       - MOTD="83RR PowerEdge Minecraft Server"
       - ENABLE_WHITELIST=false
     volumes:
-      - minecraft_data:/data
+      # The live world has been in minecraft_data_local since 2026-01 (the
+      # override file mounted it). minecraft_data no longer exists; mounting it
+      # under the prod invocation would start a fresh, empty world.
+      - minecraft_data_local:/data
     networks:
       - infrastructure
 
@@ -1084,7 +1087,7 @@ networks:
 volumes:
   opensearch_data:
   fluent_bit_data:
-  minecraft_data:
+  minecraft_data_local:
   prometheus_data:
   grafana_data:
   plex_config:

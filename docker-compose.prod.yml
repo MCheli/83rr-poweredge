@@ -57,7 +57,7 @@ services:
     ports:
       - "25565:25565"  # Minecraft server port (direct connection, not proxied)
     volumes:
-      - minecraft_data:/data  # Production data volume
+      - minecraft_data_local:/data  # The live world (see the base file)
 
   asa:
     ports:

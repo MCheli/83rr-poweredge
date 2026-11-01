@@ -59,7 +59,7 @@ function, so the list is what a real run would delete.
 |---|---|---|
 | `83rr-poweredge_grafana_data` | 42 M | Dashboards, datasources, users |
 | `83rr-poweredge_prometheus_data` | 3.4 G | Metrics history (~30 days TSDB retention) |
-| `83rr-poweredge_minecraft_data_local` | 366 M | World saves (the live volume: `docker-compose.override.yml` mounts `minecraft_data_local`; until 2026-10-31 backups copied the stale `minecraft_data` from January instead) |
+| `83rr-poweredge_minecraft_data_local` | 366 M | World saves (the live volume; every compose invocation mounts `minecraft_data_local` since 2026-11-01, before that only `docker-compose.override.yml` did; until 2026-10-31 backups copied the stale `minecraft_data` from January instead) |
 | `83rr-poweredge_plex_config` | 312 M | Plex's metadata DB only — *not media* |
 | `83rr-poweredge_tallied_db_data` | 81 M | Postgres data dir (use `.sql.gz` for restore) |
 | `83rr-poweredge_tasks_db_data` | 47 M | Postgres data dir (use `.sql.gz` for restore) |
