@@ -63,7 +63,7 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
   `sudo systemctl disable --now webmin && sudo apt purge webmin`, or bind
   192.168.1.179 + `allow=192.168.1.0/24` in miniserv.conf. Check
   `/var/webmin/miniserv.log` for non-LAN logins first. **[sudo]**
-- [~] **P0-6 Bind internal ports** *(3000/5001 → 127.0.0.1 done 2026-10-18. Remaining 5050/5051/32400/32469/1900 deliberately left: LAN IP is DHCP-dynamic, binding to it risks containers failing at boot — Plex failing breaks nginx. Do a DHCP reservation (or netplan static) first. No global IPv6 on host, so `[::]` is not internet-exposed today.)* to 127.0.0.1/LAN in compose: 3000
+- [~] **P0-6 Bind internal ports** *(3000/5001 → 127.0.0.1 done 2026-10-18. 5050/5051 → `LOCAL_IP` (.env) 2026-11-01: LAN consumers (HeyClawy firmware, Home Assistant) already hard-depend on the same address, and a failed bind only takes down the two voice services, so the DHCP reservation below is still recommended. Remaining 32400/32469/1900 deliberately left: LAN IP is DHCP-dynamic, binding to it risks containers failing at boot — Plex failing breaks nginx. Do a DHCP reservation (or netplan static) first. No global IPv6 on host, so `[::]` is not internet-exposed today.)* to 127.0.0.1/LAN in compose: 3000
   (personal-website), 5001 (flask-api), 5050 edge-tts + 5051 faster-whisper
   (no auth), 32469, 1900/udp → LAN IP. **[me]**
 - [x] **P0-7 File perms** *(done 2026-10-18)*: `chmod 600` `infrastructure/nginx/certs/*.key`

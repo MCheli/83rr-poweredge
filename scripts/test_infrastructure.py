@@ -147,13 +147,13 @@ class InfrastructureHealthTest:
                 'description': 'OpenClaw control UI'
             },
             'edge-tts': {
-                # Host-published port, no nginx vhost (plain HTTP).
-                'url': 'http://localhost:5050/v1/models',
+                # Host-published on LOCAL_IP (not 0.0.0.0), no nginx vhost (plain HTTP).
+                'url': f"http://{os.getenv('LOCAL_IP', 'localhost')}:5050/v1/models",
                 'expected_content': 'tts-1',
                 'description': 'Edge TTS (OpenAI-compatible) model list'
             },
             'faster-whisper': {
-                'url': 'http://localhost:5051/health',
+                'url': f"http://{os.getenv('LOCAL_IP', 'localhost')}:5051/health",
                 'expected_content': 'OK',
                 'description': 'Faster Whisper STT health'
             }

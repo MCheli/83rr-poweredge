@@ -10,6 +10,12 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# The five PostgreSQL 16 databases (tallied, tallied-demo, tasks, tasks-demo,
+# energy-monitor) share this pin. Minor bumps within 16.x keep the data
+# directory (no dump/restore); read the "Migration to Version 16.N" section of
+# the release notes first. 16.15: 2026-11-01 (was floating 16-alpine = 16.10).
+x-postgres16-image: &postgres16-image postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+
 services:
   # ═════════════════════════════════════════════════════════════════════════════
   # NGINX Reverse Proxy
@@ -131,7 +137,10 @@ services:
     # outage when the Docker 29 upgrade forced a restart. Keep this in lockstep
     # with opensearch-dashboards below; deploy via the prod invocation so the
     # opensearch_data volume (not the dev override's opensearch_data_local) is used.
-    image: opensearchproject/opensearch:3.2.0
+    # 3.9.0 (2026-11-01, was 3.2.0): in-place minor upgrade, no index migration.
+    # One-way: once 3.9 has written to the volume, 3.2 can't open it again, so
+    # tar the volume before the bump and restore that tarball to roll back.
+    image: opensearchproject/opensearch:3.9.0@sha256:3b55f6b6249cfdb92b52ee59adc8a266203ba9ef9f5d82544fad6f1af2f3609e
     container_name: opensearch
     restart: unless-stopped
     logging: *default-logging
@@ -165,7 +174,8 @@ services:
   # OpenSearch Dashboards (Logging UI)
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:3.2.0  # MUST match opensearch version above
+    # MUST match the opensearch version above.
+    image: opensearchproject/opensearch-dashboards:3.9.0@sha256:256d4cea5928868ac09bca642a0ac8285a2b7e4b7fdd45c4ec06e75a5cf3184c
     container_name: opensearch-dashboards
     restart: unless-stopped
     logging: *default-logging
@@ -187,7 +197,9 @@ services:
   # Fluent Bit (Log Shipper)
   # ═════════════════════════════════════════════════════════════════════════════
   fluent-bit:
-    image: fluent/fluent-bit:3.2
+    # 5.1.5 (2026-11-01, was floating 3.2 = 3.2.10). The classic-format config
+    # below needed no changes for 4.x/5.x (see Fluent Bit's upgrade notes).
+    image: fluent/fluent-bit:5.1.5@sha256:2740f387f6e68fab66d28e4fa6a853387b9cab6ffb4cb78958f69bba4eb0e7b4
     container_name: fluent-bit
     restart: unless-stopped
     logging: *default-logging
@@ -212,7 +224,10 @@ services:
   # Minecraft Server
   # ═════════════════════════════════════════════════════════════════════════════
   minecraft:
-    image: itzg/minecraft-server:java25
+    # Release tag + digest (2026-11-01, was floating java25 from 2026-05). The
+    # image upgrades Paper itself at startup (VERSION=LATEST); this pin only
+    # covers the OS/JRE/tooling layer. Bump to the next YYYY.M.P-java25 release.
+    image: itzg/minecraft-server:2026.10.1-java25@sha256:d12aed7e35981dfe259b60fbfee77d23a19b5898a7a31dca298d18b47b7b5776
     container_name: minecraft
     restart: unless-stopped
     logging: *default-logging
@@ -225,7 +240,10 @@ services:
       - MOTD="83RR PowerEdge Minecraft Server"
       - ENABLE_WHITELIST=false
     volumes:
-      - minecraft_data:/data
+      # The live world has been in minecraft_data_local since 2026-01 (the
+      # override file mounted it). minecraft_data no longer exists; mounting it
+      # under the prod invocation would start a fresh, empty world.
+      - minecraft_data_local:/data
     networks:
       - infrastructure
 
@@ -269,7 +287,9 @@ services:
   # Monitoring: Prometheus (Metrics Database)
   # ═════════════════════════════════════════════════════════════════════════════
   prometheus:
-    image: prom/prometheus:v3.2.1
+    # v3.13.5 = current LTS line (2026-11-01, was v3.2.1). No TSDB format change
+    # within 3.x, so the old digest should still read the data on rollback.
+    image: prom/prometheus:v3.13.5@sha256:aafa9d694e6a883c02db516d9f6e5b84e14195f49a2a6456a4cca815edda72b9
     container_name: prometheus
     restart: unless-stopped
     logging: *default-logging
@@ -328,7 +348,8 @@ services:
   # Monitoring: cAdvisor (Container Metrics)
   # ═════════════════════════════════════════════════════════════════════════════
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    # Moved from gcr.io/cadvisor/cadvisor to ghcr.io/google/cadvisor at v0.53.
+    image: ghcr.io/google/cadvisor:v0.60.6@sha256:b8e7d1093144fd088f425ff003d75a4aa405de075db78dae3bc563730b1bd07a
     container_name: cadvisor
     restart: unless-stopped
     logging: *default-logging
@@ -351,7 +372,7 @@ services:
   # Monitoring: NGINX Exporter (NGINX Metrics)
   # ═════════════════════════════════════════════════════════════════════════════
   nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.4
+    image: nginx/nginx-prometheus-exporter:1.5.3@sha256:85666e7fde7e253f1c6d978f9a961245df4c9cdb7677e1866d9bb28e8f9ee41d
     container_name: nginx-exporter
     restart: unless-stopped
     logging: *default-logging
@@ -366,7 +387,7 @@ services:
   # Monitoring: Node Exporter (Host System Metrics)
   # ═════════════════════════════════════════════════════════════════════════════
   node-exporter:
-    image: prom/node-exporter:v1.8.2
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     container_name: node-exporter
     restart: unless-stopped
     logging: *default-logging
@@ -397,7 +418,8 @@ services:
     # 2026-10-18: bumped to 1.43.4.10903 after the incident below. Must stay
     # >= 1.43.3.10861 (fixes CompanionProxy SSRF + network-writable
     # transcoder prefs, CVE-2026-96652/96656), which was exploited here.
-    image: plexinc/pms-docker@sha256:e0ab27395614a8e1a4fdf84c6bc60ac664915cfdde70c52d030c7728a1c48e14
+    # 2026-11-01: 1.43.5.11079 (= latest on that date).
+    image: plexinc/pms-docker:1.43.5.11079-b3b13e506@sha256:6d778d41daae68f89115aa87a44ae14a96b23e71a2093da173b5a9aac4091336
     container_name: plex
     restart: unless-stopped
     logging: *default-logging
@@ -430,7 +452,7 @@ services:
   # Image published from: github.com/mcheli/tallied
   # ═════════════════════════════════════════════════════════════════════════════
   tallied-db:
-    image: postgres:16-alpine
+    image: *postgres16-image
     container_name: tallied-db
     restart: unless-stopped
     logging: *default-logging
@@ -521,7 +543,7 @@ services:
   # restarts it nightly). Never give it env_file: .env or the production database: startup
   # refuses AI/Google secrets and any database with real users.
   tallied-demo-db:
-    image: postgres:16-alpine
+    image: *postgres16-image
     container_name: tallied-demo-db
     restart: unless-stopped
     logging: *default-logging
@@ -575,7 +597,7 @@ services:
   # Image published from: github.com/mcheli/tasks
   # ═════════════════════════════════════════════════════════════════════════════
   tasks-db:
-    image: postgres:16-alpine
+    image: *postgres16-image
     container_name: tasks-db
     restart: unless-stopped
     logging: *default-logging
@@ -632,7 +654,7 @@ services:
   # restarts it nightly). Never give it env_file: .env or the production database: startup
   # refuses Google/test-user secrets and any database with real users.
   tasks-demo-db:
-    image: postgres:16-alpine
+    image: *postgres16-image
     container_name: tasks-demo-db
     restart: unless-stopped
     logging: *default-logging
@@ -722,7 +744,11 @@ services:
     # CVE-2026-111497 Brotli). This digest runs Node 22.23.4. 1.x -> 2.x
     # migrates the SQLite DB one-way: back up 83rr-poweredge_uptime_kuma_data
     # before the first start. Not watchtower-managed; bump deliberately.
-    image: louislam/uptime-kuma:2@sha256:e88415a90dd2f7efecdbc18de0490aff292764a3ac471531bf1d0481725591bd
+    # 2026-11-01: 2.5.9-slim. Slim drops the bundled Chromium (real-browser
+    # monitors) and embedded MariaDB; we use neither (http/docker/gamedig
+    # monitors on SQLite), and Chromium was most of the image's CVEs. Adding a
+    # "Real Browser" monitor later means going back to the full image.
+    image: louislam/uptime-kuma:2.5.9-slim@sha256:c41c46667c116066ad252b4887e1c4c66cca8891ca17f3161c1d16540645d1cc
     container_name: uptime-kuma
     restart: unless-stopped
     logging: *default-logging
@@ -749,7 +775,10 @@ services:
   # message format: infrastructure/opensearch/config/alerting/README.md.
   # ═════════════════════════════════════════════════════════════════════════════
   ntfy:
-    image: binwiederhier/ntfy:v2.11.0
+    # v2.36.0 (2026-11-01, was v2.11.0 from 2024-05). server.yml needed no
+    # changes. The upgrade migrates cache.db/user.db: to roll back, restore the
+    # ntfy_data tarball (v2.11 can't read the newer schema).
+    image: binwiederhier/ntfy:v2.36.0@sha256:fb48c413eb11d50339962b5d62cddce0f800e7f77c626d638a7c20cb7e9c4465
     container_name: ntfy
     command: serve
     restart: unless-stopped
@@ -773,7 +802,7 @@ services:
   # the *.ops nginx allowlist. ESPHome / HA URLs are configured in-app.
   # ═════════════════════════════════════════════════════════════════════════════
   energy-monitor-db:
-    image: postgres:16-alpine
+    image: *postgres16-image
     container_name: energy-monitor-db
     restart: unless-stopped
     logging: *default-logging
@@ -951,6 +980,11 @@ services:
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Voice AI Services (LAN-only, for HeyClawy ESP32 devices)
+  # Consumers reach them over the LAN by host IP + port: the HeyClawy firmware
+  # (SECRETS_TTS_HOST/PORT, SECRETS_STT_HOST/PORT) and Home Assistant (edge-tts).
+  # Published on LOCAL_IP (the server's LAN address, from .env) instead of
+  # 0.0.0.0, so they no longer listen on IPv6 ([::]) or other interfaces. No
+  # auth on either: never port-forward 5050/5051 on the router.
   # ═════════════════════════════════════════════════════════════════════════════
   edge-tts:
     # Pinned by digest 2026-05-17 (was :latest) — 3rd-party, auto-pulled.
@@ -959,7 +993,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
-      - "5050:5050"
+      - "${LOCAL_IP:?set LOCAL_IP in .env}:5050:5050"
     environment:
       - DEFAULT_VOICE=en-US-AndrewNeural
       - DEFAULT_LANGUAGE=en-US
@@ -980,7 +1014,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
-      - "5051:8000"
+      - "${LOCAL_IP:?set LOCAL_IP in .env}:5051:8000"
     environment:
       - WHISPER__MODEL=Systran/faster-whisper-small
       - WHISPER__DEVICE=cpu
@@ -1053,7 +1087,7 @@ networks:
 volumes:
   opensearch_data:
   fluent_bit_data:
-  minecraft_data:
+  minecraft_data_local:
   prometheus_data:
   grafana_data:
   plex_config:

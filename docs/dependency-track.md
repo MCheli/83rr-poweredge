@@ -2,7 +2,9 @@
 
 OWASP Dependency-Track **v5** holds a CycloneDX SBOM of every running
 container and matches it against mirrored vulnerability data (OSV, NVD,
-CISA KEV). New HIGH/CRITICAL findings are pushed to ntfy the same day.
+CISA KEV). Known-exploited (KEV) findings, and HIGH/CRITICAL ones with
+EPSS >= 0.1 in an internet-exposed service, are pushed to ntfy the same day;
+everything else lands in a weekly digest.
 Dependabot and CodeQL only see the code in our repos; this covers the
 runtimes and third-party images (Uptime Kuma's Node, openclaw, nginx,
 distro packages such as libbrotli, ...).
@@ -15,8 +17,8 @@ distro packages such as libbrotli, ...).
 | Volumes | `deptrack_db_data` (Postgres 17), `deptrack_data` (`/data`: KEK keyset + file storage) |
 | Nightly scan | `scripts/sbom-scan.sh` (cron 03:30, user `mcheli`), log `logs/sbom-scan.log` |
 | Setup / config | `scripts/deptrack-setup.sh` |
-| Alerts | ntfy topic `homelab`, rule "ntfy: new HIGH/CRITICAL vulnerabilities" |
-| Credentials | admin password in 1Password ("Dependency-Track admin"); `DEPTRACK_DB_PASSWORD`, `DT_API_KEY` in `.env` |
+| Alerts | ntfy topic `homelab`: policy "alert: KEV, or HIGH/CRITICAL with EPSS >= 0.1 on internet-exposed" + rule "ntfy: KEV or high-EPSS on internet-exposed" (push), rule "ntfy: weekly vulnerability digest" (Saturdays) |
+| Credentials | admin password in 1Password ("Dependency-Track admin"); `DEPTRACK_DB_PASSWORD`, `DT_API_KEY` (scanner), `DT_TRIAGE_API_KEY` (weekly sweep) in `.env` |
 
 ## How it fits together
 
@@ -25,7 +27,8 @@ cron 03:30 ─▶ sbom-scan.sh ─┬─ docker ps / inspect      (container →
                             ├─ syft docker:<image ID>   (CycloneDX SBOM of exactly what runs)
                             └─ POST /api/v1/bom ───────▶ deptrack-apiserver ──▶ deptrack-db
                                                           │  mirrors OSV / NVD / KEV daily
-                                                          └─ new HIGH/CRITICAL ─▶ http://ntfy/ ─▶ phone
+                                                          ├─ alert policy violation ─▶ http://ntfy/ ─▶ phone
+                                                          └─ Saturday digest ─────────▶ http://ntfy/ ─▶ phone
 LAN browser ─▶ nginx (deptrack.ops) ─┬─ /     ─▶ deptrack-frontend
                                      └─ /api  ─▶ deptrack-apiserver
 ```
@@ -89,7 +92,7 @@ the docker group mcheli already has and adds no new socket mount.
 | OSV | on | Ecosystems: Alpine, Debian, Ubuntu, npm, PyPI, Go, Maven, crates.io, RubyGems, Packagist, NuGet. Main source for distro and language packages (PURL matching). |
 | NVD | on | v5 mirrors the NVD JSON 2.0 **feed files**; there is no API-key setting any more, so no NVD key is needed. NVD matches by CPE, which Syft adds for many packages; expect some noisier CPE matches. |
 | GitHub Advisories | off unless `DT_GITHUB_TOKEN` is set | Needs a token (no scopes). OSV already includes GitHub's advisories, so this mostly adds duplicates. |
-| CISA KEV | on (DT default) | Marks known-exploited CVEs; such findings alert even below HIGH and get priority 5. |
+| CISA KEV | on (DT default) | Marks known-exploited CVEs; such findings alert at any severity and in any project (alert policy). |
 
 ## First boot (summary; exact commands in the runbook below)
 
@@ -101,7 +104,8 @@ the docker group mcheli already has and adds no new socket mount.
    "Dependency-Track admin (deptrack.ops.markcheli.com)", then
    `shred -u ~/.config/deptrack/admin-password`.
 3. `scripts/deptrack-setup.sh apply`: base URL, vuln sources + first mirror,
-   ntfy secret/publisher/alert rule (created **off**), team `sbom-scanner` with
+   ntfy secret/publisher, alert policy + push rule (created **off**) and the
+   weekly digest rule, team `sbom-scanner` with
    `BOM_UPLOAD, PROJECT_CREATION_UPLOAD, VIEW_PORTFOLIO, PORTFOLIO_MANAGEMENT`
    and its API key written to `.env` as `DT_API_KEY`. (A v4-style team key is
    used on purpose: team keys don't expire, v5 service-account keys expire
@@ -133,10 +137,21 @@ Alerts arrive in the ntfy app on topic `homelab`, tagged `dependency-track`:
 
 | Push | Meaning | Priority |
 |---|---|---|
-| `HIGH CVE-… in <container>` | A new finding on a component in that container's image (new advisory, or a new image brought it in). Body: component PURL, CVSS, title, project. | 3 (5 if KEV, 4 if CRITICAL) |
-| `Vulnerable dependency added to <container>` | A new image introduced a component that already has HIGH/CRITICAL/KEV findings; body lists them. | 4 |
+| `Exploitable: <component> in <container>` | A component now violates the alert policy: it has a KEV finding (any project), or a HIGH/CRITICAL finding with EPSS >= 0.1 in an internet-exposed project. Body: component PURL, policy, project. | 5 |
+| `Dependency-Track weekly: N new finding(s) in M project(s)` | Saturday 13:00 UTC digest of everything new that week, by severity (`NEW_VULNERABILITIES_SUMMARY`; skipped when nothing is new). | 2 |
 
-Tapping opens the vulnerability (or project) in the DT UI. What to do:
+**Why a policy, not a rule filter:** DT 5.2's notification schema has
+`is_kev` but no EPSS, so a rule filter can't test EPSS. The CEL policy engine
+can (`vulns`, `project`, `v.epss_score`), and it re-evaluates on every BOM
+upload: a CVE that is added to KEV, or whose EPSS rises, later still alerts.
+Suppressed findings are excluded, so a *Not affected* + suppress analysis
+silences a false positive for good. "Internet-exposed" is the
+`INTERNET_PROJECTS` list in `scripts/deptrack-setup.sh` (container names with
+a public vhost or a forwarded port); re-run `apply` after changing it.
+Policies are evaluated per project version, so a container that is still
+violating can alert again when its image changes (new version).
+
+Tapping opens the project in the DT UI. What to do:
 
 1. Open the project in DT → *Audit Vulnerabilities*. Check the component and
    whether a fixed version exists.
@@ -147,13 +162,16 @@ Tapping opens the vulnerability (or project) in the DT UI. What to do:
    record an analysis in DT (*Not affected* + justification, or *Suppress*).
    Analyses carry over to future versions through the clone step.
 
-Silence for a while: `scripts/deptrack-setup.sh alerts off` (and `on` again).
-Weekly sanity check: `scripts/deptrack-setup.sh test-alert`.
+Silence for a while: `scripts/deptrack-setup.sh alerts off` (and `on` again);
+this leaves the weekly digest running.
+Sanity check: `scripts/deptrack-setup.sh test-alert` (sends both rules' test
+notifications and expects two in ntfy's cache).
 
 ## Operations
 
 ```bash
-scripts/deptrack-setup.sh status          # mirror runs, project count, alerts on/off
+scripts/deptrack-setup.sh status          # mirror runs, project count, rules on/off, policy
+scripts/deptrack-setup.sh triage-key      # team "triage" key -> DT_TRIAGE_API_KEY in .env (weekly sweep)
 scripts/sbom-scan.sh --dry-run            # what tonight's run would upload
 scripts/sbom-scan.sh --only uptime-kuma   # re-scan one container now
 scripts/sbom-scan.sh --force              # re-upload every container
@@ -178,6 +196,35 @@ volume holds the key-encryption key without which secrets stored in the DB
 (ntfy token, GitHub token) can't be decrypted. If the volume is lost, restore
 the dump anyway and re-run `deptrack-setup.sh apply` to re-enter the secrets.
 Restore steps: `docs/BACKUP_RESTORE.md`.
+
+## Remediation 2026-11-01
+
+The first full scan (2026-10-31) found ~3,470 critical/high findings across
+the portfolio, most of them in stale third-party images. Changes in this round:
+
+* **Uptime Kuma** moved to the `2.5.9-slim` image: no bundled Chromium (most
+  of its findings) or embedded MariaDB. Our monitors are http/docker/gamedig on
+  SQLite, so nothing used them.
+* **Pinned by version + digest** (were floating tags or older pins): minecraft
+  `2026.10.1-java25`, plex `1.43.5.11079`, the five PostgreSQL 16 databases
+  `16.15-alpine` (one shared `x-postgres16-image` anchor; same major, no
+  dump/restore), ntfy `v2.36.0`, OpenSearch + Dashboards `3.9.0`, Prometheus
+  `v3.13.5` (LTS), node-exporter `v1.12.1`, nginx-exporter `1.5.3`, cAdvisor
+  `v0.60.6` (now from `ghcr.io/google/cadvisor`), Fluent Bit `5.1.5`.
+* **edge-tts / faster-whisper** publish on the LAN address (`LOCAL_IP` in
+  `.env`) instead of `0.0.0.0`; the HeyClawy devices and Home Assistant use
+  them over the LAN.
+* **Alerts:** the push rule no longer fires on every new HIGH/CRITICAL
+  finding (about 13 pushes a day); it now fires only on the alert policy
+  (above), and a weekly digest covers the rest.
+* **`triage-key`** subcommand: a separate team key that can record analyses,
+  so the weekly sweep can mark false positives without widening the scanner
+  key.
+
+Still open (tracked in the weekly sweep): Seafile 11 → 13 (separate change),
+faster-whisper → a maintained image (speaches), edge-tts upstream rebuild,
+mariadb/memcached/watchtower re-pins, and the curl/toolchain clean-up in our
+own images.
 
 ## Rollback / removal
 

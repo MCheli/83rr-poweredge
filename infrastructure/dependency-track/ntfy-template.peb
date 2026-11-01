@@ -23,6 +23,27 @@
   "tags": ["warning", "dependency-track"],
   "click": "{{ baseUrl }}/projects/{{ subject.project.uuid | escape(strategy="json") }}"
 }
+{%- elseif notification.group == "GROUP_POLICY_VIOLATION" -%}
+{#- The push rule only lets through violations of the alert policy (KEV, or
+    HIGH/CRITICAL with EPSS >= 0.1 on an internet-exposed project). -#}
+{
+  "topic": "homelab",
+  "title": "Exploitable: {{ subject.component.name | escape(strategy="json") }} in {{ subject.project.name | escape(strategy="json") }}",
+  "message": "{{ subject.component | summarize | escape(strategy="json") }}\nPolicy: {{ subject.policyViolation.condition.policy.name | escape(strategy="json") }}\nProject: {{ subject.project | summarize | escape(strategy="json") }}",
+  "priority": 5,
+  "tags": ["rotating_light", "dependency-track"],
+  "click": "{{ baseUrl }}/projects/{{ subject.project.uuid | escape(strategy="json") }}"
+}
+{%- elseif notification.group == "GROUP_NEW_VULNERABILITIES_SUMMARY" -%}
+{%- set o = subject.overview -%}
+{
+  "topic": "homelab",
+  "title": "Dependency-Track weekly: {{ o.newVulnerabilitiesCount }} new finding(s) in {{ o.affectedProjectsCount }} project(s)",
+  "message": "{% for e in o.newVulnerabilitiesCountBySeverityMap %}{{ e.key | escape(strategy="json") }}: {{ e.value }}\n{% endfor %}Suppressed: {{ o.suppressedNewVulnerabilitiesCount }}\nFor the weekly sweep; anything urgent was pushed already.",
+  "priority": 2,
+  "tags": ["calendar", "dependency-track"],
+  "click": "{{ baseUrl }}/vulnerabilities"
+}
 {%- else -%}
 {
   "topic": "homelab",
