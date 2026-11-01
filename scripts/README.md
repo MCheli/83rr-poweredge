@@ -354,8 +354,10 @@ a CycloneDX SBOM of that exact image with Syft (`~/.local/bin/syft`), and
 uploads it to Dependency-Track as project `<container>`, version
 `<tag>@<digest12>`, marked latest. Existing versions are skipped (idempotent);
 when an image changes, the previous latest is cloned first so old findings
-and audit decisions carry over and only new findings alert. Keeps 2 versions
-per container. Talks to `deptrack-apiserver` on the docker bridge (no nginx),
+and audit decisions carry over and only new findings alert. After each upload
+every non-latest version of that project is deactivated (not deleted), so the
+portfolio metrics count only what runs; needs `PORTFOLIO_MANAGEMENT`, else it
+warns and continues. Talks to `deptrack-apiserver` on the docker bridge (no nginx),
 reads `DT_API_KEY` / `NTFY_PUBLISH_TOKEN` from `.env`, logs to
 `logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) only on failure.
 No sudo; needs the docker group.
@@ -366,6 +368,7 @@ scripts/sbom-scan.sh                  # what cron runs (03:30)
 scripts/sbom-scan.sh --dry-run        # list what would be uploaded
 scripts/sbom-scan.sh --only plex      # one container
 scripts/sbom-scan.sh --force          # re-upload unchanged images too
+scripts/sbom-scan.sh --deactivate-superseded-only [--dry-run]   # no scan: deactivate all non-latest versions
 ```
 
 **When to Use:**
