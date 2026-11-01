@@ -61,8 +61,21 @@ image ID otherwise (locally built images).
   (components, findings, audit decisions) to the new version and then uploads
   the BOM into the clone. Findings you already have carry over and do **not**
   alert again; only genuinely new ones do. The new version is marked latest.
-* Only the newest 2 versions per container are kept (`KEEP_VERSIONS`).
+* After each upload, every other version of that project that isn't latest is
+  **deactivated** (`active=false`), not deleted. DT leaves inactive projects
+  out of the portfolio metrics, so the totals count only what runs, but their
+  findings and audit history stay (UI: project list → *Show inactive*). Each
+  change is logged (`deactivated superseded version …`). This needs
+  `PORTFOLIO_MANAGEMENT` on the scanner team; without it the scan logs a
+  warning, still uploads, and leaves the old versions active.
 * Projects of containers that no longer run stay until you delete them in the UI.
+
+Until 2026-11-01 the scanner instead *deleted* versions beyond the newest 2
+(`KEEP_VERSIONS=2`). With exactly two versions per container (the old and
+the new), nothing was ever beyond 2, so after the 2026-11-01 upgrades 24
+superseded versions stayed active and the portfolio totals went **up**
+(crit 540 → 740) while what was running went down (540 → 294). Deletion is
+gone: deactivating keeps the history and is reversible.
 
 ### Supply chain: why Syft is installed the way it is
 
@@ -175,10 +188,16 @@ scripts/deptrack-setup.sh triage-key      # team "triage" key -> DT_TRIAGE_API_K
 scripts/sbom-scan.sh --dry-run            # what tonight's run would upload
 scripts/sbom-scan.sh --only uptime-kuma   # re-scan one container now
 scripts/sbom-scan.sh --force              # re-upload every container
+scripts/sbom-scan.sh --deactivate-superseded-only --dry-run   # list superseded versions (GETs only)
+scripts/sbom-scan.sh --deactivate-superseded-only             # deactivate them, no scanning
 docker compose logs --tail 100 deptrack-apiserver
 docker exec deptrack-apiserver wget -qO- http://127.0.0.1:9000/health/ready
 ```
 
+* **Image rolled back:** the next scan finds the old version already exists,
+  sets it active + latest again and deactivates the newer one (logged as
+  `reactivated … as latest`). To reactivate by hand: UI → project →
+  *Show inactive* → the version → *Active*.
 * **Rotate the scanner key:** delete it in the UI (Administration → Access
   Management → Teams → sbom-scanner), then `deptrack-setup.sh apply` creates a
   new one and rewrites `DT_API_KEY` in `.env`.
