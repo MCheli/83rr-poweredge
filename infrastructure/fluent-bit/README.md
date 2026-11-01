@@ -5,7 +5,7 @@ Fluent Bit collects logs from all Docker containers and ships them to OpenSearch
 ## Overview
 
 - **Role**: Log collection and forwarding
-- **Image**: fluent/fluent-bit:3.2
+- **Image**: fluent/fluent-bit:5.1.5 (pinned by digest in docker-compose.yml)
 - **Output**: OpenSearch (logs-homelab-* indices)
 - **Input**: Docker container JSON logs
 

@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** October 31, 2026
+**Last Updated:** November 1, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -406,7 +406,7 @@ scripts/install-syft.sh --force    # reinstall
 ### 12. `deptrack-setup.sh` 🏗️ DEPLOYMENT
 
 **Purpose:** First boot and idempotent configuration of Dependency-Track
-**Size:** ~18KB
+**Size:** ~27KB
 **Language:** Bash (+ python3 for JSON)
 
 **Description:**
@@ -414,22 +414,29 @@ scripts/install-syft.sh --force    # reinstall
 0600 file (for 1Password). `apply` sets the base URL, enables OSV + NVD
 (GitHub Advisories only with `DT_GITHUB_TOKEN`) and starts mirrors, stores the
 ntfy token as a DT secret, installs the `ntfy` webhook publisher with
-`infrastructure/dependency-track/ntfy-template.peb`, configures the alert rule
-(NEW_VULNERABILITY / NEW_VULNERABLE_DEPENDENCY, severity >= HIGH or KEV;
-created disabled), and creates team `sbom-scanner` with an API key written to
-`.env` as `DT_API_KEY`. Every step checks state first; re-running is safe.
+`infrastructure/dependency-track/ntfy-template.peb`, creates the alert policy
+(CEL: any KEV finding, or HIGH/CRITICAL with EPSS >= 0.1 in an internet-exposed
+project, list in `INTERNET_PROJECTS`) and the push rule that fires only on
+that policy's violations (created disabled; renames the old severity rule in
+place), adds the weekly digest (scheduled `NEW_VULNERABILITIES_SUMMARY` rule,
+Saturdays 13:00 UTC), and creates team `sbom-scanner` with an API key written
+to `.env` as `DT_API_KEY`. `triage-key` creates team `triage`
+(VIEW_PORTFOLIO, VIEW_VULNERABILITY, VULNERABILITY_ANALYSIS) and writes its
+key to `.env` as `DT_TRIAGE_API_KEY`. Every step checks state first;
+re-running is safe.
 
 **Usage:**
 ```bash
 scripts/deptrack-setup.sh init-admin
 scripts/deptrack-setup.sh apply
-scripts/deptrack-setup.sh status        # mirrors, projects, alerts on/off
-scripts/deptrack-setup.sh alerts on|off
-scripts/deptrack-setup.sh test-alert    # test push, verified in ntfy's cache
+scripts/deptrack-setup.sh triage-key    # key for the weekly sweep -> DT_TRIAGE_API_KEY
+scripts/deptrack-setup.sh status        # mirrors, projects, rules on/off, policy
+scripts/deptrack-setup.sh alerts on|off # push rule only; the digest keeps running
+scripts/deptrack-setup.sh test-alert    # push + digest test, verified in ntfy's cache
 ```
 
 **When to Use:**
-- Deploy (see the runbook in docs/dependency-track.md), and after rotating the ntfy token or scanner key.
+- Deploy (see the runbook in docs/dependency-track.md), after rotating the ntfy token or scanner key, and after changing which services are internet-exposed (`INTERNET_PROJECTS`).
 
 **Referenced in:** docs/dependency-track.md
 
