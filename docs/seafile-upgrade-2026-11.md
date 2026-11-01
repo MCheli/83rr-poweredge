@@ -70,11 +70,23 @@ Everything in this section is safe while 11.0 is running. **Don't `git pull` the
 edge nginx config is bind-mounted, and the new `/notification` route only works once
 `seafile-notification` exists.
 
-Run the whole runbook in a single **bash** shell, because the login shell is zsh and the snippets assume bash:
+The snippets assume **bash** (the login shell is zsh). They also depend on shell state: the `dc`/`q`
+helpers, `TS`/`SNAP`/`LOCAL` from step 2, and the 12.0 image overrides from step 4. If a block
+runs in a new shell (a new SSH connection, or an agent's separate tool call), that state is gone,
+and an empty `$SNAP`/`$LOCAL` makes the rollback destructive. So **start every block with the
+prelude**. Step 2 and step 4 persist the state it reloads:
 
 ```bash
-cd ~/83rr-poweredge && bash
+# PRELUDE: run at the top of every block, in bash
+cd ~/83rr-poweredge
 dc() { docker compose -f docker-compose.yml -f docker-compose.prod.yml "$@"; }
+q() { docker exec seafile-db sh -c "exec mariadb -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -N -e \"$1\""; }
+[ -f ~/seafile-upgrade.state ] && . ~/seafile-upgrade.state   # TS, SNAP, LOCAL (written in step 2)
+[ -f ~/seafile-upgrade.hop12 ] && . ~/seafile-upgrade.hop12   # 12.0 image overrides (step 4 to step 5 only)
+```
+
+```bash
+bash   # then paste the PRELUDE
 findmnt /storage && findmnt /mnt/nas          # both must print a mount
 df -h /storage /mnt/nas /data
 dc ps seafile seafile-db seafile-memcached    # all Up
@@ -137,10 +149,12 @@ This keeps uploads from being interrupted when the server stops.
 ## 2. Maintenance start: stop Seafile and back up (gate)
 
 ```bash
-cd ~/83rr-poweredge   # same bash session, dc() defined
+# PRELUDE first
+[ -f ~/seafile-upgrade.state ] && echo "!! ~/seafile-upgrade.state exists from an earlier run: check it, don't overwrite"
 TS=$(date +%Y%m%d-%H%M)
 SNAP=/mnt/nas/83rr-backup/pre-seafile-13-$TS        # off-host copy
 LOCAL=/storage/seafile-pre13-$TS                    # same-disk copy for fast rollback
+printf 'TS=%s\nSNAP=%s\nLOCAL=%s\n' "$TS" "$SNAP" "$LOCAL" > ~/seafile-upgrade.state   # reloaded by the prelude
 mkdir -p "$SNAP"
 git rev-parse HEAD > "$SNAP/git-head"               # pre-upgrade commit (rollback target)
 
@@ -153,7 +167,7 @@ files.markcheli.com now returns 502. **Downtime starts here.**
 ### 2a. Baseline counts (to compare after each hop)
 
 ```bash
-q() { docker exec seafile-db sh -c "exec mariadb -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -N -e \"$1\""; }
+# PRELUDE first
 q "SELECT 'users',COUNT(*) FROM ccnet_db.EmailUser UNION ALL SELECT 'repos',COUNT(*) FROM seafile_db.Repo
    UNION ALL SELECT 'branches',COUNT(*) FROM seafile_db.Branch UNION ALL SELECT 'repo_size_sum',SUM(size) FROM seafile_db.RepoSize
    UNION ALL SELECT 'tokens',COUNT(*) FROM seahub_db.api2_tokenv2" | tee "$SNAP/baseline.txt"
@@ -188,6 +202,9 @@ only proof that the rollback dump really loads.
 
 ```bash
 docker run -d --rm --name seafile-restore-test --network none -e MARIADB_ROOT_PASSWORD=restoretest mariadb:10.11
+# The entrypoint runs a temporary init server, then restarts. Wait for the real server, or the
+# import can hit the restart halfway through.
+until docker logs seafile-restore-test 2>&1 | grep -q 'init process done'; do sleep 2; done
 until docker exec seafile-restore-test mariadb -uroot -prestoretest -e 'SELECT 1' >/dev/null 2>&1; do sleep 2; done
 zcat "$SNAP/seafile-3db.sql.gz" | docker exec -i seafile-restore-test mariadb -uroot -prestoretest
 docker exec seafile-restore-test mariadb -uroot -prestoretest -N -e \
@@ -237,21 +254,29 @@ again (`dc up -d seafile`), and the window is over with nothing changed.
 git fetch origin && git status --short          # must print nothing (.env is gitignored)
 git pull --ff-only                              # brings in this PR (compose + nginx + script)
 dc config -q && echo COMPOSE_OK                 # fails loudly if 1a was skipped
-dc exec nginx nginx -t                          # new production.conf parses (don't reload yet)
 ```
+
+Don't run `nginx -t` here. Seafile is stopped, so Docker DNS can't resolve the static
+`upstream seafile { server seafile:80; }`, and the test fails with `host not found in upstream`
+even though the config is fine. Step 4b tests and reloads once seafile is running again.
 
 ---
 
 ## 4. Hop 1: 11.0.13 → 12.0.14
 
 ```bash
-export SEAFILE_IMAGE=seafileltd/seafile-mc:12.0.14@sha256:8d0dd6b682c12cb0e1d4f1f73ba223b0176e9e3d43805408a2f631706e9c10e8
-export SEAFILE_NOTIFICATION_IMAGE=seafileltd/notification-server:12.0.11@sha256:3155a6e476109edcb36be9b953e551d0dbe0ec37839b2c64d4f6dc559642532e
+# PRELUDE first
+printf 'export %s\n' \
+  SEAFILE_IMAGE=seafileltd/seafile-mc:12.0.14@sha256:8d0dd6b682c12cb0e1d4f1f73ba223b0176e9e3d43805408a2f631706e9c10e8 \
+  SEAFILE_NOTIFICATION_IMAGE=seafileltd/notification-server:12.0.11@sha256:3155a6e476109edcb36be9b953e551d0dbe0ec37839b2c64d4f6dc559642532e \
+  > ~/seafile-upgrade.hop12
+. ~/seafile-upgrade.hop12
 dc config seafile seafile-notification | grep 'image: seafileltd'   # both must show 12.0.x
 ```
 
-> ⚠️ Keep both exports in this shell until step 5. A `dc up` **without** them would start 13.0
-> directly, which skips the 12.0 checkpoint. It isn't harmful (both migrations would still run), but it isn't the plan.
+> ⚠️ The prelude reloads these overrides until step 5 deletes `~/seafile-upgrade.hop12`. A `dc up`
+> **without** them would start 13.0 directly, which skips the 12.0 checkpoint. It isn't harmful (both
+> migrations would still run), but it isn't the plan. Before every `dc up` in step 4, run the `dc config … | grep` check.
 
 **4a. Config migration (12):**
 
@@ -284,7 +309,8 @@ dc exec nginx nginx -t && dc exec nginx nginx -s reload                 # activa
 **4c. Verify 12.0** (all must pass before hop 2):
 
 ```bash
-until [ "$(docker inspect -f '{{.State.Health.Status}}' seafile)" = healthy ]; do sleep 5; done; echo healthy
+for i in $(seq 60); do [ "$(docker inspect -f '{{.State.Health.Status}}' seafile)" = healthy ] && break; sleep 5; done
+docker inspect -f '{{.State.Health.Status}}' seafile      # healthy (gives up after 5 min instead of hanging)
 curl -s -o /dev/null -w '%{http_code}\n' https://files.markcheli.com/accounts/login/   # 200
 curl -s https://files.markcheli.com/api2/ping/                                         # "pong"
 curl -s -w ' %{http_code}\n' https://files.markcheli.com/notification/ping             # {"ret": "pong"} 200
@@ -302,8 +328,9 @@ before you decide.
 ## 5. Hop 2: 12.0.14 → 13.0.28
 
 ```bash
+# PRELUDE first
 dc stop -t 60 seafile-notification seafile
-unset SEAFILE_IMAGE SEAFILE_NOTIFICATION_IMAGE
+rm -f ~/seafile-upgrade.hop12; unset SEAFILE_IMAGE SEAFILE_NOTIFICATION_IMAGE
 dc config seafile seafile-notification | grep 'image: seafileltd'   # both must show 13.0.x
 ```
 
@@ -327,6 +354,11 @@ sudo cat /storage/seafile/seafile/seafile-data/current_version      # 13.0.28
 docker logs seafile 2>&1 | grep -iE 'traceback|error|failed' | tail -20
 dc up -d seafile-notification
 docker logs --tail 20 seafile-notification
+# The recreated seafile container may have a new IP, and nginx resolved the static
+# `upstream seafile` when it loaded. Reload, or the edge keeps proxying to the old IP (502).
+dc exec nginx nginx -t && dc exec nginx nginx -s reload
+for i in $(seq 60); do [ "$(docker inspect -f '{{.State.Health.Status}}' seafile)" = healthy ] && break; sleep 5; done
+docker inspect -f '{{.State.Health.Status}}' seafile      # healthy
 ```
 
 If seahub logs a cache or redis error: `docker exec seafile-redis sh -c 'redis-cli -a "$REDIS_PASSWORD" ping'` should print `PONG`, and
@@ -391,6 +423,7 @@ Then:
 
 - [ ] Update `docs/DEPLOYMENT_STATUS.md` (Seafile 13.0.28, redis and notification-server entries).
 - [ ] Mark `docs/SEAFILE_UPGRADE_RUNBOOK.md` as done or delete it.
+- [ ] Keep `~/seafile-upgrade.state` until the snapshots are deleted, because the rollback reads it.
 - [ ] Keep `$SNAP` (NAS) and `$LOCAL` (`/storage/seafile-pre13-*`) for **at least 2 weeks**, then
       `sudo rm -rf /storage/seafile-pre13-*`. The NAS copy can stay longer.
 - [ ] After 2 stable weeks: follow-up PR removing `seafile-memcached` (13.0 uses redis), its
@@ -406,8 +439,18 @@ Seafile migrations only go forward. **Reverting only the image won't work agains
 *and* `/storage/seafile` (the conf files and the `current_version` stamp changed).
 
 ```bash
-cd ~/83rr-poweredge; dc() { docker compose -f docker-compose.yml -f docker-compose.prod.yml "$@"; }
-# SNAP and LOCAL as set in step 2 (ls -d /mnt/nas/83rr-backup/pre-seafile-13-* /storage/seafile-pre13-*)
+# PRELUDE first (it reloads SNAP and LOCAL from ~/seafile-upgrade.state)
+# GUARDS: the DROP and the rsync --delete below are destructive. With an empty $LOCAL, the
+# rsync would copy / over /storage/seafile. Continue only if this prints GUARDS_OK.
+rb=1
+[ -n "$SNAP" ] && [ -n "$LOCAL" ] || { echo "!! SNAP/LOCAL unset: check ~/seafile-upgrade.state"; rb=0; }
+zcat "$SNAP/seafile-3db.sql.gz" 2>/dev/null | tail -1 | grep -q 'Dump completed' || { echo "!! no usable dump in $SNAP"; rb=0; }
+[ "$(sudo cat "$LOCAL/seafile/seafile-data/current_version" 2>/dev/null)" = 11.0.13 ] || { echo "!! $LOCAL is not an 11.0.13 snapshot"; rb=0; }
+[ "$rb" = 1 ] && echo GUARDS_OK
+```
+
+```bash
+# PRELUDE first. Run this only after GUARDS_OK.
 dc stop -t 60 seafile-notification seafile
 dc rm -f seafile-notification seafile seafile-redis
 
@@ -423,7 +466,7 @@ sudo cat /storage/seafile/seafile/seafile-data/current_version     # 11.0.13
 
 # 3. Code: restore the pre-upgrade compose + nginx files
 git checkout "$(cat "$SNAP/git-head")" -- docker-compose.yml infrastructure/nginx/conf.d/production.conf scripts/test_infrastructure.py
-unset SEAFILE_IMAGE SEAFILE_NOTIFICATION_IMAGE
+rm -f ~/seafile-upgrade.hop12; unset SEAFILE_IMAGE SEAFILE_NOTIFICATION_IMAGE
 dc up -d seafile
 dc exec nginx nginx -t && dc exec nginx nginx -s reload
 
