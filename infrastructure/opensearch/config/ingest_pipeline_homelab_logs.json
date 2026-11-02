@@ -31,7 +31,7 @@
 
     {
       "grok": {
-        "if": "ctx.container_name == 'tasks' || ctx.container_name == 'faster-whisper'",
+        "if": "ctx.container_name == 'tasks'",
         "field": "log",
         "patterns": [
           "^%{LOGLEVEL:level}:\\s+%{IP:client_ip}:%{INT:client_port} - \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int}",
@@ -65,18 +65,6 @@
           "^\\[%{DATA:scope}\\] %{GREEDYDATA:msg}"
         ],
         "ignore_failure": true
-      }
-    },
-
-    {
-      "grok": {
-        "if": "ctx.container_name == 'edge-tts'",
-        "field": "log",
-        "patterns": [
-          "^%{IP:client_ip} - - \\[%{DATA:app_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} %{NUMBER:request_time:float}"
-        ],
-        "ignore_failure": true,
-        "description": "Apache-style access log with response time"
       }
     },
 
