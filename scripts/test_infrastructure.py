@@ -150,17 +150,6 @@ class InfrastructureHealthTest:
                 'url': 'https://openclaw.ops.markcheli.com',
                 'expected_content': 'OpenClaw',
                 'description': 'OpenClaw control UI'
-            },
-            'edge-tts': {
-                # Host-published on LOCAL_IP (not 0.0.0.0), no nginx vhost (plain HTTP).
-                'url': f"http://{os.getenv('LOCAL_IP', 'localhost')}:5050/v1/models",
-                'expected_content': 'tts-1',
-                'description': 'Edge TTS (OpenAI-compatible) model list'
-            },
-            'faster-whisper': {
-                'url': f"http://{os.getenv('LOCAL_IP', 'localhost')}:5051/health",
-                'expected_content': 'OK',
-                'description': 'Faster Whisper STT health'
             }
         }
 
@@ -223,8 +212,6 @@ class InfrastructureHealthTest:
             'energy-monitor-db': {'status': 'running', 'health': 'healthy'},
             'uptime-kuma': {'status': 'running', 'health': 'healthy'},
             'openclaw': {'status': 'running', 'health': 'healthy'},
-            'edge-tts': {'status': 'running', 'health': 'healthy'},
-            'faster-whisper': {'status': 'running', 'health': 'healthy'},
             'watchtower': {'status': 'running', 'health': 'healthy'}
         }
 
