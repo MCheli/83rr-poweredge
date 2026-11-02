@@ -48,7 +48,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      # Boot runs `openclaw doctor` (~100s) before the gateway binds :18789
+      # (~40s more), so a 20s grace marked it unhealthy on every restart.
+      start_period: 180s
 
 networks:
   openclaw-net:
