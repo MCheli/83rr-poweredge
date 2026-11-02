@@ -40,8 +40,8 @@ Refreshing the index-pattern field list after schema changes:
 | `method` | keyword | nginx / app HTTP grok | `GET`, `POST`, etc. |
 | `path` | keyword | nginx / app HTTP grok | URL path without query string. |
 | `status` | integer | nginx / app HTTP grok | HTTP status code. |
-| `bytes` | long | nginx / edge-tts grok | Response body size. |
-| `request_time` | float | edge-tts grok | Seconds. |
+| `bytes` | long | nginx grok | Response body size. |
+| `request_time` | float | (none since 2026-11-01) | Seconds. Was set by the edge-tts grok; the service is removed, the mapping stays for older indices. |
 | `client_ip` | ip | nginx / app HTTP grok | Real `ip` type — supports CIDR queries. |
 | `x_forwarded_for` | keyword | nginx grok | The XFF chain (string). |
 | `client_port` | integer | uvicorn / asgi grok | Source port from the request. |
@@ -152,7 +152,6 @@ Copy-paste into the search bar at the top of Discover. Lucene syntax.
 | All warnings | `level:WARNING` |
 | Server errors at the edge | `container_name:nginx AND status:[500 TO 599]` |
 | Failed auth | `container_name:nginx AND status:401` |
-| Slow requests (edge-tts) | `container_name:edge-tts AND request_time:>1.0` |
 | Healthcheck failures | `healthcheck:true AND status:!=200` |
 | Watchtower update failures | `container_name:watchtower AND extras:"Failed=*" AND NOT extras:"Failed=0"` |
 | Things the parser couldn't understand | `_exists_:ingest_error` |

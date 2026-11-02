@@ -117,6 +117,8 @@ services:
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
+      # Empty = /weather serves demo data.
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
     networks:
       - infrastructure
     healthcheck:
@@ -224,10 +226,12 @@ services:
   # Minecraft Server
   # ═════════════════════════════════════════════════════════════════════════════
   minecraft:
-    # Release tag + digest (2026-11-01, was floating java25 from 2026-05). The
+    # java25 rebuild of 2026-10-29 (mc-image-helper 1.75.0), pinned by digest
+    # (2026-11-01). It's newer than the last release tag (2026.10.1-java25
+    # @d12aed7e, the rollback), so there's no YYYY.M.P name for it yet. The
     # image upgrades Paper itself at startup (VERSION=LATEST); this pin only
     # covers the OS/JRE/tooling layer. Bump to the next YYYY.M.P-java25 release.
-    image: itzg/minecraft-server:2026.10.1-java25@sha256:d12aed7e35981dfe259b60fbfee77d23a19b5898a7a31dca298d18b47b7b5776
+    image: itzg/minecraft-server:java25@sha256:f7f2222512810f0f0e85133913622cf639be77a5dd1d4b11f24ab675da6ba742
     container_name: minecraft
     restart: unless-stopped
     logging: *default-logging
@@ -287,9 +291,11 @@ services:
   # Monitoring: Prometheus (Metrics Database)
   # ═════════════════════════════════════════════════════════════════════════════
   prometheus:
-    # v3.13.5 = current LTS line (2026-11-01, was v3.2.1). No TSDB format change
-    # within 3.x, so the old digest should still read the data on rollback.
-    image: prom/prometheus:v3.13.5@sha256:aafa9d694e6a883c02db516d9f6e5b84e14195f49a2a6456a4cca815edda72b9
+    # v3.15.1 (2026-11-01, was v3.13.5 LTS): Go 1.27.3 / x/net security fixes.
+    # 3.15 is not LTS, so move to 3.16.x or the next LTS when 3.15 stops getting
+    # patches. XOR2 chunks stay opt-in (not enabled here), so v3.13.5
+    # @aafa9d69 still reads the TSDB on rollback.
+    image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
     container_name: prometheus
     restart: unless-stopped
     logging: *default-logging
@@ -957,7 +963,7 @@ services:
   # seahub_settings.py). 13.0 uses seafile-redis. Remove this service in a
   # follow-up once 13.0 has been stable for two weeks (runbook step 6).
   seafile-memcached:
-    image: memcached:1.6
+    image: memcached:1.6.45@sha256:aea0d81d101a9b64fe30cf2cf2f96144e284f8e9552bb084a03f4e12e9043bab
     container_name: seafile-memcached
     restart: unless-stopped
     logging: *default-logging
@@ -1054,63 +1060,16 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # Voice AI Services (LAN-only, for HeyClawy ESP32 devices)
-  # Consumers reach them over the LAN by host IP + port: the HeyClawy firmware
-  # (SECRETS_TTS_HOST/PORT, SECRETS_STT_HOST/PORT) and Home Assistant (edge-tts).
-  # Published on LOCAL_IP (the server's LAN address, from .env) instead of
-  # 0.0.0.0, so they no longer listen on IPv6 ([::]) or other interfaces. No
-  # auth on either: never port-forward 5050/5051 on the router.
-  # ═════════════════════════════════════════════════════════════════════════════
-  edge-tts:
-    # Pinned by digest 2026-05-17 (was :latest) — 3rd-party, auto-pulled.
-    image: travisvn/openai-edge-tts@sha256:af8df8fb39719623cb6c3dbcba87ab65813030d97e20ae436d3161a53d41d72a
-    container_name: edge-tts
-    restart: unless-stopped
-    logging: *default-logging
-    ports:
-      - "${LOCAL_IP:?set LOCAL_IP in .env}:5050:5050"
-    environment:
-      - DEFAULT_VOICE=en-US-AndrewNeural
-      - DEFAULT_LANGUAGE=en-US
-      - REQUIRE_API_KEY=false
-    networks:
-      - voice-services
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5050/v1/models')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  faster-whisper:
-    # Pinned by digest 2026-05-17 (was :latest-cuda) — 3rd-party, auto-pulled.
-    image: fedirz/faster-whisper-server@sha256:0b64050ad0b9244745746b652473ee42a8d5454d501877a252c3e65f631ffc99
-    container_name: faster-whisper
-    restart: unless-stopped
-    logging: *default-logging
-    ports:
-      - "${LOCAL_IP:?set LOCAL_IP in .env}:5051:8000"
-    environment:
-      - WHISPER__MODEL=Systran/faster-whisper-small
-      - WHISPER__DEVICE=cpu
-      - WHISPER__COMPUTE_TYPE=int8
-    networks:
-      - voice-services
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ═════════════════════════════════════════════════════════════════════════════
   # Watchtower (Automatic Container Updates)
   # Monitors ghcr.io images and auto-deploys when new versions are pushed
   # ═════════════════════════════════════════════════════════════════════════════
   watchtower:
     # containrrr/watchtower is abandoned and too old for the Docker 29 API
     # (min API 1.40); migrated to the maintained nicholas-fedor fork 2026-08-05.
-    image: ghcr.io/nicholas-fedor/watchtower:latest
+    # Pinned 2026-11-01 (was :latest = 1.20.3). The fork tags images without
+    # the "v" its GitHub releases use. 1.23.2 checks notification URLs at
+    # startup; logger:// below is valid.
+    image: ghcr.io/nicholas-fedor/watchtower:1.23.2@sha256:62fb91130ddb493f869cad7e198fa260dd16c5da293ed092cbd5d8781566f7a6
     container_name: watchtower
     restart: unless-stopped
     logging: *default-logging
@@ -1143,9 +1102,6 @@ networks:
     # Created by infrastructure/openclaw/docker-compose.yml
     external: true
     name: openclaw_nginx-openclaw
-  voice-services:
-    # LAN-only network for voice AI services (EdgeTTS, faster-whisper)
-    driver: bridge
   tallied-demo:
     # Only the Tallied demo app and its database; the demo can't reach tallied-db
     internal: true
