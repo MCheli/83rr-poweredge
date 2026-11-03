@@ -23,9 +23,11 @@
                 { "term": { "healthcheck": true } },
                 { "range": { "@timestamp": { "gte": "now-5m" } } }
               ],
-              "must_not": [
-                { "term": { "status": 200 } }
-              ]
+              "should": [
+                { "range": { "status": { "gte": 500 } } },
+                { "bool": { "must_not": [ { "exists": { "field": "status" } } ] } }
+              ],
+              "minimum_should_match": 1
             }
           },
           "aggs": {

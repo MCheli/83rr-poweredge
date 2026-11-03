@@ -161,7 +161,7 @@ docker exec opensearch curl -s -X POST "http://localhost:9200/_plugins/_alerting
 | `error-rate-5m.json` | ERROR/CRITICAL/FATAL count > 10 in 5 min, per-service | 2 |
 | `nginx-5xx-burst.json` | nginx status 500-599 count > 5 in 5 min | 1 |
 | `auth-bruteforce.json` | nginx status 401 from same client_ip > 30 in 5 min | 2 |
-| `healthcheck-failure.json` | healthcheck:true AND status != 200, any in 5 min | 2 |
+| `healthcheck-failure.json` | healthcheck:true AND (status >= 500 OR no status), >= 3 in 5 min. 3xx/4xx are excluded: in practice they are internet scanners probing `/api/health` on public vhosts (e.g. 2026-11-03 08:30Z); a wrong route on a real probe is caught by Uptime Kuma | 2 |
 | `watchtower-update-failure.json` | watchtower Failed != 0 in last 1h | 3 |
 
 The files' actions already point at `ntfy-homelab`; run `wire-ntfy.py` once
