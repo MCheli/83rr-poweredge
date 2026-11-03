@@ -48,7 +48,7 @@ Refreshing the index-pattern field list after schema changes:
 | `referrer` | keyword | nginx grok | HTTP Referer. |
 | `user_agent` | keyword | nginx grok | UA string. |
 | `http_version` | keyword | nginx / app HTTP grok | `1.0`, `1.1`, `2.0`, `3.0`. |
-| `healthcheck` | boolean | Pipeline | `true` if path matches `/health`, `/api/health`, `/api/v1/health`, etc. **Successful healthchecks are dropped at Fluent Bit, so any healthcheck doc with `status:!=200` is a real signal.** |
+| `healthcheck` | boolean | Pipeline | `true` if path matches `/health`, `/api/health`, `/api/v1/health`, etc. **Successful healthchecks are dropped at Fluent Bit.** The tag is path-based, so internet scanners probing `/api/health` on public vhosts also get it (they show up as 301/404). Treat only 5xx / missing status as a real probe failure. |
 | `ingest_error` | text | Pipeline `on_failure` | Set when grok / a processor failed. Filter on `_exists_:ingest_error` to find broken parses. |
 | `source` | keyword | Multiple | Either Prometheus's `source=...` field, or the Fluent Bit `source: file` marker for Plex/Seafile file inputs. |
 
@@ -176,7 +176,7 @@ Names matter — keep them stable so a status page can subscribe by name.
 | `error-rate-5m` | per-service: `level:(ERROR OR CRITICAL OR FATAL)` count > 10 in 5 min | 2 (high) |
 | `nginx-5xx-burst` | `container_name:nginx AND status:[500 TO 599]` count > 5 in 5 min | 1 (critical) |
 | `auth-bruteforce` | `container_name:nginx AND status:401` from same `client_ip` count > 30 in 5 min | 2 |
-| `healthcheck-failure` | `healthcheck:true AND status:!=200` any in 5 min | 2 |
+| `healthcheck-failure` | `healthcheck:true AND (status:>=500 OR NOT _exists_:status)` >= 3 in 5 min | 2 |
 | `watchtower-update-failure` | `container_name:watchtower AND extras:"Failed=*" AND NOT extras:"Failed=0"` any in 1h | 3 |
 | `parser-failures-spike` | `_exists_:ingest_error` count > 100 in 1h | 4 (warning) |
 | `backup-no-success-24h` | (separate cron job that writes a heartbeat doc to OpenSearch when backup succeeds; alert on its absence) | 1 |
