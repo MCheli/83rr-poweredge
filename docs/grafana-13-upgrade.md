@@ -41,13 +41,12 @@ Every block starts by sourcing `$D/state.env`, so any step can be resumed from a
 ```bash
 cd ~/83rr-poweredge
 D=/data/backups/upgrade-20261103; mkdir -p $D/before
-cat > $D/state.env <<EOF
-D=$D
-OLD_REV=$(git rev-parse HEAD)
-OLD_IMAGE_ID=$(docker inspect grafana --format '{{.Image}}')
-OLD_DIGEST=grafana/grafana@sha256:ae509d9ae8c1021ca32ec370a9ca975d40165eda9fccd1e1102d317ff8787cd7
-VOL=83rr-poweredge_grafana_data
-EOF
+# printf, not a cat heredoc: interactive zsh here aliases cat to `cat -n`
+printf '%s\n' "D=$D" "OLD_REV=$(git rev-parse HEAD)" \
+  "OLD_IMAGE_ID=$(docker inspect grafana --format '{{.Image}}')" \
+  "OLD_DIGEST=grafana/grafana@sha256:ae509d9ae8c1021ca32ec370a9ca975d40165eda9fccd1e1102d317ff8787cd7" \
+  "VOL=83rr-poweredge_grafana_data" > $D/state.env
+command cat $D/state.env     # check: plain KEY=value lines, no line numbers
 git pull --ff-only
 ```
 
@@ -77,11 +76,12 @@ wc -l $D/before/*.txt     # expect 6 dashboards, 2 datasources, 0 alert rules, 1
 docker compose -f docker-compose.yml -f docker-compose.prod.yml stop grafana
 docker run --rm -u 0 --entrypoint sh -v $VOL:/src:ro -v $D:/dst $OLD_DIGEST \
   -c "tar -C /src -czf /dst/grafana_data.tgz . && chown $(id -u):$(id -g) /dst/grafana_data.tgz"
-tar -tzf $D/grafana_data.tgz | grep -qx './grafana.db' && echo "db present"
+tar -tzf $D/grafana_data.tgz | grep -qx './grafana.db' && echo "db present" || echo '!! STOP: grafana.db not in the tarball. Do not continue'
 echo "BACKUP_SHA=$(sha256sum $D/grafana_data.tgz | cut -d' ' -f1)" >> $D/state.env
 N=/mnt/nas/83rr-backup/upgrade-20261103
 mountpoint -q /mnt/nas && mkdir -p $N && cp $D/grafana_data.tgz $D/state.env $N/ \
-  && [ "$(sha256sum $N/grafana_data.tgz | cut -d' ' -f1)" = "$(sha256sum $D/grafana_data.tgz | cut -d' ' -f1)" ] && echo "NAS copy verified"
+  && [ "$(sha256sum $N/grafana_data.tgz | cut -d' ' -f1)" = "$(sha256sum $D/grafana_data.tgz | cut -d' ' -f1)" ] && echo "NAS copy verified" \
+  || echo '!! STOP: NAS copy missing or sha mismatch. Do not continue'
 ```
 If the NAS isn't writable as `mcheli`, stop and copy it by another route. Don't use sudo. Don't continue without an off-box copy.
 
@@ -151,14 +151,15 @@ if [ "$(sha256sum $D/grafana_data.tgz | cut -d' ' -f1)" = "$BACKUP_SHA" ]; then
   docker compose -f docker-compose.yml -f docker-compose.prod.yml stop grafana
   docker run --rm -u 0 --entrypoint sh -v $VOL:/dst -v $D:/src:ro $OLD_DIGEST \
     -c 'find /dst -mindepth 1 -delete && tar -C /dst -xzf /src/grafana_data.tgz'
-  git checkout $OLD_REV -- docker-compose.yml      # back to the 12.4.14 pin; no commit on the server
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml config --images | grep grafana  # expect grafana/grafana:12.4.14
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps grafana
+  # Override only grafana's image. A git checkout of docker-compose.yml would also undo unrelated pins merged since OLD_REV.
+  printf 'services:\n  grafana:\n    image: grafana/grafana:rollback-12.4.14\n' > ~/grafana-rollback.override.yml
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f ~/grafana-rollback.override.yml config --images | grep grafana  # expect grafana/grafana:rollback-12.4.14
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f ~/grafana-rollback.override.yml up -d --no-deps grafana
 else
-  echo "BACKUP SHA MISMATCH: STOP. Nothing changed. Verify the NAS copy (/mnt/nas/83rr-backup/upgrade-20261103/) and restore from it instead"
+  echo "!! STOP: BACKUP SHA MISMATCH. Nothing changed. Verify the NAS copy (/mnt/nas/83rr-backup/upgrade-20261103/) and restore from it instead"
 fi
 ```
-Then run steps 5 and 6 again, expecting version 12.4.14, and open a revert PR on GitHub. Once that PR is merged, `git checkout -- docker-compose.yml && git pull --ff-only` returns the server to a clean tree. Anything changed in the UI while 13.x was running is lost, but in practice that's nothing, because the dashboards are file-provisioned.
+Then run steps 5 and 6 again, expecting version 12.4.14, and open a revert PR for this change on GitHub. Keep `~/grafana-rollback.override.yml`, and pass it as a third `-f` on every grafana `up` until that revert PR is merged and pulled. A plain `up -d` would bring 13.3.0 back onto the restored 12.4 data. Delete the override file once the revert is pulled. The server's git tree is never modified. Anything changed in the UI while 13.x was running is lost, but in practice that's nothing, because the dashboards are file-provisioned.
 
 ## Optional follow-up (only after the 10-minute watch passes)
 These change state after the backup. Do them separately, if at all.
