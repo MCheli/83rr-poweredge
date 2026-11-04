@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 3, 2026
+**Last Updated:** November 4, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -345,7 +345,7 @@ out of credits) and nothing noticed.
 ### 10. `sbom-scan.sh` 🔐 SBOM / CVE SCAN
 
 **Purpose:** Nightly SBOM of every running container, uploaded to Dependency-Track
-**Size:** ~42KB
+**Size:** ~59KB
 **Language:** Bash (+ python3 for JSON)
 
 **Description:**
@@ -358,9 +358,17 @@ image). Image ref and digest are stored on that version as properties (group
 digest matches the stored one is skipped (idempotent). Re-uploading into the
 same version keeps findings and analyses of components still in the image, and
 DT's portfolio history stays continuous, so its dashboard shows the burn-down.
+A package whose version changes is a new component, so the analysed findings
+of `running` are snapshotted before each re-upload and replayed after DT has
+processed the BOM (kept in `~/.cache/sbom-scan/pending/` for the next run if
+it hasn't). Every analysis copy matches the same purl first, then the same
+purl at another version: a suppressed NOT_AFFECTED/FALSE_POSITIVE is carried
+to the one newer-or-equal build (dpkg / apk / semver order, comment
+"re-verify"); downgrades, several candidates and other states are logged as
+"needs review" and pushed to ntfy (one push; not with `--no-notify`).
 Only `--migrate-stable` moves a container off the old per-digest model (the
 nightly run keeps unmigrated containers on it): the old latest version is
-cloned to `running`, missing analyses are copied by (purl, vulnerability)
+cloned to `running`, missing analyses are copied (two-pass, as above)
 with `DT_TRIAGE_API_KEY`, and the old versions are deactivated (not deleted;
 needs `PORTFOLIO_MANAGEMENT`, else it warns and continues). A re-run finishes
 a half-done migration. After each full run it appends DT's current portfolio totals to
@@ -368,7 +376,7 @@ a half-done migration. After each full run it appends DT's current portfolio tot
 node-exporter's textfile collector (Grafana "Dependency-Track trend").
 Talks to `deptrack-apiserver` on the docker bridge (no nginx), reads
 `DT_API_KEY` / `DT_TRIAGE_API_KEY` / `NTFY_PUBLISH_TOKEN` from `.env`, logs to
-`logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) only on failure.
+`logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) on failure, one when analyses need review and one listing suppressions carried to a newer build (each also logged).
 No sudo; needs the docker group.
 
 **Usage:**

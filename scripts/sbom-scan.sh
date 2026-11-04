@@ -15,7 +15,14 @@
 # Re-uploading into the same version keeps the findings, analyses and
 # suppressions of every component that is still in the BOM (DT matches
 # components by identity; checked on DT 5.2.1), so an image bump alerts only
-# on findings that are actually new.
+# on findings that are actually new. A component whose VERSION changed (say
+# openssl moved to a newer Ubuntu build) is a new component without them, so
+# the analysed findings of "running" are snapshotted before each re-upload and
+# replayed afterwards. Every analysis copy (replay, clone, migration) matches
+# the same purl first, then the same purl at another version: a suppressed
+# NOT_AFFECTED/FALSE_POSITIVE is carried to the one newer-or-equal build
+# (comment "re-verify"); anything else (a downgrade, several candidates, other
+# states) is logged as "needs review" and pushed to ntfy.
 #
 # Migration from the old model (one version "<tag>@<digest>" per image), ONLY
 # with --migrate-stable: for a container with no "running" version yet, its
@@ -72,6 +79,7 @@ METRICS_LOG="${METRICS_LOG:-${PROJECT_DIR}/logs/deptrack-metrics.jsonl}"
 TEXTFILE_DIR="${TEXTFILE_DIR:-${PROJECT_DIR}/logs/textfile}"   # node-exporter textfile collector
 SYFT="${SYFT:-$HOME/.local/bin/syft}"
 CACHE_DIR="${CACHE_DIR:-$HOME/.cache/sbom-scan}"
+PENDING_DIR="${CACHE_DIR}/pending"          # analysis snapshots a run couldn't replay yet
 DT_CONTAINER="${DT_CONTAINER:-deptrack-apiserver}"
 PROCESS_TIMEOUT="${PROCESS_TIMEOUT:-900}"   # seconds to wait for DT to analyze one BOM
 STABLE_VERSION="running"                    # the one DT version per container
@@ -146,23 +154,23 @@ umask 022
 FAILURES=()
 fail() { FAILURES+=("$1"); log "ERROR: $1"; }
 
-notify_failure() {
-    [[ "$NOTIFY" == true && "$DRY_RUN" == false && ${#FAILURES[@]} -gt 0 ]] || return 0
+# ntfy_push TITLE TAG ITEMS... -> ONE short push (topic homelab, first 8 items)
+ntfy_push() {
     if [[ -z "$NTFY_PUBLISH_TOKEN" ]]; then
-        log "NTFY_PUBLISH_TOKEN not set; cannot send failure push"
+        log "NTFY_PUBLISH_TOKEN not set; cannot send the push \"${1}\""
         return 0
     fi
     local body ip url sent=false
-    body=$(python3 - "$NTFY_TOPIC" "${#FAILURES[@]}" "$TOTAL" "${FAILURES[@]}" <<'EOF'
+    body=$(python3 - "$NTFY_TOPIC" "$@" <<'EOF'
 import json, sys
-topic, n, total, items = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
+topic, title, tag, items = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 lines = items[:8] + ([f"... and {len(items) - 8} more"] if len(items) > 8 else [])
 print(json.dumps({
     "topic": topic,
-    "title": f"SBOM scan: {n} failure(s) of {total} container(s)",
+    "title": title,
     "message": "\n".join(lines) + "\nLog: ~/83rr-poweredge/logs/sbom-scan.log",
     "priority": 3,
-    "tags": ["warning", "dependency-track"],
+    "tags": [tag, "dependency-track"],
 }))
 EOF
 )
@@ -173,11 +181,24 @@ EOF
         if curl -fsS -o /dev/null --max-time 15 -H @"${WORK}/ntfy-hdr" \
                 -H 'Content-Type: application/json' -d "$body" "$url"; then
             sent=true
-            log "failure summary sent to ntfy (${url})"
+            log "push \"${1}\" sent to ntfy (${url})"
             break
         fi
     done
-    [[ "$sent" == true ]] || log "could not reach ntfy to send the failure summary"
+    [[ "$sent" == true ]] || log "could not reach ntfy to send the push \"${1}\""
+}
+
+# notify -> failures, analyses that need a human (not carried across a
+# version change), and suppressions that were carried to a newer build (to
+# re-verify), each as one push. Not on --no-notify or a dry run.
+notify() {
+    [[ "$NOTIFY" == true && "$DRY_RUN" == false ]] || return 0
+    (( ${#FAILURES[@]} == 0 )) \
+        || ntfy_push "SBOM scan: ${#FAILURES[@]} failure(s) of ${TOTAL} container(s)" warning "${FAILURES[@]}"
+    (( ${#REVIEW[@]} == 0 )) \
+        || ntfy_push "SBOM scan: ${#REVIEW[@]} triage analysis/analyses need review" mag "${REVIEW[@]}"
+    (( ${#CARRIED[@]} == 0 )) \
+        || ntfy_push "SBOM scan: ${#CARRIED[@]} suppression(s) carried to a newer build (re-verify)" recycle "${CARRIED[@]}"
 }
 
 finish() {
@@ -188,10 +209,11 @@ finish() {
     elif [[ "$DEACTIVATE_ONLY" == true ]]; then
         log "done: ${DEACTIVATED} superseded version(s) ${would}deactivated, ${#FAILURES[@]} failed"
     else
-        [[ "$MIGRATE" == false ]] || log "migration: ${MIGRATED} container(s) ${would}moved to \"${STABLE_VERSION}\", ${ALREADY} already on it, ${STALE} project(s) without a container left as they are; analyses: ${ANALYSES_SRC} on the old versions, ${ANALYSES_COPIED} ${would}copied, ${ANALYSES_PRESENT} already present, ${ANALYSES_GONE} for components no longer in the image"
+        [[ "$MIGRATE" == false ]] || log "migration: ${MIGRATED} container(s) ${would}moved to \"${STABLE_VERSION}\", ${ALREADY} already on it, ${STALE} project(s) without a container left as they are; analyses: ${ANALYSES_SRC} on the old versions, ${ANALYSES_COPIED} ${would}copied, ${ANALYSES_CARRIED} carried across version change, ${ANALYSES_PRESENT} already present, ${ANALYSES_REVIEW} need review, ${ANALYSES_GONE} for components no longer in the image"
+        [[ "$MIGRATE" == true || "$COPY_RAN" == false ]] || log "analyses: ${ANALYSES_SRC} checked, ${ANALYSES_COPIED} copied, ${ANALYSES_CARRIED} carried across version change, ${ANALYSES_PRESENT} already present, ${ANALYSES_REVIEW} need review, ${ANALYSES_GONE} for components no longer in the image"
         log "done: ${UPLOADED} ${would}uploaded, ${SKIPPED} unchanged, ${DEACTIVATED} superseded ${would}deactivated, ${#FAILURES[@]} failed, ${TOTAL} containers"
     fi
-    notify_failure
+    notify
     [[ ${#FAILURES[@]} -eq 0 ]]
     exit $?
 }
@@ -207,6 +229,12 @@ ANALYSES_SRC=0
 ANALYSES_COPIED=0
 ANALYSES_PRESENT=0
 ANALYSES_GONE=0
+ANALYSES_CARRIED=0
+ANALYSES_REVIEW=0
+COPY_RAN=false
+CONVERGED=0
+REVIEW=()
+CARRIED=()
 CAN_DEACTIVATE=true
 CAN_TRIAGE=false
 
@@ -326,17 +354,33 @@ image_info() {
     echo "$tag $digest $image_id $cfg_image"
 }
 
-# copy_analyses SRC_UUID DST_UUID|"" SRC_LABEL -> copies every analysis
-# (state, justification, response, details, suppression) of version SRC onto
-# the same finding (component purl + vulnerability source/ID) in DST, where
-# DST has none yet. Never overwrites an analysis DST already has, so it is
-# safe to repeat. Without DST (dry run) it only counts. Prints
-# "<analysed on src> <copied> <already present> <component gone> <failed>".
-copy_analyses() {
-    python3 - "$DT_URL" "${WORK}/triage-hdr" "$1" "$2" "$3" <<'EOF'
-import json, sys, urllib.parse, urllib.request
-url, hdr, src, dst, label = sys.argv[1:6]
+# analyses snapshot PROJECT_UUID OUT_FILE -> every analysed finding of
+# PROJECT (component, vulnerability, full GET /api/v1/analysis) as JSON in
+# OUT_FILE; prints how many.
+#
+# analyses copy project|snapshot SRC DST_UUID|"" SRC_LABEL REVIEW_FILE ->
+# copies every analysis (state, justification, response, details,
+# suppression) of version SRC (or of a snapshot file) onto DST, where DST has
+# none yet. Two passes:
+#   1. the same finding: component purl + vulnerability source/ID;
+#   2. for an analysis with no such finding, the same purl WITHOUT its
+#      version (same qualifiers) + source/ID: a package that moved to another
+#      build. Copied only if there is exactly one candidate, it has no
+#      analysis, the old analysis is a suppressed NOT_AFFECTED/FALSE_POSITIVE,
+#      and the new version is >= the old (dpkg rules for pkg:deb, apk rules
+#      for pkg:apk, semver/PEP 440 otherwise); the copy says "re-verify".
+#      Anything else is a "needs review" line in REVIEW_FILE.
+# Never overwrites an analysis DST already has, so it is safe to repeat.
+# Without DST (dry run) it only counts. Prints "<analysed on src> <copied>
+# <already present> <component gone> <failed> <carried across version
+# change> <needs review>".
+analyses() {
+    python3 - "$DT_URL" "${WORK}/triage-hdr" "$@" <<'EOF'
+import json, re, sys, urllib.parse, urllib.request
+url, hdr, mode = sys.argv[1:4]
 key = open(hdr).read().split(":", 1)[1].strip()
+CARRY_STATES = ("NOT_AFFECTED", "FALSE_POSITIVE")   # carried across a version change (suppressed only)
+FIELDS = ("analysisState", "analysisJustification", "analysisResponse", "analysisDetails")
 
 def call(method, path, body=None):
     req = urllib.request.Request(url + path, method=method,
@@ -364,43 +408,210 @@ def analysed(f):
     a = f.get("analysis") or {}
     return a.get("state") not in (None, "NOT_SET") or bool(a.get("isSuppressed"))
 
-old = {ident(f): f for f in findings(src) if analysed(f)}
-if not dst:
-    print(len(old), 0, 0, 0, 0)
+def full_analysis(project, f):
+    return call("GET", "/api/v1/analysis?" + urllib.parse.urlencode({
+        "project": project, "component": f["component"]["uuid"], "vulnerability": f["vulnerability"]["uuid"]})) or {}
+
+def loose(f):
+    """((purl without version, qualifiers sorted), source, vulnId), purl type, version"""
+    c, v = f["component"], f["vulnerability"]
+    purl = c.get("purl")
+    if not purl:
+        return (f'{c.get("group") or ""}/{c.get("name")}', v.get("source"), v.get("vulnId")), "", c.get("version") or ""
+    rest, _, sub = purl.partition("#")
+    rest, _, quals = rest.partition("?")
+    head, at, ver = rest.rpartition("@")
+    if not at or "/" in ver:   # no version (an "@" in the namespace)
+        head, ver = rest, ""
+    quals = "&".join(sorted(q for q in quals.split("&") if q))
+    typ = head[4:].split("/", 1)[0].lower() if head.startswith("pkg:") else ""
+    base = head + (f"?{quals}" if quals else "") + (f"#{sub}" if sub else "")
+    return (base, v.get("source"), v.get("vulnId")), typ, urllib.parse.unquote(ver)
+
+# --- version order: cmp(a, b) -> <0 / 0 / >0; ValueError if not comparable ---
+def dpkg_cmp(a, b):   # dpkg --compare-versions (epoch:upstream-revision)
+    def split(v):
+        epoch, _, rest = v.partition(":") if ":" in v else ("0", "", v)
+        if not epoch.isdigit():
+            raise ValueError(v)
+        up, dash, rev = rest.rpartition("-")
+        if dash and not rev:   # "1.0-": dpkg rejects an empty revision
+            raise ValueError(v)
+        return int(epoch), (up if dash else rest), (rev if dash else "")
+    def order(c):
+        return 0 if c.isdigit() else ord(c) if c.isalpha() else -1 if c == "~" else ord(c) + 256
+    def verrev(x, y):
+        i = j = 0
+        while i < len(x) or j < len(y):
+            while (i < len(x) and not x[i].isdigit()) or (j < len(y) and not y[j].isdigit()):
+                ox = order(x[i]) if i < len(x) else 0
+                oy = order(y[j]) if j < len(y) else 0
+                if ox != oy:
+                    return ox - oy
+                i += 1; j += 1
+            while i < len(x) and x[i] == "0":
+                i += 1
+            while j < len(y) and y[j] == "0":
+                j += 1
+            first = 0
+            while i < len(x) and x[i].isdigit() and j < len(y) and y[j].isdigit():
+                first = first or int(x[i]) - int(y[j])
+                i += 1; j += 1
+            if i < len(x) and x[i].isdigit():
+                return 1
+            if j < len(y) and y[j].isdigit():
+                return -1
+            if first:
+                return first
+        return 0
+    (ea, ua, ra), (eb, ub, rb) = split(a), split(b)
+    return (ea - eb) or verrev(ua, ub) or verrev(ra, rb)
+
+APK = re.compile(r"(\d+(?:\.\d+)*)([a-z]?)((?:_(?:alpha|beta|pre|rc|cvs|svn|git|hg|p)\d*)*)(?:~[0-9a-f]+)?(?:-r(\d+))?")
+APK_SUFFIX = {"alpha": 0, "beta": 1, "pre": 2, "rc": 3, "cvs": 5, "svn": 6, "git": 7, "hg": 8, "p": 9}   # 4 = none
+
+def apk_key(v):   # apk version order: 1.2.3a_rc1-r2
+    m = APK.fullmatch(v)
+    if not m:
+        raise ValueError(v)
+    sufs = [(APK_SUFFIX[s], int(n or 0)) for s, n in re.findall(r"_([a-z]+)(\d*)", m.group(3))] + [(4, 0)]
+    return [int(x) for x in m.group(1).split(".")], m.group(2), sufs, int(m.group(4) or 0)
+
+SEMVER = re.compile(r"v?(\d+(?:\.\d+)*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?")
+
+def semver_key(v):   # 1.2 == 1.2.0; a pre-release sorts before its release
+    m = SEMVER.fullmatch(v)
+    if not m:
+        raise ValueError(v)
+    core = [int(x) for x in m.group(1).split(".")]
+    while len(core) > 1 and core[-1] == 0:
+        core.pop()
+    pre = m.group(2)
+    ids = [] if pre is None else [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre.split(".")]
+    return core, pre is None, ids
+
+def order_cmp(key, a, b):
+    ka, kb = key(a), key(b)
+    return (ka > kb) - (ka < kb)
+
+def pep440_cmp(a, b):   # ImportError if packaging isn't installed; InvalidVersion is a ValueError
+    from packaging.version import Version
+    return order_cmp(Version, a, b)
+
+def cmp_versions(typ, a, b):
+    if typ == "deb":
+        return dpkg_cmp(a, b)
+    if typ == "apk":
+        return order_cmp(apk_key, a, b)
+    for f in ((pep440_cmp, lambda x, y: order_cmp(semver_key, x, y)) if typ == "pypi" else
+              (lambda x, y: order_cmp(semver_key, x, y), pep440_cmp)):
+        try:
+            return f(a, b)
+        except (ValueError, ImportError):
+            pass
+    raise ValueError(f"{a} / {b}")
+
+if mode == "snapshot":
+    project, out = sys.argv[4:6]
+    snap = [dict(f, fullAnalysis=full_analysis(project, f)) for f in findings(project) if analysed(f)]
+    with open(out, "w") as fh:
+        json.dump(snap, fh)
+    print(len(snap))
     sys.exit(0)
-new = {}   # ident -> every matching finding (a package vendored twice is two components)
+
+kind, src, dst, label, review_path = sys.argv[4:9]
+old = {}
+for f in (json.load(open(src)) if kind == "snapshot" else [f for f in findings(src) if analysed(f)]):
+    old.setdefault(ident(f), f)
+open(review_path, "w").close()
+open(review_path + ".carried", "w").close()
+if not dst:
+    print(len(old), 0, 0, 0, 0, 0, 0)
+    sys.exit(0)
+new = {}     # ident -> every matching finding (a package vendored twice is two components)
+loose_new = {}
 for f in findings(dst):
     new.setdefault(ident(f), []).append(f)
-copied = present = gone = failed = 0
+    lk, typ, ver = loose(f)
+    loose_new.setdefault(lk, []).append((f, ver))
+done = set()   # (component, vulnerability) written by this run
+
+def free(n):
+    return not analysed(n) and (n["component"]["uuid"], n["vulnerability"]["uuid"]) not in done
+
+def body_for(f):
+    a = f.get("analysis") or {}
+    body = {"analysisState": a.get("state"), "isSuppressed": bool(a.get("isSuppressed"))}
+    full = f.get("fullAnalysis")
+    if full is None:
+        try:
+            full = full_analysis(src, f)
+        except Exception:
+            full = {}   # fall back to the state/suppression from the finding itself
+    for field in FIELDS:
+        if full.get(field) is not None:
+            body[field] = full[field]
+    body["isSuppressed"] = bool(full.get("isSuppressed", body["isSuppressed"]))
+    return body
+
+def put(n, body, comment, what):
+    try:
+        call("PUT", "/api/v1/analysis", dict(body, project=dst, component=n["component"]["uuid"],
+                                             vulnerability=n["vulnerability"]["uuid"], comment=comment))
+        done.add((n["component"]["uuid"], n["vulnerability"]["uuid"]))
+        return True
+    except Exception as e:
+        print(f"could not copy {what}: {e}", file=sys.stderr)
+        return False
+
+copied = present = gone = failed = carried = 0
+review = []
+carried_log = []   # audit trail: every finding pass 2 suppressed on its own
 for k, f in old.items():
-    targets = [n for n in new.get(k, []) if not analysed(n)]
-    if k not in new:
+    if k in new:   # pass 1: the same finding
+        targets = [n for n in new[k] if free(n)]
+        if not targets:
+            present += 1
+        for n in targets:
+            if put(n, body_for(f), f"copied from version {label} by sbom-scan.sh", k):
+                copied += 1
+            else:
+                failed += 1
+        continue
+    lk, typ, old_ver = loose(f)   # pass 2: the same package at another version
+    cands = loose_new.get(lk, [])
+    if not cands:
         gone += 1
         continue
-    if not targets:
+    if not any(free(n) for n, _ in cands):
         present += 1
         continue
     a = f.get("analysis") or {}
-    body = {"analysisState": a.get("state"), "isSuppressed": bool(a.get("isSuppressed"))}
-    try:
-        full = call("GET", "/api/v1/analysis?" + urllib.parse.urlencode({
-            "project": src, "component": f["component"]["uuid"], "vulnerability": f["vulnerability"]["uuid"]})) or {}
-        for field in ("analysisState", "analysisJustification", "analysisResponse", "analysisDetails"):
-            if full.get(field) is not None:
-                body[field] = full[field]
-        body["isSuppressed"] = bool(full.get("isSuppressed", body["isSuppressed"]))
-    except Exception:
-        pass   # fall back to the state/suppression from the finding itself
-    for n in targets:
-        put = dict(body, project=dst, component=n["component"]["uuid"], vulnerability=n["vulnerability"]["uuid"],
-                   comment=f"copied from version {label} by sbom-scan.sh")
+    new_ver = ", ".join(sorted({v for _, v in cands}))
+    why = None
+    if len(cands) > 1:
+        why = f"{len(cands)} candidates"
+    elif not (a.get("isSuppressed") and a.get("state") in CARRY_STATES):
+        why = f"{a.get('state')}{'' if a.get('isSuppressed') else ' (not suppressed)'} is not carried across a version change"
+    else:
         try:
-            call("PUT", "/api/v1/analysis", put)
-            copied += 1
-        except Exception as e:
-            failed += 1
-            print(f"could not copy {k}: {e}", file=sys.stderr)
-print(len(old), copied, present, gone, failed)
+            if cmp_versions(typ, new_ver, old_ver) < 0:
+                why = "older version"
+        except ValueError:
+            why = "versions not comparable"
+    if why:
+        review.append(f"{k[2]} {lk[0]}: {old_ver} -> {new_ver}: {why}")
+        continue
+    if put(cands[0][0], body_for(f), f"copied from {label}; version changed {old_ver}→{new_ver}, re-verify", k):
+        carried += 1
+        carried_log.append(f"{k[2]} {lk[0]}: {old_ver} -> {new_ver}: {a.get('state')} (suppressed)")
+    else:
+        failed += 1
+with open(review_path, "w") as fh:
+    fh.write("".join(line + "\n" for line in review))
+with open(review_path + ".carried", "w") as fh:
+    fh.write("".join(line + "\n" for line in carried_log))
+print(len(old), copied, present, gone, failed, carried, len(review))
 EOF
 }
 
@@ -432,74 +643,144 @@ EOF
     done
 }
 
-# stored_digest UUID -> the sbom-scan/digest property of a version ("" if none)
-stored_digest() {
+# stored_prop UUID NAME -> the sbom-scan/NAME property of a version ("" if none)
+stored_prop() {
     [[ "$(dt GET "/api/v1/project/${1}/property")" == 200 ]] || return 0
-    json "next((p.get('propertyValue') for p in d if p.get('groupName') == 'sbom-scan' and p.get('propertyName') == 'digest'), '')"
+    json "next((p.get('propertyValue') for p in d if p.get('groupName') == 'sbom-scan' and p.get('propertyName') == '${2}'), '')"
 }
 
-# report_copy SRC DST LABEL NAME -> runs copy_analyses, logs, adds to the totals.
+# report_copy SRC DST LABEL NAME [project|snapshot] -> runs `analyses copy`
+# (SRC is a version UUID or a snapshot file), logs, adds to the totals and
+# collects the "needs review" items for the ntfy push.
 # Returns 1 if the comparison or any copy failed: the caller must then keep
-# SRC active, so a re-run of --migrate-stable can retry the copy.
+# SRC (the old version active, or the snapshot) so a re-run can retry it.
 report_copy() {
-    local out n_src n_copied n_present n_gone n_failed
+    local out line n_src n_copied n_present n_gone n_failed n_carried n_review
     if [[ "$CAN_TRIAGE" == false ]]; then
         log "  ${4}: WARNING: no working DT_TRIAGE_API_KEY, analyses not checked (the clone normally carries them)"
         return
     fi
-    if ! out=$(copy_analyses "$1" "$2" "$3" 2>"${WORK}/copy-err"); then
+    if ! out=$(analyses copy "${5:-project}" "$1" "$2" "$3" "${WORK}/review" 2>"${WORK}/copy-err"); then
         fail "${4}: could not compare analyses with ${3}: $(tail -n 1 "${WORK}/copy-err" | cut -c1-200)"
         return 1
     fi
-    read -r n_src n_copied n_present n_gone n_failed <<<"$out"
+    read -r n_src n_copied n_present n_gone n_failed n_carried n_review <<<"$out"
     ANALYSES_SRC=$((ANALYSES_SRC + n_src)); ANALYSES_COPIED=$((ANALYSES_COPIED + n_copied))
     ANALYSES_PRESENT=$((ANALYSES_PRESENT + n_present)); ANALYSES_GONE=$((ANALYSES_GONE + n_gone))
+    ANALYSES_CARRIED=$((ANALYSES_CARRIED + n_carried)); ANALYSES_REVIEW=$((ANALYSES_REVIEW + n_review))
     if [[ -z "$2" ]]; then
         log "  ${4}: ${n_src} analysis/analyses on ${3} to carry over"
-    else
-        log "  ${4}: analyses from ${3}: ${n_src} total, ${n_copied} copied, ${n_present} already present, ${n_gone} for components no longer in the image"
-        if (( n_failed > 0 )); then
-            fail "${4}: ${n_failed} analysis/analyses could not be copied from ${3}"
-            return 1
-        fi
+        return
+    fi
+    COPY_RAN=true
+    log "  ${4}: analyses from ${3}: ${n_src} total, ${n_copied} copied, ${n_carried} carried across version change, ${n_present} already present, ${n_review} need review, ${n_gone} for components no longer in the image"
+    # Audit trail: pass 2 suppresses a finding on its own, so log each one.
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        log "  ${4}: carried across version change: ${line}"
+        CARRIED+=("${4}: ${line}")
+    done < "${WORK}/review.carried"
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        log "  ${4}: needs review: ${line}"
+        REVIEW+=("${4}: ${line}")
+    done < "${WORK}/review"
+    if (( n_failed > 0 )); then
+        fail "${4}: ${n_failed} analysis/analyses could not be copied from ${3}"
+        return 1
     fi
 }
 
-# finish_migration STABLE_UUID NAME -> for a container already on "running":
-# copy analyses from every other version still active (none after a clean
-# migration), then deactivate those versions. Both steps are idempotent, so a
-# re-run of --migrate-stable completes one that died after the clone.
-finish_migration() {
-    local stable="$1" name="$2" err uuid ver n=0 copy_ok=true
+# converge CURRENT_UUID NAME -> copy the analyses of every other active
+# version of NAME (latest first) into CURRENT, then deactivate those versions.
+# If a copy failed they stay active so a re-run retries (both steps are
+# idempotent). Sets CONVERGED to how many other versions were active. Returns
+# 1 if the versions couldn't be listed or a copy failed.
+converge() {
+    local current="$1" name="$2" err uuid ver copy_ok=true
+    CONVERGED=0
     if ! err=$(list_projects "$name"); then
         fail "${name}: could not list versions (${err})"
-        return
+        return 1
     fi
     while read -r uuid ver; do
         [[ -n "$uuid" ]] || continue
-        n=$((n + 1))
-        log "  ${name}: on \"${STABLE_VERSION}\", but ${ver} is still active: finishing the migration"
+        CONVERGED=$((CONVERGED + 1))
         if [[ "$DRY_RUN" == true ]]; then
             report_copy "$uuid" "" "$ver" "$name" || copy_ok=false
         else
-            report_copy "$uuid" "$stable" "$ver" "$name" || copy_ok=false
+            report_copy "$uuid" "$current" "$ver" "$name" || copy_ok=false
         fi
-    done < <(python3 - "${WORK}/projects.json" "$stable" <<'EOF'
+    done < <(python3 - "${WORK}/projects.json" "$current" <<'EOF'
 import json, sys
-for p in json.load(open(sys.argv[1])):
-    if p["uuid"] != sys.argv[2] and p.get("active", True):
-        print(p["uuid"], p.get("version", ""))
+others = [p for p in json.load(open(sys.argv[1])) if p["uuid"] != sys.argv[2] and p.get("active", True)]
+for p in sorted(others, key=lambda p: not p.get("isLatest")):
+    print(p["uuid"], p.get("version", ""))
 EOF
 )
-    if (( n == 0 )); then
-        log "  ${name}: already on \"${STABLE_VERSION}\""
-        return
-    fi
+    (( CONVERGED > 0 )) || return 0
     if [[ "$copy_ok" == false ]]; then
         log "  ${name}: old version(s) left active so a re-run can retry the analysis copy"
-        return
+        return 1
     fi
-    deactivate_superseded "$stable" "$name"
+    deactivate_superseded "$current" "$name"
+}
+
+# finish_migration STABLE_UUID NAME -> for a container already on "running":
+# converge it (nothing to do after a clean migration), so a re-run of
+# --migrate-stable completes one that died after the clone.
+finish_migration() {
+    converge "$1" "$2" || return
+    (( CONVERGED > 0 )) || log "  ${2}: already on \"${STABLE_VERSION}\""
+}
+
+# snapshot_analyses UUID NAME FILE -> every analysed finding of version UUID
+# into FILE, before a BOM is re-uploaded into it: a component whose version
+# changes is replaced, and its analyses go with it. Returns 1 on failure.
+snapshot_analyses() {
+    local n
+    if ! n=$(analyses snapshot "$1" "$3" 2>"${WORK}/copy-err"); then
+        fail "${2}: could not snapshot the analyses, not re-uploaded: $(tail -n 1 "${WORK}/copy-err" | cut -c1-200)"
+        return 1
+    fi
+    log "  ${2}: ${n} analysed finding(s) snapshotted before the upload"
+}
+
+# token_done TOKEN -> true once DT has finished with a BOM upload (or no
+# longer knows the token).
+token_done() {
+    local code
+    code=$(dt GET "/api/v1/event/token/${1}")
+    [[ "$code" == 200 ]] || return 0
+    [[ "$(json "d.get('status') or ('DONE' if not d.get('processing') else 'RUNNING')")" =~ ^(COMPLETED|FAILED|DONE)$ ]]
+}
+
+# keep_pending NAME SNAPSHOT LABEL TOKEN -> keep a snapshot that couldn't be
+# replayed (BOM processing unfinished, or a copy failed) for the next run.
+keep_pending() {
+    mkdir -p "$PENDING_DIR"
+    if [[ "$2" != "${PENDING_DIR}/${1}.json" ]]; then
+        mv -f "$2" "${PENDING_DIR}/${1}.json" || { fail "${1}: could not keep the analysis snapshot"; return; }
+    fi
+    printf '%s\n%s\n' "$3" "${4:-}" > "${PENDING_DIR}/${1}.meta"
+    log "  ${1}: analysis snapshot kept in ${PENDING_DIR}/${1}.json; a later run replays it"
+}
+
+# replay_pending NAME UUID -> replay a snapshot an earlier run kept, once DT
+# has finished the BOM it was taken for (before that, the replaced component's
+# new findings may not exist yet and its analyses would look "gone").
+replay_pending() {
+    local label token
+    [[ -f "${PENDING_DIR}/${1}.json" && "$DRY_RUN" == false && "$CAN_TRIAGE" == true ]] || return 0
+    { read -r label; read -r token; } < "${PENDING_DIR}/${1}.meta" 2>/dev/null
+    if [[ -n "${token:-}" ]] && ! token_done "$token"; then
+        log "  ${1}: kept analysis snapshot not replayed yet: DT is still processing that BOM"
+        return 1
+    fi
+    log "  ${1}: replaying the analysis snapshot kept by an earlier run"
+    if report_copy "${PENDING_DIR}/${1}.json" "$2" "${label:-an earlier scan}" "$1" snapshot; then
+        rm -f -- "${PENDING_DIR:?}/${1:?}.json" "${PENDING_DIR:?}/${1:?}.meta"
+    fi
 }
 
 declare -A SBOM_FOR_IMAGE=()   # image_id -> generated SBOM file (shared images scan once)
@@ -507,7 +788,7 @@ declare -A SBOM_FOR_IMAGE=()   # image_id -> generated SBOM file (shared images 
 scan_container() {
     local name="$1" info tag digest image_id image_ref short label bom
     local stable_uuid="" stable_active=true src_uuid="" src_version="" code target_uuid="" token status cloned=false waited
-    local legacy=false version="$STABLE_VERSION" new_uuid
+    local legacy=false version="$STABLE_VERSION" new_uuid snap="" snap_label="" prev
 
     info=$(image_info "$name") || { fail "${name}: docker inspect failed"; return; }
     read -r tag digest image_id image_ref <<<"$info"
@@ -526,6 +807,7 @@ scan_container() {
     fi
 
     if [[ -n "$stable_uuid" ]]; then
+        replay_pending "$name" "$stable_uuid"
         if [[ "$MIGRATE" == true ]]; then
             # Converge a half-done migration (a run that died after the clone):
             # copy analyses from any old version still active, then deactivate it.
@@ -534,7 +816,7 @@ scan_container() {
             SKIPPED=$((SKIPPED + 1))
             return
         fi
-        if [[ "$FORCE" == false && "$(stored_digest "$stable_uuid")" == "$digest" ]]; then
+        if [[ "$FORCE" == false && "$(stored_prop "$stable_uuid" digest)" == "$digest" ]]; then
             log "  ${name} ${label}: unchanged, skipping"
             SKIPPED=$((SKIPPED + 1))
             # Container came back after --deactivate-missing: count it again.
@@ -562,13 +844,18 @@ scan_container() {
             code=$(dt GET /api/v1/project/lookup -G --data-urlencode "name=${name}" --data-urlencode "version=${label}")
             if [[ "$code" == 200 && "$FORCE" == false ]]; then
                 SKIPPED=$((SKIPPED + 1))
+                target_uuid=$(json "d.get('uuid')")
                 if [[ "$(json "d.get('active', True) and d.get('isLatest')")" == True ]]; then
                     log "  ${name} ${label}: unchanged, skipping (old per-digest model; not migrated)"
+                    # An older version left active because its analysis copy
+                    # failed: retry the copy, then deactivate it.
+                    if [[ "$DRY_RUN" == false && "$CAN_TRIAGE" == true && "$CAN_DEACTIVATE" == true ]]; then
+                        converge "$target_uuid" "$name"
+                    fi
                     return
                 fi
                 # Rolled back to an older image: its version exists but was
                 # deactivated; make it the active latest again.
-                target_uuid=$(json "d.get('uuid')")
                 if [[ "$DRY_RUN" == true ]]; then
                     log "  ${name}: would reactivate ${label} as latest (running again)"
                     return
@@ -592,6 +879,7 @@ scan_container() {
     if [[ "$DRY_RUN" == true ]]; then
         if [[ "$legacy" == true ]]; then
             log "  ${name} ${label}: would clone ${src_version} -> ${label}, scan ${image_id:7:12} and upload (old per-digest model; --migrate-stable moves it to \"${STABLE_VERSION}\")"
+            [[ "$CAN_TRIAGE" == false ]] || report_copy "$src_uuid" "" "$src_version" "$name"
             deactivate_superseded "" "$name" "$label"
         elif [[ -n "$stable_uuid" ]]; then
             log "  ${name} ${label}: would scan ${image_id:7:12} and upload into \"${STABLE_VERSION}\""
@@ -659,6 +947,27 @@ EOF
         fi
     fi
 
+    # Re-upload into "running": DT replaces every component whose identity
+    # (purl, so its version) changed, and its analyses go with it. Snapshot
+    # them first; replayed below once the BOM is processed.
+    if [[ -n "$stable_uuid" ]]; then
+        if [[ "$CAN_TRIAGE" == true && -f "${PENDING_DIR}/${name}.json" ]]; then
+            # Not replayed yet (see replay_pending): a new upload would replace
+            # the components it still has to be matched against.
+            log "  ${name}: not re-uploaded while an earlier analysis snapshot is pending"
+            SKIPPED=$((SKIPPED + 1))
+            return
+        fi
+        if [[ "$CAN_TRIAGE" == true ]]; then
+            snap="${WORK}/${name}.analyses.json"
+            prev=$(stored_prop "$stable_uuid" label)
+            snap_label="\"${STABLE_VERSION}\" at ${prev:-the previous scan}"
+            snapshot_analyses "$stable_uuid" "$name" "$snap" || return
+        else
+            log "  ${name}: WARNING: no working DT_TRIAGE_API_KEY, analyses of components whose version changes are not carried"
+        fi
+    fi
+
     if [[ -n "$target_uuid" ]]; then
         code=$(dt POST /api/v1/bom -F "project=${target_uuid}" \
             -F "bom=@${bom}.gz;type=application/gzip")
@@ -698,14 +1007,27 @@ EOF
             UPLOADED=$((UPLOADED + 1)) ;;
         FAILED)
             fail "${name}: Dependency-Track failed to process the BOM (token ${token})"
+            [[ -z "$snap" ]] || keep_pending "$name" "$snap" "$snap_label" "$token"
             return ;;
         *)
             log "  ${name} ${label}: uploaded; analysis still running after ${PROCESS_TIMEOUT}s"
             UPLOADED=$((UPLOADED + 1)) ;;
     esac
 
+    if [[ -n "$snap" ]]; then
+        if [[ "$status" != COMPLETED && "$status" != DONE ]]; then
+            fail "${name}: BOM still processing after ${PROCESS_TIMEOUT}s, analysis snapshot not replayed yet"
+            keep_pending "$name" "$snap" "$snap_label" "$token"
+        elif ! report_copy "$snap" "$stable_uuid" "$snap_label" "$name" snapshot; then
+            keep_pending "$name" "$snap" "$snap_label" "$token"
+        fi
+    fi
+
     if [[ "$legacy" == true ]]; then
-        [[ -n "$target_uuid" ]] && deactivate_superseded "$target_uuid" "$name"
+        # Copy what the clone didn't carry (a package at another version)
+        # before the old version is deactivated; a failed copy keeps it
+        # active, and the next run retries.
+        [[ -z "$target_uuid" ]] || converge "$target_uuid" "$name"
         return
     fi
     if [[ -z "$target_uuid" ]]; then
@@ -716,13 +1038,12 @@ EOF
     set_image_meta "$target_uuid" "$image_ref" "$digest" "$image_id" "$label" \
         || log "  ${name}: WARNING: image properties not stored; the next run uploads it again"
     if [[ -n "$src_uuid" ]]; then
+        # Copy from every old version still active (the latest first), then
+        # deactivate them; a failed copy keeps them active and a re-run of
+        # --migrate-stable retries it (finish_migration).
         MIGRATED=$((MIGRATED + 1))
-        if ! report_copy "$src_uuid" "$target_uuid" "$src_version" "$name"; then
-            # Keep the old version active: --migrate-stable retries the copy
-            # (finish_migration) and deactivates it once that succeeds.
-            log "  ${name}: ${src_version} left active so a re-run of --migrate-stable can retry the analysis copy"
-            return
-        fi
+        converge "$target_uuid" "$name"
+        return
     fi
     deactivate_superseded "$target_uuid" "$name"
 }

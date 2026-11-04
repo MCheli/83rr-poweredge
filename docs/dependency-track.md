@@ -71,6 +71,37 @@ container is uploaded into. What image it is lives on that version:
   bom-refs, and component UUIDs stayed the same. A component that leaves the
   image loses its analysis; if it comes back later it is a new component and
   needs a new one (the old per-digest clone had the same limit).
+* **A package that changes version is a component that leaves the image**
+  (its purl changes), so its analyses would go with it: on 2026-11-04
+  seafile-db lost 33 when openssl/perl moved to newer Ubuntu builds. So the
+  script **snapshots** the analysed findings of `running` (component purl,
+  vulnerability, full analysis) before every re-upload, waits for DT to
+  finish processing the BOM (`/api/v1/event/token`, at most
+  `PROCESS_TIMEOUT`, 900 s), and **replays** the snapshot into `running`. If
+  processing doesn't finish in time, or a copy fails, the snapshot is kept in
+  `~/.cache/sbom-scan/pending/<container>.json` (with the BOM's event token)
+  and a later run replays it first, once that token reports done; until then
+  the container is not re-uploaded.
+* Every analysis copy (that replay, a clone of the old per-digest model,
+  `--migrate-stable`) matches in two passes:
+  1. same component purl + vulnerability (source + ID): copied as it is;
+  2. otherwise the same purl **without its version** (same qualifiers) +
+     vulnerability: copied only if there is exactly one such finding, it has
+     no analysis yet, the old analysis is a **suppressed `NOT_AFFECTED` or
+     `FALSE_POSITIVE`**, and the new version is **≥** the old one (dpkg rules
+     for `pkg:deb`, apk rules for `pkg:apk`, semver / PEP 440 otherwise). The
+     copy is commented `copied from <label>; version changed <old>→<new>,
+     re-verify` and counted as "carried across version change". Each one
+     is also logged (`carried across version change: <CVE> <purl>: <old> ->
+     <new>: <state>`) and they go out as one ntfy push (`SBOM scan: N
+     suppression(s) carried to a newer build (re-verify)`), because the
+     nightly run then suppresses those findings unattended.
+  Anything else in pass 2 (a downgrade, several candidates, an analysis that
+  isn't a suppressed NOT_AFFECTED/FALSE_POSITIVE, versions that can't be
+  compared) is **not** copied: it is logged as `needs review` and sent as one
+  ntfy push (`SBOM scan: N triage analysis/analyses need review`; not with
+  `--no-notify`). Re-check those in DT by hand. An existing analysis is never
+  overwritten, so every copy is safe to repeat.
 * After each upload `running` is set active + latest and every other active
   version of that project is **deactivated** (only relevant for the old
   per-digest versions left over from before the migration).
@@ -136,9 +167,10 @@ A failure here only logs a warning; it never fails the scan.
 `scripts/sbom-scan.sh --migrate-stable` moves every running container that
 has no `running` version yet onto it: clone the old latest version to
 `running` (components, findings, audit history), upload the current BOM into
-it, copy any analysis the clone missed by (component purl, vulnerability
-source + ID) using `DT_TRIAGE_API_KEY` (state, justification, response,
-details, suppression; never overwrites one that's there), set the image
+it, copy any analysis the clone missed from every old version still active
+(two-pass matching as above) using `DT_TRIAGE_API_KEY` (state,
+justification, response, details, suppression; never overwrites one that's
+there), set the image
 properties/tags, and deactivate the old versions (not deleted). Idempotent
 and convergent: for a container already on `running` a re-run only copies
 missing analyses from, and deactivates, any old version that is still active
@@ -147,8 +179,10 @@ projects without a running container are only listed.
 
 **The nightly run never migrates.** Until `--migrate-stable` has run, an
 unmigrated container stays on the old per-digest model (an image change
-clones the latest version to a new `<tag>@<digest12>` version and deactivates
-the old one; a rollback reactivates the old version), and DT's history keeps
+clones the latest version to a new `<tag>@<digest12>` version, copies the
+analyses the clone lost (two-pass, as above) and only then deactivates the
+old one; if that copy fails the old version stays active and the next night
+retries it; a rollback reactivates the old version), and DT's history keeps
 its old distortion. Only a container with no DT project at all (a new
 service) starts directly on `running`. Run the migration by hand, once Mark
 has approved it:
@@ -293,7 +327,10 @@ Tapping opens the project in the DT UI. What to do:
    nightly scan uploads the new BOM into `running` and the finding disappears.
 3. If it doesn't apply (e.g. vulnerable code path not used, disputed CVE),
    record an analysis in DT (*Not affected* + justification, or *Suppress*).
-   Analyses stay as long as that component stays in the image.
+   Analyses stay as long as that component stays in the image; a suppressed
+   *Not affected* / *False positive* also follows the package to a newer
+   build (comment "re-verify"). Anything else that can't follow arrives as an
+   `SBOM scan: … need review` push: re-triage those findings.
 
 Silence for a while: `scripts/deptrack-setup.sh alerts off` (and `on` again);
 this leaves the weekly digest running.
