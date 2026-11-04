@@ -322,13 +322,19 @@ services:
   # Monitoring: Grafana (Visualization Dashboards)
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
-    # 12.4.14: fixes CVE-2026-17183 (Unified Alerting datasource authz bypass,
-    # fixed in 12.4.9) plus CVE-2026-100105, -88858 and -88967 (12.4.14),
-    # and the 11.x CVEs in docs/SECURITY_PLAN.md P2-2. All provisioned
-    # dashboards use timeseries/stat/gauge/table panels (no Angular), so the
-    # 12.x Angular removal does not affect them. Back up grafana_data first:
-    # the SQLite schema migration is one-way.
-    image: grafana/grafana:12.4.14
+    # 13.3.0: latest stable release (Mark asked for latest stable). Covers
+    # CVE-2026-14199 (Auth Proxy session takeover; upstream fixed it in
+    # 13.0.8, and Auth Proxy isn't used here) plus the later 13.x security
+    # fixes. Fallback if a 13.0.x pin is preferred:
+    # 13.0.12@sha256:28476aa8096cd8d0f658a05a443b605fffb450e57f444335216175d604cfd23d.
+    # Pinned by digest: watchtower only polls ghcr.io, so bump tag and digest
+    # together by hand. The first 13.x start runs a ONE-WAY migration
+    # of dashboards/folders into unified storage inside grafana.db. Back up
+    # grafana_data first: runbook and rollback in docs/grafana-13-upgrade.md.
+    # Provisioned dashboards use only timeseries/stat/gauge/bargauge/table
+    # panels, so React 19 and the removed Graph UI components don't affect
+    # them. No image renderer, CLI calls or command override.
+    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
     container_name: grafana
     restart: unless-stopped
     logging: *default-logging
