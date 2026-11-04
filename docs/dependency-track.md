@@ -91,7 +91,11 @@ container is uploaded into. What image it is lives on that version:
      `FALSE_POSITIVE`**, and the new version is **≥** the old one (dpkg rules
      for `pkg:deb`, apk rules for `pkg:apk`, semver / PEP 440 otherwise). The
      copy is commented `copied from <label>; version changed <old>→<new>,
-     re-verify` and counted as "carried across version change".
+     re-verify` and counted as "carried across version change". Each one
+     is also logged (`carried across version change: <CVE> <purl>: <old> ->
+     <new>: <state>`) and they go out as one ntfy push (`SBOM scan: N
+     suppression(s) carried to a newer build (re-verify)`), because the
+     nightly run then suppresses those findings unattended.
   Anything else in pass 2 (a downgrade, several candidates, an analysis that
   isn't a suppressed NOT_AFFECTED/FALSE_POSITIVE, versions that can't be
   compared) is **not** copied: it is logged as `needs review` and sent as one

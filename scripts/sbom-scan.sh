@@ -188,14 +188,17 @@ EOF
     [[ "$sent" == true ]] || log "could not reach ntfy to send the push \"${1}\""
 }
 
-# notify -> failures, and analyses that need a human (not carried across a
-# version change), each as one push. Not on --no-notify or a dry run.
+# notify -> failures, analyses that need a human (not carried across a
+# version change), and suppressions that were carried to a newer build (to
+# re-verify), each as one push. Not on --no-notify or a dry run.
 notify() {
     [[ "$NOTIFY" == true && "$DRY_RUN" == false ]] || return 0
     (( ${#FAILURES[@]} == 0 )) \
         || ntfy_push "SBOM scan: ${#FAILURES[@]} failure(s) of ${TOTAL} container(s)" warning "${FAILURES[@]}"
     (( ${#REVIEW[@]} == 0 )) \
         || ntfy_push "SBOM scan: ${#REVIEW[@]} triage analysis/analyses need review" mag "${REVIEW[@]}"
+    (( ${#CARRIED[@]} == 0 )) \
+        || ntfy_push "SBOM scan: ${#CARRIED[@]} suppression(s) carried to a newer build (re-verify)" recycle "${CARRIED[@]}"
 }
 
 finish() {
@@ -231,6 +234,7 @@ ANALYSES_REVIEW=0
 COPY_RAN=false
 CONVERGED=0
 REVIEW=()
+CARRIED=()
 CAN_DEACTIVATE=true
 CAN_TRIAGE=false
 
@@ -431,6 +435,8 @@ def dpkg_cmp(a, b):   # dpkg --compare-versions (epoch:upstream-revision)
         if not epoch.isdigit():
             raise ValueError(v)
         up, dash, rev = rest.rpartition("-")
+        if dash and not rev:   # "1.0-": dpkg rejects an empty revision
+            raise ValueError(v)
         return int(epoch), (up if dash else rest), (rev if dash else "")
     def order(c):
         return 0 if c.isdigit() else ord(c) if c.isalpha() else -1 if c == "~" else ord(c) + 256
@@ -518,6 +524,7 @@ old = {}
 for f in (json.load(open(src)) if kind == "snapshot" else [f for f in findings(src) if analysed(f)]):
     old.setdefault(ident(f), f)
 open(review_path, "w").close()
+open(review_path + ".carried", "w").close()
 if not dst:
     print(len(old), 0, 0, 0, 0, 0, 0)
     sys.exit(0)
@@ -559,6 +566,7 @@ def put(n, body, comment, what):
 
 copied = present = gone = failed = carried = 0
 review = []
+carried_log = []   # audit trail: every finding pass 2 suppressed on its own
 for k, f in old.items():
     if k in new:   # pass 1: the same finding
         targets = [n for n in new[k] if free(n)]
@@ -596,10 +604,13 @@ for k, f in old.items():
         continue
     if put(cands[0][0], body_for(f), f"copied from {label}; version changed {old_ver}→{new_ver}, re-verify", k):
         carried += 1
+        carried_log.append(f"{k[2]} {lk[0]}: {old_ver} -> {new_ver}: {a.get('state')} (suppressed)")
     else:
         failed += 1
 with open(review_path, "w") as fh:
     fh.write("".join(line + "\n" for line in review))
+with open(review_path + ".carried", "w") as fh:
+    fh.write("".join(line + "\n" for line in carried_log))
 print(len(old), copied, present, gone, failed, carried, len(review))
 EOF
 }
@@ -663,6 +674,12 @@ report_copy() {
     fi
     COPY_RAN=true
     log "  ${4}: analyses from ${3}: ${n_src} total, ${n_copied} copied, ${n_carried} carried across version change, ${n_present} already present, ${n_review} need review, ${n_gone} for components no longer in the image"
+    # Audit trail: pass 2 suppresses a finding on its own, so log each one.
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        log "  ${4}: carried across version change: ${line}"
+        CARRIED+=("${4}: ${line}")
+    done < "${WORK}/review.carried"
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
         log "  ${4}: needs review: ${line}"

@@ -376,7 +376,7 @@ a half-done migration. After each full run it appends DT's current portfolio tot
 node-exporter's textfile collector (Grafana "Dependency-Track trend").
 Talks to `deptrack-apiserver` on the docker bridge (no nginx), reads
 `DT_API_KEY` / `DT_TRIAGE_API_KEY` / `NTFY_PUBLISH_TOKEN` from `.env`, logs to
-`logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) on failure and one when analyses need review.
+`logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) on failure, one when analyses need review and one listing suppressions carried to a newer build (each also logged).
 No sudo; needs the docker group.
 
 **Usage:**
