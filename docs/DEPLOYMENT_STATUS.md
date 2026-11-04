@@ -35,7 +35,7 @@
    - Endpoint: logs.ops.markcheli.com
 
 7. **Grafana** - Monitoring dashboards ✅
-   - Version: 13.0.12 (digest-pinned; unified storage for dashboards/folders; upgrade notes: docs/grafana-13-upgrade.md)
+   - Version: 13.3.0 (digest-pinned; unified storage for dashboards/folders; upgrade notes: docs/grafana-13-upgrade.md)
    - Endpoint: dashboard.ops.markcheli.com
    - Login: admin / `GRAFANA_ADMIN_PASSWORD` in `.env`
    - Dashboards: 6 provisioned (System, Infrastructure, Docker Containers, Docker Services, NGINX, Containers — Glance)

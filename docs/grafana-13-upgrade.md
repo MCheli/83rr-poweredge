@@ -1,16 +1,17 @@
-# Grafana 12.4.14 → 13.0.12 upgrade (November 2026)
+# Grafana 12.4.14 → 13.3.0 upgrade (November 2026)
 
-**Target:** `grafana/grafana:13.0.12@sha256:28476aa8096cd8d0f658a05a443b605fffb450e57f444335216175d604cfd23d`. This is the multi-arch index digest; the amd64 manifest is `sha256:5e3f5270…9e2ab`. The image config is the same as 12.x: entrypoint `/run.sh`, user 472.
+**Target:** `grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205`. This is the multi-arch index digest; the amd64 manifest is `sha256:6e5d3063…ce63d`. The image config is the same as 12.x: entrypoint `/run.sh`, user 472.
+**Fallback (13.0.x line):** `grafana/grafana:13.0.12@sha256:28476aa8096cd8d0f658a05a443b605fffb450e57f444335216175d604cfd23d` (amd64 `sha256:5e3f5270…9e2ab`, same image config). If Mark picks 13.0.x at approval, it takes a one-line follow-up PR to swap the compose pin before deploy. Then read `13.0.12` wherever this runbook expects `13.3.0`.
 **Rollback image:** `grafana/grafana:12.4.14@sha256:ae509d9ae8c1021ca32ec370a9ca975d40165eda9fccd1e1102d317ff8787cd7`
 
-## Why 13.0.12
-- It is the latest patch of the 13.0 line. 13.0.0 had a Git Sync migration bug. Git Sync isn't used here, but we take a patched release anyway.
-- **CVE-2026-14199** (Auth Proxy cache-key session takeover) is fixed in v13.0.8, per upstream release notes. It isn't exploitable here anyway: only the built-in admin login is used, not Auth Proxy.
-- The 13.0 line also carries:
-  - CVE-2026-13719, -13720 and -81841 (13.0.10)
-  - CVE-2026-15577, -33374, -93294 and -95502 (13.0.11)
-  - CVE-2026-100105, -88858 and -88967 (13.0.12)
-- 13.3.0 is newer, but it's a fresh `.0` minor. Moving to 13.1+ later is a normal minor bump.
+## Why 13.3.0
+- Mark asked for the latest stable, non-beta release. 13.3.0 is the "Latest" GA release on the upstream releases page (2026-10-27). The briefs' "13.0.x" was a mistake by the spawning session.
+- **CVE-2026-14199** (Auth Proxy cache-key session takeover) was fixed upstream in v13.0.8, so 13.3.0 and the 13.0.12 fallback both cover it. It isn't exploitable here anyway: only the built-in admin login is used, not Auth Proxy.
+- Both lines carry the later security fixes:
+  - CVE-2026-13719, -13720 and -81841
+  - CVE-2026-15577, -33374, -93294 and -95502
+  - CVE-2026-100105, -88858 and -88967
+- Trade-off: 13.3.0 is a fresh `.0` minor. The 13.0.0 migration bug only affected Git Sync setups, which this isn't, and it was fixed in 13.0.1.
 
 ## Breaking changes vs this setup
 Inventory was taken read-only on 2026-11-03.
@@ -24,6 +25,7 @@ Inventory was taken read-only on 2026-11-03.
 | `/api` deprecated (still served); numeric-id datasource APIs disabled | No. Only `/api/health` is called (healthcheck, Makefile, Uptime Kuma, `test_infrastructure.py`) |
 | Legacy Alertmanager endpoints removed or restricted | No. 0 alert rules, no templates or mute timings. The only contact point is the default `email receiver` placeholder. ntfy alerting goes through OpenSearch and Uptime Kuma, not Grafana |
 | `grafana_caching_*` metrics removed | No. Prometheus doesn't scrape Grafana |
+| 13.1–13.3 breaking changes: Prometheus azure/sigv4 auth and Zipkin removed from core, `[marketplace]` renamed to `[plugins_marketplace]`, `alertingSaveStateCompressed` flag removed | No. The Prometheus datasource uses no auth, there's no Zipkin and no custom ini |
 | React 19 / removed `@grafana/ui` Graph components | No for dashboards (timeseries/stat/gauge/bargauge/table only). The volume holds stale drilldown app copies (lokiexplore 1.0.10, metricsdrilldown 1.0.26, exploretraces 1.2.2, pyroscope 1.17.0); see the optional follow-up below |
 
 Other notes:
@@ -92,7 +94,7 @@ docker tag $OLD_DIGEST grafana/grafana:rollback-12.4.14
 ### 4. Dry run, then upgrade
 ```bash
 . /data/backups/upgrade-20261103/state.env; cd ~/83rr-poweredge
-docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q && docker compose -f docker-compose.yml -f docker-compose.prod.yml config --images | grep grafana   # expect 13.0.12@sha256:28476aa8…
+docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q && docker compose -f docker-compose.yml -f docker-compose.prod.yml config --images | grep grafana   # expect 13.3.0@sha256:488984b7…
 docker compose -f docker-compose.yml -f docker-compose.prod.yml pull grafana
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --dry-run up -d --no-deps grafana
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps grafana
@@ -111,7 +113,7 @@ echo "RESTARTS0=$(docker inspect -f '{{.RestartCount}}' grafana)" >> $D/state.en
 ### 6. Health check (diff against the before-state)
 ```bash
 . /data/backups/upgrade-20261103/state.env; mkdir -p $D/after
-docker exec grafana wget -qO- http://localhost:3000/api/health      # "version": "13.0.12", "database": "ok"
+docker exec grafana wget -qO- http://localhost:3000/api/health      # "version": "13.3.0", "database": "ok"
 docker exec grafana sh -c 'H="Authorization: Basic $(printf %s "admin:$GF_SECURITY_ADMIN_PASSWORD"|base64)"; g(){ wget -qO- --header="$H" "http://localhost:3000/api/$1"; echo; }
   g "search?type=dash-db" | grep -o "\"uid\":\"[^\"]*\"" | sort' > $D/after/dashboards.txt
 docker exec grafana sh -c 'H="Authorization: Basic $(printf %s "admin:$GF_SECURITY_ADMIN_PASSWORD"|base64)"; g(){ wget -qO- --header="$H" "http://localhost:3000/api/$1"; echo; }
