@@ -35,10 +35,10 @@
    - Endpoint: logs.ops.markcheli.com
 
 7. **Grafana** - Monitoring dashboards ✅
-   - Version: 12.4.14
+   - Version: 13.3.0 (digest-pinned; unified storage for dashboards/folders)
    - Endpoint: dashboard.ops.markcheli.com
    - Login: admin / `GRAFANA_ADMIN_PASSWORD` in `.env`
-   - Dashboards: 5 provisioned (System, Infrastructure, Docker, NGINX, Containers)
+   - Dashboards: 6 provisioned (System, Infrastructure, Docker Containers, Docker Services, NGINX, Containers — Glance)
 
 8. **Prometheus** - Metrics database ✅
    - Status: Healthy
