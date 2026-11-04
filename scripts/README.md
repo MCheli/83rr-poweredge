@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 1, 2026
+**Last Updated:** November 3, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -345,29 +345,38 @@ out of credits) and nothing noticed.
 ### 10. `sbom-scan.sh` 🔐 SBOM / CVE SCAN
 
 **Purpose:** Nightly SBOM of every running container, uploaded to Dependency-Track
-**Size:** ~17KB
+**Size:** ~42KB
 **Language:** Bash (+ python3 for JSON)
 
 **Description:**
 For each running container: resolves image ID, tag and registry digest, makes
 a CycloneDX SBOM of that exact image with Syft (`~/.local/bin/syft`), and
-uploads it to Dependency-Track as project `<container>`, version
-`<tag>@<digest12>`, marked latest. Existing versions are skipped (idempotent);
-when an image changes, the previous latest is cloned first so old findings
-and audit decisions carry over and only new findings alert. After each upload
-every non-latest version of that project is deactivated (not deleted), so the
-portfolio metrics count only what runs; needs `PORTFOLIO_MANAGEMENT`, else it
-warns and continues. Talks to `deptrack-apiserver` on the docker bridge (no nginx),
-reads `DT_API_KEY` / `NTFY_PUBLISH_TOKEN` from `.env`, logs to
+uploads it to Dependency-Track as project `<container>`, ONE stable version
+`running` (since 2026-11-03; before that one version `<tag>@<digest12>` per
+image). Image ref and digest are stored on that version as properties (group
+`sbom-scan`) and tags (`digest:<12 hex>`, `image:<ref>`); a container whose
+digest matches the stored one is skipped (idempotent). Re-uploading into the
+same version keeps findings and analyses of components still in the image, and
+DT's portfolio history stays continuous, so its dashboard shows the burn-down.
+A container still on the old model is migrated on its next upload: the old
+latest version is cloned to `running`, missing analyses are copied by
+(purl, vulnerability) with `DT_TRIAGE_API_KEY`, and the old versions are
+deactivated (not deleted; needs `PORTFOLIO_MANAGEMENT`, else it warns and
+continues). After each full run it appends DT's current portfolio totals to
+`logs/deptrack-metrics.jsonl` and writes `logs/textfile/deptrack.prom` for
+node-exporter's textfile collector (Grafana "Dependency-Track trend").
+Talks to `deptrack-apiserver` on the docker bridge (no nginx), reads
+`DT_API_KEY` / `DT_TRIAGE_API_KEY` / `NTFY_PUBLISH_TOKEN` from `.env`, logs to
 `logs/sbom-scan.log`, sends one ntfy push (topic `homelab`) only on failure.
 No sudo; needs the docker group.
 
 **Usage:**
 ```bash
 scripts/sbom-scan.sh                  # what cron runs (03:30)
-scripts/sbom-scan.sh --dry-run        # list what would be uploaded
+scripts/sbom-scan.sh --dry-run        # list what would be uploaded (GETs only)
 scripts/sbom-scan.sh --only plex      # one container
 scripts/sbom-scan.sh --force          # re-upload unchanged images too
+scripts/sbom-scan.sh --migrate-stable [--dry-run]               # one-time: move every container onto "running" (clone + upload + copy analyses + deactivate old versions)
 scripts/sbom-scan.sh --deactivate-superseded-only [--dry-run]   # no scan: deactivate all non-latest versions
 scripts/sbom-scan.sh --deactivate-missing [--dry-run]            # no scan: deactivate projects whose container is gone (after removing a service; not in cron)
 ```
@@ -375,7 +384,8 @@ scripts/sbom-scan.sh --deactivate-missing [--dry-run]            # no scan: deac
 **When to Use:**
 - Runs from mcheli's crontab: `30 3 * * * /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1`
 - Manually after bumping an image, to see its findings before the next night.
-- `--deactivate-missing` once, by hand, after removing a service: sets `active=false` on every version of each `sbom-scan`-tagged project whose name matches no existing container, running or stopped (refuses if `docker ps -a` is empty). If the container returns, the nightly run reactivates its version as latest.
+- `--migrate-stable` once after deploying the stable-version change (dry run first). Idempotent: containers already on `running` are skipped, analyses are never overwritten. Needs a working `DT_TRIAGE_API_KEY`.
+- `--deactivate-missing` once, by hand, after removing a service: sets `active=false` on every version of each `sbom-scan`-tagged project whose name matches no existing container, running or stopped (refuses if `docker ps -a` is empty). If the container returns, the nightly run reactivates its `running` version.
 
 **Referenced in:** docs/dependency-track.md
 

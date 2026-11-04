@@ -402,9 +402,15 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      # *.prom files from host scripts (scripts/sbom-scan.sh: deptrack.prom).
+      # Own mount: node-exporter runs as nobody and can't traverse ~mcheli via
+      # /host. Create the dir as mcheli before the first `up` (else docker
+      # makes it root-owned): mkdir -p logs/textfile
+      - '--collector.textfile.directory=/textfile'
     pid: host
     volumes:
       - '/:/host:ro,rslave'
+      - ./logs/textfile:/textfile:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/"]
       interval: 30s
