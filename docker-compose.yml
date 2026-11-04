@@ -404,13 +404,19 @@ services:
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
       # *.prom files from host scripts (scripts/sbom-scan.sh: deptrack.prom).
       # Own mount: node-exporter runs as nobody and can't traverse ~mcheli via
-      # /host. Create the dir as mcheli before the first `up` (else docker
-      # makes it root-owned): mkdir -p logs/textfile
+      # /host. Create the dir as mcheli before the first `up`
+      # (mkdir -p logs/textfile); create_host_path: false makes a missing dir
+      # fail the `up` instead of docker creating it root-owned.
       - '--collector.textfile.directory=/textfile'
     pid: host
     volumes:
       - '/:/host:ro,rslave'
-      - ./logs/textfile:/textfile:ro
+      - type: bind
+        source: ./logs/textfile
+        target: /textfile
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/"]
       interval: 30s

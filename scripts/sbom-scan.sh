@@ -17,14 +17,18 @@
 # components by identity; checked on DT 5.2.1), so an image bump alerts only
 # on findings that are actually new.
 #
-# Migration from the old model (one version "<tag>@<digest>" per image): when
-# a container has no "running" version yet, its latest version is CLONED to
+# Migration from the old model (one version "<tag>@<digest>" per image), ONLY
+# with --migrate-stable: for a container with no "running" version yet, its
+# latest version is CLONED to
 # "running" (components, findings, audit history), the BOM goes into the clone,
 # any analysis the clone missed is copied by (component purl, vulnerability)
 # with DT_TRIAGE_API_KEY, and every other version of the project is
 # deactivated (not deleted; DT keeps their findings and audit history).
-# The nightly run does this for any container it finds unmigrated;
-# --migrate-stable does it for all of them at once and reports.
+# Idempotent: a re-run copies analyses from, and deactivates, any old version
+# still active (a run that died half-way). The nightly run never migrates: an
+# unmigrated container stays on the old model (clone of the latest version to
+# a new "<tag>@<digest>" version on image change, old one deactivated); a
+# container with no project at all starts on "running".
 #
 # After each run the current portfolio totals are appended as one JSON line to
 # logs/deptrack-metrics.jsonl and written to logs/textfile/deptrack.prom for
@@ -89,7 +93,7 @@ while [[ $# -gt 0 ]]; do
         --migrate-stable) MIGRATE=true ;;
         --deactivate-superseded-only) DEACTIVATE_ONLY=true ;;
         --deactivate-missing) DEACTIVATE_ONLY=true; DEACTIVATE_MISSING=true ;;
-        -h|--help)   sed -n '2,60p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,64p' "$0"; exit 0 ;;
         *)           echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
@@ -364,14 +368,16 @@ old = {ident(f): f for f in findings(src) if analysed(f)}
 if not dst:
     print(len(old), 0, 0, 0, 0)
     sys.exit(0)
-new = {ident(f): f for f in findings(dst)}
+new = {}   # ident -> every matching finding (a package vendored twice is two components)
+for f in findings(dst):
+    new.setdefault(ident(f), []).append(f)
 copied = present = gone = failed = 0
 for k, f in old.items():
-    n = new.get(k)
-    if n is None:
+    targets = [n for n in new.get(k, []) if not analysed(n)]
+    if k not in new:
         gone += 1
         continue
-    if analysed(n):
+    if not targets:
         present += 1
         continue
     a = f.get("analysis") or {}
@@ -385,14 +391,15 @@ for k, f in old.items():
         body["isSuppressed"] = bool(full.get("isSuppressed", body["isSuppressed"]))
     except Exception:
         pass   # fall back to the state/suppression from the finding itself
-    body.update(project=dst, component=n["component"]["uuid"], vulnerability=n["vulnerability"]["uuid"],
-                comment=f"copied from version {label} by sbom-scan.sh")
-    try:
-        call("PUT", "/api/v1/analysis", body)
-        copied += 1
-    except Exception as e:
-        failed += 1
-        print(f"could not copy {k}: {e}", file=sys.stderr)
+    for n in targets:
+        put = dict(body, project=dst, component=n["component"]["uuid"], vulnerability=n["vulnerability"]["uuid"],
+                   comment=f"copied from version {label} by sbom-scan.sh")
+        try:
+            call("PUT", "/api/v1/analysis", put)
+            copied += 1
+        except Exception as e:
+            failed += 1
+            print(f"could not copy {k}: {e}", file=sys.stderr)
 print(len(old), copied, present, gone, failed)
 EOF
 }
@@ -453,11 +460,45 @@ report_copy() {
     fi
 }
 
+# finish_migration STABLE_UUID NAME -> for a container already on "running":
+# copy analyses from every other version still active (none after a clean
+# migration), then deactivate those versions. Both steps are idempotent, so a
+# re-run of --migrate-stable completes one that died after the clone.
+finish_migration() {
+    local stable="$1" name="$2" err uuid ver n=0
+    if ! err=$(list_projects "$name"); then
+        fail "${name}: could not list versions (${err})"
+        return
+    fi
+    while read -r uuid ver; do
+        [[ -n "$uuid" ]] || continue
+        n=$((n + 1))
+        log "  ${name}: on \"${STABLE_VERSION}\", but ${ver} is still active: finishing the migration"
+        if [[ "$DRY_RUN" == true ]]; then
+            report_copy "$uuid" "" "$ver" "$name"
+        else
+            report_copy "$uuid" "$stable" "$ver" "$name"
+        fi
+    done < <(python3 - "${WORK}/projects.json" "$stable" <<'EOF'
+import json, sys
+for p in json.load(open(sys.argv[1])):
+    if p["uuid"] != sys.argv[2] and p.get("active", True):
+        print(p["uuid"], p.get("version", ""))
+EOF
+)
+    if (( n == 0 )); then
+        log "  ${name}: already on \"${STABLE_VERSION}\""
+        return
+    fi
+    deactivate_superseded "$stable" "$name"
+}
+
 declare -A SBOM_FOR_IMAGE=()   # image_id -> generated SBOM file (shared images scan once)
 
 scan_container() {
     local name="$1" info tag digest image_id image_ref short label bom
-    local stable_uuid="" stable_active=true src_uuid="" src_version="" code target_uuid token status cloned=false waited
+    local stable_uuid="" stable_active=true src_uuid="" src_version="" code target_uuid="" token status cloned=false waited
+    local legacy=false version="$STABLE_VERSION" new_uuid
 
     info=$(image_info "$name") || { fail "${name}: docker inspect failed"; return; }
     read -r tag digest image_id image_ref <<<"$info"
@@ -477,7 +518,9 @@ scan_container() {
 
     if [[ -n "$stable_uuid" ]]; then
         if [[ "$MIGRATE" == true ]]; then
-            log "  ${name}: already on \"${STABLE_VERSION}\""
+            # Converge a half-done migration (a run that died after the clone):
+            # copy analyses from any old version still active, then deactivate it.
+            finish_migration "$stable_uuid" "$name"
             ALREADY=$((ALREADY + 1))
             SKIPPED=$((SKIPPED + 1))
             return
@@ -502,10 +545,46 @@ scan_container() {
             src_uuid=$(json "d.get('uuid')")
             src_version=$(json "d.get('version')")
         fi
+        # Only --migrate-stable migrates. Until then an unmigrated container
+        # stays on the old model: one version "<tag>@<digest12>" per image.
+        if [[ -n "$src_uuid" && "$MIGRATE" == false ]]; then
+            legacy=true
+            version="$label"
+            code=$(dt GET /api/v1/project/lookup -G --data-urlencode "name=${name}" --data-urlencode "version=${label}")
+            if [[ "$code" == 200 && "$FORCE" == false ]]; then
+                SKIPPED=$((SKIPPED + 1))
+                if [[ "$(json "d.get('active', True) and d.get('isLatest')")" == True ]]; then
+                    log "  ${name} ${label}: unchanged, skipping (old per-digest model; not migrated)"
+                    return
+                fi
+                # Rolled back to an older image: its version exists but was
+                # deactivated; make it the active latest again.
+                target_uuid=$(json "d.get('uuid')")
+                if [[ "$DRY_RUN" == true ]]; then
+                    log "  ${name}: would reactivate ${label} as latest (running again)"
+                    return
+                fi
+                code=$(dt PATCH "/api/v1/project/${target_uuid}" -H 'Content-Type: application/json' \
+                    -d '{"active": true, "isLatest": true}')
+                if [[ "$code" == 200 || "$code" == 304 ]]; then
+                    log "  ${name}: reactivated ${label} as latest (running again)"
+                    deactivate_superseded "$target_uuid" "$name"
+                else
+                    log "  ${name}: WARNING: could not reactivate ${label} as latest (HTTP ${code})"
+                fi
+                return
+            elif [[ "$code" != 200 && "$code" != 404 ]]; then
+                fail "${name}: project lookup failed (HTTP ${code})"
+                return
+            fi
+        fi
     fi
 
     if [[ "$DRY_RUN" == true ]]; then
-        if [[ -n "$stable_uuid" ]]; then
+        if [[ "$legacy" == true ]]; then
+            log "  ${name} ${label}: would clone ${src_version} -> ${label}, scan ${image_id:7:12} and upload (old per-digest model; --migrate-stable moves it to \"${STABLE_VERSION}\")"
+            deactivate_superseded "" "$name" "$label"
+        elif [[ -n "$stable_uuid" ]]; then
             log "  ${name} ${label}: would scan ${image_id:7:12} and upload into \"${STABLE_VERSION}\""
         elif [[ -n "$src_uuid" ]]; then
             log "  ${name} ${label}: would clone ${src_version} -> \"${STABLE_VERSION}\", scan ${image_id:7:12} and upload"
@@ -553,18 +632,19 @@ EOF
     fi
     bom="${WORK}/${name}.cdx.json"
 
-    # Migration: clone the old latest version to "running" so its findings and
-    # audit decisions carry over and don't re-alert.
+    # A new version (migration to "running", or the next per-digest version
+    # of an unmigrated container) starts as a clone of the latest one, so its
+    # findings and audit decisions carry over and don't re-alert.
     target_uuid="$stable_uuid"
-    if [[ -z "$target_uuid" && -n "$src_uuid" ]]; then
+    if [[ -z "$target_uuid" && -n "$src_uuid" && "$src_version" != "$version" ]]; then
         code=$(dt POST "/api/v2/projects/${src_uuid}/clone" -H 'Content-Type: application/json' \
             -d "$(python3 -c 'import json, sys; print(json.dumps({"version": sys.argv[1], "version_is_latest": True,
                 "includes": ["COMPONENTS", "FINDINGS", "FINDINGS_AUDIT_HISTORY", "POLICY_VIOLATIONS",
-                             "POLICY_VIOLATIONS_AUDIT_HISTORY", "PROPERTIES", "TAGS", "ACL"]}))' "$STABLE_VERSION")")
+                             "POLICY_VIOLATIONS_AUDIT_HISTORY", "PROPERTIES", "TAGS", "ACL"]}))' "$version")")
         if [[ "$code" == 201 ]]; then
             target_uuid=$(json "d.get('uuid')")
             cloned=true
-            log "  ${name}: cloned ${src_version} -> \"${STABLE_VERSION}\""
+            log "  ${name}: cloned ${src_version} -> \"${version}\""
         else
             log "  ${name}: clone failed (HTTP ${code}), uploading as a fresh version instead (analyses copied afterwards)"
         fi
@@ -574,23 +654,24 @@ EOF
         code=$(dt POST /api/v1/bom -F "project=${target_uuid}" \
             -F "bom=@${bom}.gz;type=application/gzip")
     else
-        code=$(dt POST /api/v1/bom -F "projectName=${name}" -F "projectVersion=${STABLE_VERSION}" \
+        code=$(dt POST /api/v1/bom -F "projectName=${name}" -F "projectVersion=${version}" \
             -F "autoCreate=true" -F "isLatest=true" -F "projectTags=sbom-scan" \
             -F "bom=@${bom}.gz;type=application/gzip")
     fi
     if [[ "$code" != 200 ]]; then
         fail "${name}: BOM upload failed (HTTP ${code}: $(head -c 200 "${WORK}/resp"))"
         if [[ "$cloned" == true ]]; then
-            # Don't leave a "running" clone with the old BOM (the next run
-            # would store nothing and retry, but the clone would count); put
-            # the latest flag back on the old version.
+            # Don't leave a clone with the old BOM under the new version (it
+            # would count, and a per-digest one would be skipped next run);
+            # put the latest flag back on the old version.
             dt DELETE "/api/v1/project/${target_uuid}" >/dev/null
             dt PATCH "/api/v1/project/${src_uuid}" -H 'Content-Type: application/json' -d '{"isLatest": true}' >/dev/null
         fi
         return
     fi
     token=$(json "d.get('token')")
-    target_uuid=$(json "d.get('projectUuid')")
+    new_uuid=$(json "d.get('projectUuid')")
+    [[ -z "$new_uuid" ]] || target_uuid="$new_uuid"
 
     # Wait for import + analysis, so the run's result means something.
     waited=0
@@ -604,7 +685,7 @@ EOF
     done
     case "$status" in
         COMPLETED|DONE)
-            log "  ${name} ${label}: uploaded into \"${STABLE_VERSION}\" and analyzed (${waited}s)"
+            log "  ${name} ${label}: uploaded into \"${version}\" and analyzed (${waited}s)"
             UPLOADED=$((UPLOADED + 1)) ;;
         FAILED)
             fail "${name}: Dependency-Track failed to process the BOM (token ${token})"
@@ -614,6 +695,14 @@ EOF
             UPLOADED=$((UPLOADED + 1)) ;;
     esac
 
+    if [[ "$legacy" == true ]]; then
+        [[ -n "$target_uuid" ]] && deactivate_superseded "$target_uuid" "$name"
+        return
+    fi
+    if [[ -z "$target_uuid" ]]; then
+        fail "${name}: DT returned no project UUID for the upload; image properties not stored"
+        return
+    fi
     # Recorded only after a good upload: a failed one is retried next run.
     set_image_meta "$target_uuid" "$image_ref" "$digest" "$image_id" "$label" \
         || log "  ${name}: WARNING: image properties not stored; the next run uploads it again"
@@ -676,7 +765,7 @@ EOF
 # again. In a dry run with NAME but no CURRENT, lists every active version of
 # NAME (all of them would be superseded by the new "running" version).
 deactivate_superseded() {
-    local current="${1:-}" name="${2:-}" err code uuid pname ver latest
+    local current="${1:-}" name="${2:-}" next="${3:-$STABLE_VERSION}" err code uuid pname ver latest
     if [[ "$CAN_DEACTIVATE" == false ]]; then
         if [[ -n "$name" ]]; then
             log "  ${name}: WARNING: superseded versions left active (no PORTFOLIO_MANAGEMENT)"
@@ -694,8 +783,8 @@ deactivate_superseded() {
         return
     fi
     if [[ "$DRY_RUN" == true && -n "$name" && -z "$current" ]]; then
-        current="dry-run-${STABLE_VERSION}"
-        python3 - "${WORK}/projects.json" "$name" "$STABLE_VERSION" > "${WORK}/superseded" <<'EOF' || return
+        current="dry-run-${next}"
+        python3 - "${WORK}/projects.json" "$name" "$next" > "${WORK}/superseded" <<'EOF' || return
 import json, sys
 for p in json.load(open(sys.argv[1])):
     if p.get("name") == sys.argv[2] and p.get("active", True):

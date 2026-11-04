@@ -74,6 +74,9 @@ container is uploaded into. What image it is lives on that version:
 * After each upload `running` is set active + latest and every other active
   version of that project is **deactivated** (only relevant for the old
   per-digest versions left over from before the migration).
+* Containers not yet migrated stay on the old per-digest model until
+  `--migrate-stable` runs (see *Migration* below); the nightly run never
+  migrates.
 * `--deactivate-missing` (after removing a service) deactivates `running`
   too; if the container comes back, the next run reactivates it.
 
@@ -136,21 +139,35 @@ has no `running` version yet onto it: clone the old latest version to
 it, copy any analysis the clone missed by (component purl, vulnerability
 source + ID) using `DT_TRIAGE_API_KEY` (state, justification, response,
 details, suppression; never overwrites one that's there), set the image
-properties/tags, and deactivate the old versions (not deleted). Idempotent:
-containers already on `running` are skipped. Active projects without a
-running container are only listed. The nightly run does the same for any
-container it finds unmigrated, so once this is deployed the next 03:30 run
-migrates everything if you haven't. Run it by hand first:
+properties/tags, and deactivate the old versions (not deleted). Idempotent
+and convergent: for a container already on `running` a re-run only copies
+missing analyses from, and deactivates, any old version that is still active
+(a run that died half-way); otherwise it logs "already on running". Active
+projects without a running container are only listed.
+
+**The nightly run never migrates.** Until `--migrate-stable` has run, an
+unmigrated container stays on the old per-digest model (an image change
+clones the latest version to a new `<tag>@<digest12>` version and deactivates
+the old one; a rollback reactivates the old version), and DT's history keeps
+its old distortion. Only a container with no DT project at all (a new
+service) starts directly on `running`. Run the migration by hand, once Mark
+has approved it:
 
 ```bash
 scripts/sbom-scan.sh --migrate-stable --dry-run   # GETs only: per container the old version, analyses to carry, versions to deactivate
-scripts/sbom-scan.sh --migrate-stable --no-notify # ~the time of a --force run (every image is scanned)
+scripts/sbom-scan.sh --migrate-stable --no-notify # every image is scanned and uploaded
 scripts/sbom-scan.sh --migrate-stable --dry-run   # again: "0 … moved, N already on it"
 ```
 
-Dry run on 2026-11-03: 39 containers to move, 486 analysis records on their
-current versions (419 after DT's alias de-duplication), 39 old versions to
-deactivate, 0 failures. The real run should report, per container, every
+Duration: about a `--force` run (each upload usually takes seconds to
+minutes), but at worst 39 × `PROCESS_TIMEOUT` (900 s) if DT is slow. The
+flock keeps the 03:30 cron run from overlapping it (it exits if one is
+running), so start it in the evening.
+
+Dry run on 2026-11-03: 39 containers to move, 486 analysed findings on their
+current versions (the portfolio's "suppressed" count, 486 at that point; the
+earlier 419 was the same figure on the morning of 11-03, before more triage),
+39 old versions to deactivate, 0 failures. The real run should report, per container, every
 analysis as "already present" (carried by the clone) or "copied"; anything
 "for components no longer in the image" means the image changed between the
 old scan and now.
@@ -159,7 +176,7 @@ Deploy order on the server (after the PR is merged), well away from 03:30:
 
 ```bash
 cd ~/83rr-poweredge && git pull
-mkdir -p logs/textfile                       # as mcheli, BEFORE the up (else docker creates it root-owned)
+mkdir -p logs/textfile                       # as mcheli, BEFORE the up (create_host_path: false: the up fails without it)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d node-exporter
 curl -s http://$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' node-exporter):9100/metrics \
   | grep '^node_textfile_scrape_error'       # "node_textfile_scrape_error 0"

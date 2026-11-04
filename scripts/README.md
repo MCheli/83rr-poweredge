@@ -358,11 +358,12 @@ image). Image ref and digest are stored on that version as properties (group
 digest matches the stored one is skipped (idempotent). Re-uploading into the
 same version keeps findings and analyses of components still in the image, and
 DT's portfolio history stays continuous, so its dashboard shows the burn-down.
-A container still on the old model is migrated on its next upload: the old
-latest version is cloned to `running`, missing analyses are copied by
-(purl, vulnerability) with `DT_TRIAGE_API_KEY`, and the old versions are
-deactivated (not deleted; needs `PORTFOLIO_MANAGEMENT`, else it warns and
-continues). After each full run it appends DT's current portfolio totals to
+Only `--migrate-stable` moves a container off the old per-digest model (the
+nightly run keeps unmigrated containers on it): the old latest version is
+cloned to `running`, missing analyses are copied by (purl, vulnerability)
+with `DT_TRIAGE_API_KEY`, and the old versions are deactivated (not deleted;
+needs `PORTFOLIO_MANAGEMENT`, else it warns and continues). A re-run finishes
+a half-done migration. After each full run it appends DT's current portfolio totals to
 `logs/deptrack-metrics.jsonl` and writes `logs/textfile/deptrack.prom` for
 node-exporter's textfile collector (Grafana "Dependency-Track trend").
 Talks to `deptrack-apiserver` on the docker bridge (no nginx), reads
