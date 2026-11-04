@@ -322,16 +322,16 @@ services:
   # Monitoring: Grafana (Visualization Dashboards)
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
-    # 13.3.0 (latest stable, 2026-10-27): moves off 12.4 for CVE-2026-14199
-    # (Auth Proxy cache-key session takeover; 13.2.1+ is fixed under every
-    # advisory) and the CVEs in the 13.3.0 notes. Pinned by digest: watchtower
-    # only polls ghcr.io, so bump tag and digest together by hand.
-    # First 13.x start runs a ONE-WAY migration of dashboards/folders into
-    # unified storage inside grafana.db; back up grafana_data first (runbook in
-    # the upgrade PR). Provisioned dashboards use only timeseries/stat/gauge/
-    # bargauge/table panels, so React 19 and the removed Graph UI components
-    # do not affect them. No image renderer, CLI calls or command override.
-    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+    # 13.0.12 (latest 13.0.x patch): CVE-2026-14199 (Auth Proxy cache-key
+    # session takeover, fixed in 13.0.8) and the 13.0.10-13.0.12 security
+    # fixes. Pinned by digest: watchtower only polls ghcr.io, so bump tag and
+    # digest together by hand. The first 13.x start runs a ONE-WAY migration
+    # of dashboards/folders into unified storage inside grafana.db. Back up
+    # grafana_data first: runbook and rollback in docs/grafana-13-upgrade.md.
+    # Provisioned dashboards use only timeseries/stat/gauge/bargauge/table
+    # panels, so React 19 and the removed Graph UI components don't affect
+    # them. No image renderer, CLI calls or command override.
+    image: grafana/grafana:13.0.12@sha256:28476aa8096cd8d0f658a05a443b605fffb450e57f444335216175d604cfd23d
     container_name: grafana
     restart: unless-stopped
     logging: *default-logging
