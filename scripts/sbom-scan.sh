@@ -438,7 +438,9 @@ stored_digest() {
     json "next((p.get('propertyValue') for p in d if p.get('groupName') == 'sbom-scan' and p.get('propertyName') == 'digest'), '')"
 }
 
-# report_copy SRC DST LABEL NAME -> runs copy_analyses, logs, adds to the totals
+# report_copy SRC DST LABEL NAME -> runs copy_analyses, logs, adds to the totals.
+# Returns 1 if the comparison or any copy failed: the caller must then keep
+# SRC active, so a re-run of --migrate-stable can retry the copy.
 report_copy() {
     local out n_src n_copied n_present n_gone n_failed
     if [[ "$CAN_TRIAGE" == false ]]; then
@@ -447,7 +449,7 @@ report_copy() {
     fi
     if ! out=$(copy_analyses "$1" "$2" "$3" 2>"${WORK}/copy-err"); then
         fail "${4}: could not compare analyses with ${3}: $(tail -n 1 "${WORK}/copy-err" | cut -c1-200)"
-        return
+        return 1
     fi
     read -r n_src n_copied n_present n_gone n_failed <<<"$out"
     ANALYSES_SRC=$((ANALYSES_SRC + n_src)); ANALYSES_COPIED=$((ANALYSES_COPIED + n_copied))
@@ -456,7 +458,10 @@ report_copy() {
         log "  ${4}: ${n_src} analysis/analyses on ${3} to carry over"
     else
         log "  ${4}: analyses from ${3}: ${n_src} total, ${n_copied} copied, ${n_present} already present, ${n_gone} for components no longer in the image"
-        (( n_failed == 0 )) || fail "${4}: ${n_failed} analysis/analyses could not be copied from ${3}"
+        if (( n_failed > 0 )); then
+            fail "${4}: ${n_failed} analysis/analyses could not be copied from ${3}"
+            return 1
+        fi
     fi
 }
 
@@ -465,7 +470,7 @@ report_copy() {
 # migration), then deactivate those versions. Both steps are idempotent, so a
 # re-run of --migrate-stable completes one that died after the clone.
 finish_migration() {
-    local stable="$1" name="$2" err uuid ver n=0
+    local stable="$1" name="$2" err uuid ver n=0 copy_ok=true
     if ! err=$(list_projects "$name"); then
         fail "${name}: could not list versions (${err})"
         return
@@ -475,9 +480,9 @@ finish_migration() {
         n=$((n + 1))
         log "  ${name}: on \"${STABLE_VERSION}\", but ${ver} is still active: finishing the migration"
         if [[ "$DRY_RUN" == true ]]; then
-            report_copy "$uuid" "" "$ver" "$name"
+            report_copy "$uuid" "" "$ver" "$name" || copy_ok=false
         else
-            report_copy "$uuid" "$stable" "$ver" "$name"
+            report_copy "$uuid" "$stable" "$ver" "$name" || copy_ok=false
         fi
     done < <(python3 - "${WORK}/projects.json" "$stable" <<'EOF'
 import json, sys
@@ -488,6 +493,10 @@ EOF
 )
     if (( n == 0 )); then
         log "  ${name}: already on \"${STABLE_VERSION}\""
+        return
+    fi
+    if [[ "$copy_ok" == false ]]; then
+        log "  ${name}: old version(s) left active so a re-run can retry the analysis copy"
         return
     fi
     deactivate_superseded "$stable" "$name"
@@ -707,8 +716,13 @@ EOF
     set_image_meta "$target_uuid" "$image_ref" "$digest" "$image_id" "$label" \
         || log "  ${name}: WARNING: image properties not stored; the next run uploads it again"
     if [[ -n "$src_uuid" ]]; then
-        report_copy "$src_uuid" "$target_uuid" "$src_version" "$name"
         MIGRATED=$((MIGRATED + 1))
+        if ! report_copy "$src_uuid" "$target_uuid" "$src_version" "$name"; then
+            # Keep the old version active: --migrate-stable retries the copy
+            # (finish_migration) and deactivates it once that succeeds.
+            log "  ${name}: ${src_version} left active so a re-run of --migrate-stable can retry the analysis copy"
+            return
+        fi
     fi
     deactivate_superseded "$target_uuid" "$name"
 }
