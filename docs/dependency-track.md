@@ -50,25 +50,143 @@ LAN browser ─▶ nginx (deptrack.ops) ─┬─ /     ─▶ deptrack-frontend
 ### Projects and versions
 
 One DT project per **container name** (`tallied`, `tallied-scheduler`, `plex`,
-...). The version is `<image tag>@<first 12 hex of the digest>`, e.g.
-`17.11-alpine@266d3c257594`, `latest@1111aaaa2222`, or `digest@e0ab27395614`
-for digest-only refs. The registry digest is used when there is one, the local
-image ID otherwise (locally built images).
+...), with ONE stable version, **`running`**, that every BOM of that
+container is uploaded into. What image it is lives on that version:
 
-* A version that already exists is skipped, so the nightly run only does work
-  for containers whose image changed (`--force` re-uploads everything).
-* When an image changes, the scanner **clones** the previous latest version
-  (components, findings, audit decisions) to the new version and then uploads
-  the BOM into the clone. Findings you already have carry over and do **not**
-  alert again; only genuinely new ones do. The new version is marked latest.
-* After each upload, every other version of that project that isn't latest is
-  **deactivated** (`active=false`), not deleted. DT leaves inactive projects
-  out of the portfolio metrics, so the totals count only what runs, but their
-  findings and audit history stay (UI: project list → *Show inactive*). Each
-  change is logged (`deactivated superseded version …`). This needs
-  `PORTFOLIO_MANAGEMENT` on the scanner team; without it the scan logs a
-  warning, still uploads, and leaves the old versions active.
-* Projects of containers that no longer run stay until you delete them in the UI.
+| | |
+|---|---|
+| Properties (group `sbom-scan`) | `image` (configured ref, e.g. `redis:7.4.12-alpine`), `digest` (full `sha256:…`; registry digest, or local image ID for locally built images), `image-id`, `label` (`<tag>@<12 hex>`, the old version name) |
+| Tags | `sbom-scan`, `digest:<12 hex>`, `image:<ref>` (DT lowercases tags) |
+| BOM `metadata.component.version` | the label, too |
+
+* A container whose current digest equals the stored `digest` property is
+  skipped, so the nightly run only does work for containers whose image
+  changed (`--force` re-uploads everything). The properties are written only
+  after a successful upload, so a failed one is retried the next night.
+* On an image change the new BOM replaces the old one in the same version.
+  DT matches components by identity, so every component still in the image
+  keeps its findings, analyses and suppressions and does **not** alert again;
+  only genuinely new findings do. Checked on DT 5.2.1 with a scratch project
+  (2026-11-03): analyses survived re-uploads with new serial numbers and
+  bom-refs, and component UUIDs stayed the same. A component that leaves the
+  image loses its analysis; if it comes back later it is a new component and
+  needs a new one (the old per-digest clone had the same limit).
+* After each upload `running` is set active + latest and every other active
+  version of that project is **deactivated** (only relevant for the old
+  per-digest versions left over from before the migration).
+* Containers not yet migrated stay on the old per-digest model until
+  `--migrate-stable` runs (see *Migration* below); the nightly run never
+  migrates.
+* `--deactivate-missing` (after removing a service) deactivates `running`
+  too; if the container comes back, the next run reactivates it.
+
+The CEL alert policy matches on `project.name` (and per-finding data), not on
+the version, so it is unaffected by the version scheme.
+
+#### Why one stable version: how DT's dashboard history works
+
+DT's dashboard (all its charts and the header sparklines) plots
+`/api/v1/metrics/portfolio/{days}/days`. Every refresh **re-sums the history
+of the projects that are active today**: for each past day it takes each
+active project's metrics row from around that day. Inactive projects are left
+out of *every* past point, retroactively, and a project version contributes
+only from the day it was created.
+
+Until 2026-11-03 each image digest was its own version, and the superseded one
+was deactivated. So every upgrade deleted the old, high counts from all of
+history and the new version only started on its upgrade day: the dashboard
+line *rose* (projects 8 → 25 → 30 → 39 as versions were created) while what
+actually ran fell from 540 critical / 2,931 high (11-01) to 190 / 1,156
+(11-03). With one `running` version per container the project, and so its
+history, is continuous; DT's own chart now shows an upgrade as a drop.
+
+Caveats: the history before the migration day stays distorted (the migrated
+`running` versions start on that day, the old versions are inactive), and it
+scrolls out of the default 30-day window about a month later.
+`/metrics/portfolio/current` (and the per-project list) was always right.
+Suppressed findings are left out of the counts and the risk score and shown
+as "suppressed"; the "auditing progress" chart counts only *unsuppressed*
+findings with an analysis state, so with every analysis suppressed it stays
+at 0.
+
+#### Our own trend line
+
+As a record that doesn't depend on DT's view, every full run (not `--only`,
+not `--dry-run`) ends with `record_trend`: it asks DT to refresh the portfolio
+metrics, reads `/api/v1/metrics/portfolio/current`, and
+
+* appends one JSON line to `logs/deptrack-metrics.jsonl` (`timestamp`,
+  `critical`, `high`, `medium`, `low`, `unassigned`, `inheritedRiskScore`,
+  `suppressed`, plus `vulnerabilities`, `projects`, `vulnerableProjects`,
+  `kev`, `policyViolationsTotal`); kept forever, the long-term record;
+* writes `logs/textfile/deptrack.prom` (gauges `deptrack_portfolio_findings{severity}`,
+  `deptrack_portfolio_inherited_risk_score`, `deptrack_portfolio_suppressed`,
+  `…_projects`, `…_vulnerable_projects`, `…_kev`, `…_policy_violations`,
+  `…_last_update_timestamp_seconds`), which node-exporter's textfile collector
+  (`./logs/textfile` mounted at `/textfile`) exposes to Prometheus (30-day
+  retention);
+* Grafana dashboard **Dependency-Track trend** (provisioned,
+  `infrastructure/monitoring/grafana/provisioning/dashboards/dependency-track.json`)
+  plots them; "Last recorded" turns red after 36 h without a run.
+
+A failure here only logs a warning; it never fails the scan.
+
+#### Migration (one time, 2026-11)
+
+`scripts/sbom-scan.sh --migrate-stable` moves every running container that
+has no `running` version yet onto it: clone the old latest version to
+`running` (components, findings, audit history), upload the current BOM into
+it, copy any analysis the clone missed by (component purl, vulnerability
+source + ID) using `DT_TRIAGE_API_KEY` (state, justification, response,
+details, suppression; never overwrites one that's there), set the image
+properties/tags, and deactivate the old versions (not deleted). Idempotent
+and convergent: for a container already on `running` a re-run only copies
+missing analyses from, and deactivates, any old version that is still active
+(a run that died half-way); otherwise it logs "already on running". Active
+projects without a running container are only listed.
+
+**The nightly run never migrates.** Until `--migrate-stable` has run, an
+unmigrated container stays on the old per-digest model (an image change
+clones the latest version to a new `<tag>@<digest12>` version and deactivates
+the old one; a rollback reactivates the old version), and DT's history keeps
+its old distortion. Only a container with no DT project at all (a new
+service) starts directly on `running`. Run the migration by hand, once Mark
+has approved it:
+
+```bash
+scripts/sbom-scan.sh --migrate-stable --dry-run   # GETs only: per container the old version, analyses to carry, versions to deactivate
+scripts/sbom-scan.sh --migrate-stable --no-notify # every image is scanned and uploaded
+scripts/sbom-scan.sh --migrate-stable --dry-run   # again: "0 … moved, N already on it"
+```
+
+Duration: about a `--force` run (each upload usually takes seconds to
+minutes), but at worst 39 × `PROCESS_TIMEOUT` (900 s) if DT is slow. The
+flock keeps the 03:30 cron run from overlapping it (it exits if one is
+running), so start it in the evening.
+
+Dry run on 2026-11-03: 39 containers to move, 486 analysed findings on their
+current versions (the portfolio's "suppressed" count, 486 at that point; the
+earlier 419 was the same figure on the morning of 11-03, before more triage),
+39 old versions to deactivate, 0 failures. The real run should report, per container, every
+analysis as "already present" (carried by the clone) or "copied"; anything
+"for components no longer in the image" means the image changed between the
+old scan and now.
+
+Deploy order on the server (after the PR is merged), well away from 03:30:
+
+```bash
+cd ~/83rr-poweredge && git pull
+mkdir -p logs/textfile                       # as mcheli, BEFORE the up (create_host_path: false: the up fails without it)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d node-exporter
+curl -s http://$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' node-exporter):9100/metrics \
+  | grep '^node_textfile_scrape_error'       # "node_textfile_scrape_error 0"
+scripts/sbom-scan.sh --migrate-stable --dry-run
+scripts/sbom-scan.sh --migrate-stable --no-notify
+ls -l logs/textfile/deptrack.prom && tail -1 logs/deptrack-metrics.jsonl
+```
+
+Then Grafana → *Dependency-Track trend* shows one point per run, and DT's
+dashboard keeps its project count flat from the migration day on.
 
 Until 2026-11-01 the scanner instead *deleted* versions beyond the newest 2
 (`KEEP_VERSIONS=2`). With exactly two versions per container (the old and
@@ -161,8 +279,10 @@ Suppressed findings are excluded, so a *Not affected* + suppress analysis
 silences a false positive for good. "Internet-exposed" is the
 `INTERNET_PROJECTS` list in `scripts/deptrack-setup.sh` (container names with
 a public vhost or a forwarded port); re-run `apply` after changing it.
-Policies are evaluated per project version, so a container that is still
-violating can alert again when its image changes (new version).
+Violations belong to a component in a project version. Since the stable
+`running` version, a violation on a component that stays in the image is not
+new after an upgrade; a changed component (new package version) is, so it can
+alert again.
 
 Tapping opens the project in the DT UI. What to do:
 
@@ -170,10 +290,10 @@ Tapping opens the project in the DT UI. What to do:
    whether a fixed version exists.
 2. Fix it the usual way: bump the image/digest in `docker-compose.yml`, or
    rebuild our own image (Dependabot/watchtower for ghcr.io images). The next
-   nightly scan uploads the new version and the finding disappears from latest.
+   nightly scan uploads the new BOM into `running` and the finding disappears.
 3. If it doesn't apply (e.g. vulnerable code path not used, disputed CVE),
    record an analysis in DT (*Not affected* + justification, or *Suppress*).
-   Analyses carry over to future versions through the clone step.
+   Analyses stay as long as that component stays in the image.
 
 Silence for a while: `scripts/deptrack-setup.sh alerts off` (and `on` again);
 this leaves the weekly digest running.
@@ -188,16 +308,17 @@ scripts/deptrack-setup.sh triage-key      # team "triage" key -> DT_TRIAGE_API_K
 scripts/sbom-scan.sh --dry-run            # what tonight's run would upload
 scripts/sbom-scan.sh --only uptime-kuma   # re-scan one container now
 scripts/sbom-scan.sh --force              # re-upload every container
+scripts/sbom-scan.sh --migrate-stable --dry-run              # containers not yet on "running" (GETs only)
 scripts/sbom-scan.sh --deactivate-superseded-only --dry-run   # list superseded versions (GETs only)
 scripts/sbom-scan.sh --deactivate-superseded-only             # deactivate them, no scanning
+tail -3 logs/deptrack-metrics.jsonl                           # our trend record
 docker compose logs --tail 100 deptrack-apiserver
 docker exec deptrack-apiserver wget -qO- http://127.0.0.1:9000/health/ready
 ```
 
-* **Image rolled back:** the next scan finds the old version already exists,
-  sets it active + latest again and deactivates the newer one (logged as
-  `reactivated … as latest`). To reactivate by hand: UI → project →
-  *Show inactive* → the version → *Active*.
+* **Image rolled back:** just a digest change; the next scan uploads the old
+  image's BOM into `running` again. Which image a version is on: project →
+  *Properties* (`sbom-scan` / `digest`, `image`) or its `digest:` tag.
 * **Rotate the scanner key:** delete it in the UI (Administration → Access
   Management → Teams → sbom-scanner), then `deptrack-setup.sh apply` creates a
   new one and rewrites `DT_API_KEY` in `.env`.
