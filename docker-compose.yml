@@ -947,7 +947,8 @@ services:
   # runbook can run the intermediate 12.0 hop; leave them unset in .env.
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
-    image: mariadb:10.11
+    # Patch bumps within 10.11: docs/seafile-db-mariadb-10.11.19.md
+    image: mariadb:10.11.19@sha256:d769e37960821dfdcf096954f6e7ac89f747e116c1bba98e48edd265dfc7deae
     container_name: seafile-db
     restart: unless-stopped
     logging: *default-logging
