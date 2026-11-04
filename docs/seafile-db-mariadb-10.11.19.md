@@ -53,7 +53,7 @@ The dump runs while Seafile is up. `--single-transaction` gives a consistent Inn
 
 ```bash
 # PRELUDE first
-[ -d "$BK" ] || { sudo mkdir -p "$BK" && sudo chown "$USER": "$BK"; }
+mkdir -p "$BK"                                   # /data/backups is mcheli-owned; no sudo (it needs a password)
 docker exec seafile-db sh -c 'exec mariadb-dump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction \
   --routines --triggers --events --all-databases' | gzip > "$BK/seafile-alldb.sql.gz"
 docker exec seafile-db sh -c 'exec mariadb-dump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction \
@@ -65,8 +65,15 @@ zcat "$BK/seafile-3db.sql.gz" | grep -cE '^CREATE DATABASE'    # 3
 # baseline counts, compared again in step 4
 q "SELECT 'users',COUNT(*) FROM ccnet_db.EmailUser UNION ALL SELECT 'repos',COUNT(*) FROM seafile_db.Repo
    UNION ALL SELECT 'tokens',COUNT(*) FROM seahub_db.api2_tokenv2" | tee "$BK/baseline.txt"
-# off-host copy
-[ -d /mnt/nas/83rr-backup ] && cp "$BK"/*.sql.gz "$BK/baseline.txt" /mnt/nas/83rr-backup/databases/ && echo "OK NAS copy"
+# off-host copy, under dated names so the nightly seafile_*.sql.gz rotation can't clash with it
+NAS=/mnt/nas/83rr-backup/databases
+if findmnt /mnt/nas >/dev/null && [ -d "$NAS" ]; then
+  (cd "$BK" && sha256sum seafile-alldb.sql.gz seafile-3db.sql.gz > SHA256SUMS)
+  for f in seafile-alldb.sql.gz seafile-3db.sql.gz; do cp "$BK/$f" "$NAS/premariadb-10.11.19-${BK##*-}-$f"; done
+  (cd "$BK" && sed "s#  #  $NAS/premariadb-10.11.19-${BK##*-}-#" SHA256SUMS | sha256sum -c) && echo "OK NAS copy"
+else
+  echo "!! NAS NOT MOUNTED: no off-host copy. Stop and fix the mount (or get Mark's OK to continue with the local copy only)"
+fi
 ```
 
 Each dump should be about 20 MB compressed, the size of the nightly `seafile_*.sql.gz`. A much smaller
@@ -101,25 +108,19 @@ for i in $(seq 1 24); do
   c=$(curl -s -o /dev/null -w '%{http_code}' https://files.markcheli.com/api2/ping/)
   [ "$c" = 200 ] && { echo "OK api ping"; break; }; sleep 5
 done
+[ "$c" = 200 ] || echo "!! ping failed after 2 min (last $c): do the one-time restart below"
 curl -s -o /dev/null -w 'web %{http_code}\n' https://files.markcheli.com/accounts/login/   # 200
 docker inspect seafile --format '{{.State.Health.Status}}'                                 # healthy
 docker logs --since 10m seafile-notification 2>&1 | grep -iE 'error|fail' | tail -5           # nothing new after the restart
 ```
 
-If the ping or the authenticated check below fails after 2 minutes, restart the apps **once** and
-**say so in the report**:
-`dc restart seafile seafile-notification`, then wait for `healthy`, then nginx `-t` and reload. The static
-upstream keeps the old container IP otherwise.
+If the ping fails after 2 minutes, restart the apps **once** and **say so in the report**:
+`dc restart seafile seafile-notification`, wait for `healthy`, then
+`dc exec nginx nginx -t && dc exec nginx nginx -s reload`. The static upstream keeps the old container IP otherwise.
 
 ```bash
-# 4b. Authenticated API: library list (nothing echoed; the password goes in on stdin)
-read -rp 'Seafile user (email): ' SF_U; read -rsp 'Password: ' SF_P; echo
-TOKEN=$(printf 'username=%s&password=%s' "$SF_U" "$SF_P" | curl -s --data @- https://files.markcheli.com/api2/auth-token/ \
-  | python3 -c 'import json,sys;print(json.load(sys.stdin).get("token",""))'); unset SF_P
-[ -n "$TOKEN" ] && echo "OK token (${#TOKEN} chars)" || echo "!! no token"
-curl -s -H "Authorization: Token $TOKEN" https://files.markcheli.com/api2/repos/ \
-  | python3 -c 'import json,sys;print("libraries:",len(json.load(sys.stdin)))'                  # 3 (same as before)
-unset TOKEN SF_U
+# 4b. fileserver path through the edge (non-interactive)
+curl -s -o /dev/null -w 'seafhttp %{http_code}\n' https://files.markcheli.com/seafhttp/protocol-version   # 200
 # 4c. Counts and the DB error log
 q "SELECT 'users',COUNT(*) FROM ccnet_db.EmailUser UNION ALL SELECT 'repos',COUNT(*) FROM seafile_db.Repo
    UNION ALL SELECT 'tokens',COUNT(*) FROM seahub_db.api2_tokenv2" | diff - "$BK/baseline.txt" && echo "OK counts match"
@@ -127,7 +128,11 @@ docker logs --since 10m seafile-db 2>&1 | grep -E '\[(ERROR|Warning)\]' | grep -
 docker logs --since 10m seafile 2>&1 | grep -iE 'error|mysql' | tail -10                                   # expect at most the brief disconnect
 ```
 
-Also open https://files.markcheli.com in a browser, open a library, and check that the desktop client shows "synced".
+**Gate:** 4a ping 200, web 200, `healthy`, seafhttp 200, `OK counts match`, and no new DB `[ERROR]` lines.
+These checks are all non-interactive, so an agent operator can run them.
+
+**Optional (Mark, afterwards, not a gate):** log in at https://files.markcheli.com, open a library (an
+authenticated library list through the DB), and check that the desktop client shows "synced".
 
 ## 5. 10-minute watch
 
@@ -186,7 +191,7 @@ zcat "$BK/seafile-3db.sql.gz" | docker exec -i seafile-db sh -c 'exec mariadb -u
 q "SELECT 'users',COUNT(*) FROM ccnet_db.EmailUser UNION ALL SELECT 'repos',COUNT(*) FROM seafile_db.Repo
    UNION ALL SELECT 'tokens',COUNT(*) FROM seahub_db.api2_tokenv2" | diff - "$BK/baseline.txt" && echo "OK restored"
 dc up -d --no-deps seafile seafile-notification
-docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload   # refresh the static upstream IPs
+dc exec nginx nginx -t && dc exec nginx nginx -s reload   # refresh the static upstream IPs
 ```
 
 The grants live in the `mysql` schema, which isn't dropped, so the `seafile` user keeps working.
