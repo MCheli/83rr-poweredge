@@ -120,7 +120,7 @@ docker compose down -v
 8. **seafile** - Self-hosted file sync and share (Dropbox alternative). 13.0 Docker layout (env-driven config) with `seafile-db` (MariaDB 10.11), `seafile-redis` (cache) and `seafile-notification` (desktop sync push, edge-routed at `/notification`); digest-pinned, not watchtower-managed. Upgrades: `docs/seafile-upgrade-2026-11.md`
 9. **opensearch** - Log aggregation and search
 10. **opensearch-dashboards** - OpenSearch visualization
-11. **grafana** - Metrics visualization dashboards (5 provisioned dashboards)
+11. **grafana** - Metrics visualization dashboards (6 provisioned dashboards)
 12. **prometheus** - Metrics collection and storage
 13. **cadvisor** - Container resource monitoring
 14. **fluent-bit** - Log shipper (Docker logs → OpenSearch)
