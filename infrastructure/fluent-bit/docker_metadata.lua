@@ -18,7 +18,8 @@ local container_cache = {}
 -- Actor.ID / Actor.Attributes.name.
 
 -- Turn one event's fields into a record, or nil to drop it.
-local function build_event(action, etype, actor_id, actor_name)
+-- `labels` = {project=, oneoff=, exit_code=} from Actor.Attributes (may be empty).
+local function build_event(action, etype, actor_id, actor_name, labels)
     -- Filter out the firehose of healthcheck exec_create/exec_start/exec_die
     -- events — Docker emits one per probe per container, ~5k/day of noise
     -- that overwhelms the actually-useful lifecycle events. Also drop
@@ -32,6 +33,13 @@ local function build_event(action, etype, actor_id, actor_name)
     if etype == "container" then
         rec["container_name"] = actor_name
         if actor_id then rec["container_id"] = string.sub(actor_id, 1, 12) end
+        -- Compose labels tell real services from scratch/`docker run`
+        -- containers (no project) and `docker compose run` one-offs
+        -- (oneoff "True"); die events carry the exit code. All three are
+        -- used by the container-died alert.
+        rec["compose_project"] = labels.project
+        rec["compose_oneoff"] = labels.oneoff
+        rec["exit_code"] = tonumber(labels.exit_code or "")
     elseif etype == "image" then
         -- For image events the "name" is the image name/sha and shouldn't
         -- masquerade as a container_name (would pollute aggregations).
@@ -67,7 +75,12 @@ local function parse_event_line(line)
         action,
         string.match(line, '"Type":"([^"]+)"'),
         string.match(line, '"Actor":%s*{[^}]*"ID":"([^"]+)"'),
-        string.match(line, '"Attributes":%s*{[^}]-"name":"([^"]+)"'))
+        string.match(line, '"Attributes":%s*{[^}]-"name":"([^"]+)"'),
+        {
+            project = string.match(line, '"com%.docker%.compose%.project":"([^"]+)"'),
+            oneoff = string.match(line, '"com%.docker%.compose%.oneoff":"([^"]+)"'),
+            exit_code = string.match(line, '"exitCode":"(%-?%d+)"'),
+        })
 end
 
 function normalize_docker_event(tag, timestamp, record)
@@ -82,13 +95,20 @@ function normalize_docker_event(tag, timestamp, record)
         -- Already structured (a Parser set on the input).
         local actor = record["Actor"]
         local actor_id, actor_name
+        local labels = {}
         if type(actor) == "table" then
             actor_id = actor["ID"]
-            if type(actor["Attributes"]) == "table" then
-                actor_name = actor["Attributes"]["name"]
+            local attrs = actor["Attributes"]
+            if type(attrs) == "table" then
+                actor_name = attrs["name"]
+                labels = {
+                    project = attrs["com.docker.compose.project"],
+                    oneoff = attrs["com.docker.compose.oneoff"],
+                    exit_code = attrs["exitCode"],
+                }
             end
         end
-        local rec = build_event(record["Action"], record["Type"], actor_id, actor_name)
+        local rec = build_event(record["Action"], record["Type"], actor_id, actor_name, labels)
         if rec then out[1] = rec end
     end
 

@@ -19,60 +19,579 @@
           "size": 0,
           "query": {
             "bool": {
-              "must": [
-                { "terms": { "level": ["ERROR", "CRITICAL", "FATAL"] } },
-                { "range": { "@timestamp": { "gte": "now-5m" } } }
-              ],
-              "must_not": [
+              "should": [
                 {
                   "bool": {
                     "must": [
-                      { "wildcard": { "container_name": "*-db" } },
-                      { "match_phrase": { "msg": "no pg_hba.conf entry" } }
+                      {
+                        "terms": {
+                          "level": [
+                            "ERROR",
+                            "CRITICAL",
+                            "FATAL"
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "@timestamp": {
+                            "gte": "now-5m",
+                            "lte": "now"
+                          }
+                        }
+                      }
+                    ],
+                    "must_not": [
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "wildcard": {
+                                "container_name": "*-db"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "no pg_hba.conf entry"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "wildcard": {
+                                "container_name": "*-db"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "password authentication failed"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "wildcard": {
+                                "container_name": "*-db"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "unsupported frontend protocol"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "wildcard": {
+                                "container_name": "*-db"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "no PostgreSQL user name specified"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "plex"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "Error parsing HTTP request"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "opensearch"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "Failed to retrieve sample documents"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "exists": {
+                          "field": "event_scope"
+                        }
+                      }
                     ]
                   }
                 },
                 {
                   "bool": {
                     "must": [
-                      { "wildcard": { "container_name": "*-db" } },
-                      { "match_phrase": { "msg": "password authentication failed" } }
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "must": [
-                      { "wildcard": { "container_name": "*-db" } },
-                      { "match_phrase": { "msg": "unsupported frontend protocol" } }
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "must": [
-                      { "wildcard": { "container_name": "*-db" } },
-                      { "match_phrase": { "msg": "no PostgreSQL user name specified" } }
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "must": [
-                      { "term": { "container_name": "plex" } },
-                      { "match_phrase": { "msg": "Error parsing HTTP request" } }
+                      {
+                        "term": {
+                          "event_scope": "container"
+                        }
+                      },
+                      {
+                        "terms": {
+                          "event_type": [
+                            "start",
+                            "die",
+                            "kill",
+                            "stop",
+                            "restart",
+                            "oom"
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "@timestamp": {
+                            "gte": "now-15m",
+                            "lte": "now"
+                          }
+                        }
+                      },
+                      {
+                        "exists": {
+                          "field": "compose_project"
+                        }
+                      }
+                    ],
+                    "must_not": [
+                      {
+                        "terms": {
+                          "container_name": [
+                            "tallied-demo",
+                            "tasks-demo",
+                            "docker-image-event",
+                            "watchtower",
+                            "uptime-kuma"
+                          ]
+                        }
+                      },
+                      {
+                        "prefix": {
+                          "container_name": "zz-scratch-"
+                        }
+                      },
+                      {
+                        "wildcard": {
+                          "container_name": "*-test"
+                        }
+                      },
+                      {
+                        "wildcard": {
+                          "container_name": "*-run-*"
+                        }
+                      },
+                      {
+                        "regexp": {
+                          "container_name": "[a-z]+_[a-z]+[0-9]*"
+                        }
+                      },
+                      {
+                        "regexp": {
+                          "container_name": "[0-9a-f]{12}_.+"
+                        }
+                      },
+                      {
+                        "term": {
+                          "compose_oneoff": "True"
+                        }
+                      }
                     ]
                   }
                 }
-              ]
+              ],
+              "minimum_should_match": 1
             }
           },
           "aggs": {
-            "by_service": {
-              "terms": { "field": "container_name", "size": 10 },
+            "p": {
+              "filter": {
+                "bool": {
+                  "must": [
+                    {
+                      "terms": {
+                        "level": [
+                          "ERROR",
+                          "CRITICAL",
+                          "FATAL"
+                        ]
+                      }
+                    },
+                    {
+                      "range": {
+                        "@timestamp": {
+                          "gte": "now-5m",
+                          "lte": "now"
+                        }
+                      }
+                    }
+                  ],
+                  "must_not": [
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "wildcard": {
+                              "container_name": "*-db"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "no pg_hba.conf entry"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "wildcard": {
+                              "container_name": "*-db"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "password authentication failed"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "wildcard": {
+                              "container_name": "*-db"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "unsupported frontend protocol"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "wildcard": {
+                              "container_name": "*-db"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "no PostgreSQL user name specified"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "plex"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "Error parsing HTTP request"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "opensearch"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "Failed to retrieve sample documents"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "exists": {
+                        "field": "event_scope"
+                      }
+                    }
+                  ]
+                }
+              },
               "aggs": {
-                "top_msg": {
-                  "terms": { "field": "msg.keyword", "size": 3 }
+                "by_service": {
+                  "terms": {
+                    "field": "container_name",
+                    "size": 5
+                  },
+                  "aggs": {
+                    "top_msg": {
+                      "terms": {
+                        "size": 3,
+                        "script": {
+                          "lang": "painless",
+                          "source": "String s = doc['msg.keyword'].size() > 0 ? doc['msg.keyword'].value : '(message over 256 chars or unparsed, see raw log)'; s = s.replace('\\\\', '/').replace('\"', \"'\"); s = /\\p{Cntrl}/.matcher(s).replaceAll(' '); return s.length() > 110 ? s.substring(0, 110) + '...' : s;"
+                        }
+                      }
+                    }
+                  }
+                },
+                "first": {
+                  "top_hits": {
+                    "size": 1,
+                    "sort": [
+                      {
+                        "@timestamp": "asc"
+                      }
+                    ],
+                    "_source": false,
+                    "script_fields": {
+                      "et": {
+                        "script": {
+                          "lang": "painless",
+                          "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                        }
+                      }
+                    }
+                  }
+                },
+                "last": {
+                  "top_hits": {
+                    "size": 1,
+                    "sort": [
+                      {
+                        "@timestamp": "desc"
+                      }
+                    ],
+                    "_source": false,
+                    "script_fields": {
+                      "et": {
+                        "script": {
+                          "lang": "painless",
+                          "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "lc": {
+              "filter": {
+                "bool": {
+                  "must": [
+                    {
+                      "term": {
+                        "event_scope": "container"
+                      }
+                    },
+                    {
+                      "terms": {
+                        "event_type": [
+                          "start",
+                          "die",
+                          "kill",
+                          "stop",
+                          "restart",
+                          "oom"
+                        ]
+                      }
+                    },
+                    {
+                      "range": {
+                        "@timestamp": {
+                          "gte": "now-10m",
+                          "lte": "now"
+                        }
+                      }
+                    },
+                    {
+                      "exists": {
+                        "field": "compose_project"
+                      }
+                    }
+                  ],
+                  "must_not": [
+                    {
+                      "terms": {
+                        "container_name": [
+                          "tallied-demo",
+                          "tasks-demo",
+                          "docker-image-event",
+                          "watchtower",
+                          "uptime-kuma"
+                        ]
+                      }
+                    },
+                    {
+                      "prefix": {
+                        "container_name": "zz-scratch-"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-test"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-run-*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[a-z]+_[a-z]+[0-9]*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[0-9a-f]{12}_.+"
+                      }
+                    },
+                    {
+                      "term": {
+                        "compose_oneoff": "True"
+                      }
+                    }
+                  ]
+                }
+              },
+              "aggs": {
+                "by_container": {
+                  "terms": {
+                    "field": "container_name",
+                    "size": 8
+                  },
+                  "aggs": {
+                    "events": {
+                      "terms": {
+                        "field": "event_type",
+                        "size": 6
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "cl": {
+              "filter": {
+                "bool": {
+                  "must": [
+                    {
+                      "term": {
+                        "event_scope": "container"
+                      }
+                    },
+                    {
+                      "term": {
+                        "event_type": "die"
+                      }
+                    },
+                    {
+                      "range": {
+                        "@timestamp": {
+                          "gte": "now-15m",
+                          "lte": "now"
+                        }
+                      }
+                    },
+                    {
+                      "exists": {
+                        "field": "compose_project"
+                      }
+                    }
+                  ],
+                  "must_not": [
+                    {
+                      "terms": {
+                        "container_name": [
+                          "tallied-demo",
+                          "tasks-demo",
+                          "docker-image-event",
+                          "watchtower",
+                          "uptime-kuma"
+                        ]
+                      }
+                    },
+                    {
+                      "prefix": {
+                        "container_name": "zz-scratch-"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-test"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-run-*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[a-z]+_[a-z]+[0-9]*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[0-9a-f]{12}_.+"
+                      }
+                    },
+                    {
+                      "term": {
+                        "compose_oneoff": "True"
+                      }
+                    }
+                  ]
+                }
+              },
+              "aggs": {
+                "loops": {
+                  "terms": {
+                    "field": "container_name",
+                    "size": 5,
+                    "min_doc_count": 3
+                  }
                 }
               }
             }
@@ -83,12 +602,12 @@
   ],
   "triggers": [
     {
-      "name": "error-burst",
+      "name": "error-rate-5m",
       "severity": "2",
       "condition": {
         "script": {
-          "source": "ctx.results[0].hits.total.value > 10",
-          "lang": "painless"
+          "lang": "painless",
+          "source": "(ctx.results[0].aggregations.p.doc_count > 10) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0)"
         }
       },
       "actions": [
@@ -96,7 +615,32 @@
           "name": "ntfy-homelab",
           "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] error burst: {{ctx.results.0.hits.total.value}} errors in 5 min\", \"message\": \"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\nWindow: last 5 minutes\\nTotal events: {{ctx.results.0.hits.total.value}}\\n(Excludes known scanner noise: pg_hba/auth-failure on *-db, plex HTTP parse errors.)\\n\\n=== By service ===\\n{{#ctx.results.0.aggregations.by_service.buckets}}\\n[{{key}}] {{doc_count}} event(s)\\n{{#top_msg.buckets}}  - ({{doc_count}}x) {{key}}\\n{{/top_msg.buckets}}\\n{{/ctx.results.0.aggregations.by_service.buckets}}\\n=== Investigate ===\\nDashboard:  https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\\nDiscover:   https://logs.ops.markcheli.com/app/discover\\nQuick CLI:  docker compose logs --tail 200 <container_name>\", \"priority\": 4, \"tags\": [\"rotating_light\"]}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"Errors in {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"When: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nBy service (top messages):\\n{{#ctx.results.0.aggregations.p.by_service.buckets}}[{{key}}] {{doc_count}}\\n{{#top_msg.buckets}}  {{doc_count}}x {{key}}\\n{{/top_msg.buckets}}{{/ctx.results.0.aggregations.p.by_service.buckets}}(Known scanner noise excluded: pg_hba/auth failures on *-db, plex HTTP parse errors, opensearch's own alerting sample-doc errors; docker die events go to container-died.)\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{^ctx.results.0.aggregations.lc.by_container.buckets}} none{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{#ctx.results.0.aggregations.cl.loops.buckets}}\\nCrash-looping: {{key}} died {{doc_count}}x in 15 min, so this is not deploy noise.{{/ctx.results.0.aggregations.cl.loops.buckets}}\\nLikely cause: {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} is logging errors with nothing restarting - read the top messages above.\\nDo: docker compose logs --tail 200 {{ctx.results.0.aggregations.p.by_service.buckets.0.key}}\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'level%3A%28ERROR%20or%20CRITICAL%20or%20FATAL%29%20and%20not%20event_scope%3A%2A'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 4, \"tags\": [\"rotating_light\", \"error-rate-5m\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'level%3A%28ERROR%20or%20CRITICAL%20or%20FATAL%29%20and%20not%20event_scope%3A%2A'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'level%3A%28ERROR%20or%20CRITICAL%20or%20FATAL%29%20and%20not%20event_scope%3A%2A'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    },
+    {
+      "name": "error-rate-5m-during-restart",
+      "severity": "4",
+      "condition": {
+        "script": {
+          "lang": "painless",
+          "source": "(ctx.results[0].aggregations.p.doc_count > 10) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"[deploy noise] Errors in {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"During restart of{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}{{/ctx.results.0.aggregations.lc.by_container.buckets}} - likely deploy noise.\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}\\nWhen: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nBy service (top messages):\\n{{#ctx.results.0.aggregations.p.by_service.buckets}}[{{key}}] {{doc_count}}\\n{{#top_msg.buckets}}  {{doc_count}}x {{key}}\\n{{/top_msg.buckets}}{{/ctx.results.0.aggregations.p.by_service.buckets}}(Known scanner noise excluded: pg_hba/auth failures on *-db, plex HTTP parse errors, opensearch's own alerting sample-doc errors; docker die events go to container-died.)\\nLikely cause: containers restarted in the same window (Watchtower, compose up, a cron restart), so these are most likely requests that hit them mid-restart.\\nDo: nothing, unless it keeps happening after the restart settles (then the next run pages at normal priority).\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'level%3A%28ERROR%20or%20CRITICAL%20or%20FATAL%29%20and%20not%20event_scope%3A%2A'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 2, \"tags\": [\"arrows_counterclockwise\", \"deploy-noise\", \"error-rate-5m\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'level%3A%28ERROR%20or%20CRITICAL%20or%20FATAL%29%20and%20not%20event_scope%3A%2A'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'level%3A%28ERROR%20or%20CRITICAL%20or%20FATAL%29%20and%20not%20event_scope%3A%2A'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
@@ -107,5 +651,8 @@
         }
       ]
     }
-  ]
+  ],
+  "ui_metadata": {
+    "description": "More than 10 ERROR/CRITICAL/FATAL log lines in 5 min. Priority 2 instead of 4 when a real container restarted in the last 10 min."
+  }
 }
