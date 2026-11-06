@@ -116,9 +116,14 @@ services:
       - app:app
     environment:
       - FLASK_ENV=production
-      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
       # Empty = /weather serves demo data.
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
+      # POST /contact (the site's contact form) publishes to ntfy. Same
+      # write-only token OpenSearch/Kuma/Dependency-Track use. Empty token =
+      # /contact returns 503 instead of silently dropping messages.
+      - NTFY_URL=http://ntfy
+      - NTFY_TOPIC=homelab
+      - NTFY_PUBLISH_TOKEN=${NTFY_PUBLISH_TOKEN:-}
     networks:
       - infrastructure
     healthcheck:
