@@ -169,7 +169,7 @@ health:
 	@curl -sf https://flask.markcheli.com/health && echo " [OK]" || echo " [FAIL]"
 	@echo ""
 	@echo "Prometheus:"
-	@curl -sf http://localhost:9090/-/healthy && echo " [OK]" || echo " [FAIL]"
+	@docker exec prometheus wget -qO- http://localhost:9090/-/healthy && echo " [OK]" || echo " [FAIL]"
 	@echo ""
 	@echo "Grafana:"
 	@docker exec grafana wget -q --spider http://localhost:3000/api/health && echo " [OK]" || echo " [FAIL]"

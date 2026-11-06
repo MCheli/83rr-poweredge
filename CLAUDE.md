@@ -419,7 +419,7 @@ docker ps
 # 2. Test service health
 curl -I https://www.markcheli.com
 curl -I https://flask.markcheli.com
-curl http://localhost:9090/-/healthy  # Prometheus
+docker exec prometheus wget -qO- http://localhost:9090/-/healthy  # Prometheus (port not published)
 
 # 3. Check for errors in logs
 docker compose logs --tail 100 | grep -i error
@@ -667,7 +667,7 @@ docker compose exec nginx nginx -t
 
 # Health check
 curl -I https://www.markcheli.com
-curl http://localhost:9090/-/healthy  # Prometheus
+docker exec prometheus wget -qO- http://localhost:9090/-/healthy  # Prometheus (port not published)
 
 # Clean up unused resources
 docker system prune -a --volumes  # ⚠️  DANGER: removes unused data
