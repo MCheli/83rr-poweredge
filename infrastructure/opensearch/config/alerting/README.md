@@ -55,8 +55,8 @@ so apply in this order:
    docker cp infrastructure/opensearch/config/ingest_pipeline_homelab_logs.json opensearch:/tmp/p.json
    docker exec opensearch curl -s -X PUT localhost:9200/_ingest/pipeline/homelab-logs -H 'Content-Type: application/json' -d @/tmp/p.json
    ```
-2. **nginx log format**: reload, don't recreate.
-   `docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`
+2. **nginx log format**: `nginx.conf` (where `log_format` lives) is baked into the image, so a reload doesn't pick it up; rebuild and recreate (a few-second blip on every vhost).
+   `docker compose -f docker-compose.yml -f docker-compose.prod.yml build nginx && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps nginx && docker compose exec nginx nginx -t`
 3. **Fluent Bit** (Lua filter adds `compose_project` / `compose_oneoff` /
    `exit_code`): `docker compose restart fluent-bit`. Docker events emitted
    while Fluent Bit restarts are lost (the docker_events input has no replay),
