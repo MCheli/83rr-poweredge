@@ -165,7 +165,7 @@ Then run steps 5 and 6 again, expecting version 12.4.14, and open a revert PR fo
 These change state after the backup. Do them separately, if at all.
 - Update the stale bundled app plugins: `docker exec grafana grafana cli plugins update-all && docker compose -f docker-compose.yml -f docker-compose.prod.yml restart grafana`
 - Remove the dead Angular plugin: `docker exec grafana rm -rf /var/lib/grafana/plugins/grafana-piechart-panel`
-- Delete the stale Traefik-era `infrastructure/monitoring/docker-compose.yml` (Grafana 10.2.0, unused). This needs a PR.
+- ~~Delete the stale Traefik-era `infrastructure/monitoring/docker-compose.yml`~~ (done 2026-11-05).
 
 ## Worth using now
 - **Recently deleted → restore:** dashboards deleted in the UI can be restored without a DB restore. Useful because `allowUiUpdates: true` lets UI edits drift from the repo JSON.
