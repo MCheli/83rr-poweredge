@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 4, 2026
+**Last Updated:** November 5, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -466,6 +466,39 @@ scripts/deptrack-setup.sh test-alert    # push + digest test, verified in ntfy's
 
 ---
 
+### 13. `logq.sh` 📊 LOG DIAGNOSTICS
+**Purpose:** Read-only OpenSearch log query, built for deploy watches
+**Size:** 3KB
+**Language:** Bash (needs `jq` on the caller)
+
+**Description:**
+Runs one `_search` against `logs-homelab-*` and prints the total hits, the hits per container and the 10 most common messages (digits normalised to `N`). It only reads. OpenSearch runs with the security plugin disabled and doesn't publish 9200 on the host, so the script goes through `docker exec opensearch curl`: directly when it runs on the server, over `ssh 83rr-poweredge` when it runs anywhere else (override the host with `LOGQ_SSH_HOST`).
+
+Arguments are positional: `[query] [hours] [container]`. The query is OpenSearch `query_string` syntax, and the default field is `log`. The special query `errors` (the default) expands to `level:(ERROR OR FATAL OR CRITICAL OR PANIC) OR status:>=500 OR log:(error OR traceback OR exception OR panic)`. That's broad on purpose (it catches the word "error", so seafile-db's "Aborted connection" warnings show up), so scope it to a container or compare against a pre-deploy baseline. `hours` can be fractional (`0.25` = 15 minutes).
+
+Exit codes: `0` = no hits, `1` = hits, `2` = the query or transport failed.
+
+**Usage:**
+```bash
+scripts/logq.sh                                   # errors, last 1h, all containers
+scripts/logq.sh errors 6                          # errors, last 6h
+scripts/logq.sh errors 1 tasks                    # errors for one container
+scripts/logq.sh 'container_name:nginx AND status:>=500' 24
+scripts/logq.sh 'container_name:grafana AND log:"Database locked"' 24
+
+# Deploy watch: non-zero exit means something matched
+scripts/logq.sh errors 0.25 tasks || echo "new errors after deploy"
+```
+
+**When to Use:**
+- After a deploy, to confirm the redeployed container isn't logging new errors
+- Quick "is X still happening?" checks across the 90 days of retained logs
+- Use `opensearch_diagnostic.py` or OpenSearch Dashboards (logs.ops) for browsing and anything interactive
+
+**Referenced in:** docs/log-noise-2026-11.md, docs/grafana-sqlite-locked.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -476,6 +509,7 @@ scripts/
 ├── infrastructure_manager.py        # 🏗️ Deployment controller
 ├── cloudflare_dns_manager.py        # 🌐 DNS management
 ├── opensearch_diagnostic_ssh.py     # 📊 Log diagnostics
+├── logq.sh                          # 📊 Read-only OpenSearch query (deploy watches)
 ├── renew-letsencrypt-certs.sh       # 🔐 SSL renewal (automated)
 ├── alert-test.sh                    # 🚀 Weekly alert path check (ntfy)
 ├── sbom-scan.sh                     # 🔐 Nightly container SBOMs -> Dependency-Track
