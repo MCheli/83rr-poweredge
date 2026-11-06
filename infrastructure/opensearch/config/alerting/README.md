@@ -42,7 +42,8 @@ rewrites leftover SendGrid-format actions; it leaves these monitors alone.
 
 The monitors read fields that only exist once the log pipeline produces them
 (`host`, `upstream_addr`, `upstream_status`, `upstream_response_time`,
-`request_time` from nginx; `compose_project`, `exit_code` from Docker events),
+`request_time` from nginx; `compose_project`, `compose_oneoff`, `exit_code`
+from Docker events),
 so apply in this order:
 
 1. **Index template + ingest pipeline** (new mappings, nginx parsing, the
@@ -56,14 +57,24 @@ so apply in this order:
    ```
 2. **nginx log format**: reload, don't recreate.
    `docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`
-3. **Fluent Bit** (Lua filter adds `compose_project` / `exit_code`):
-   `docker compose restart fluent-bit`
-4. **Monitors**: `apply-monitors.py --dry-run`, then `apply-monitors.py`.
+3. **Fluent Bit** (Lua filter adds `compose_project` / `compose_oneoff` /
+   `exit_code`): `docker compose restart fluent-bit`. Docker events emitted
+   while Fluent Bit restarts are lost (the docker_events input has no replay),
+   and the *old* `container-died` monitor (any die, any container) pages on
+   Fluent Bit's own die. Expect that one page; do it in a quiet window.
+4. **Monitors**, straight after the step-3 check so the old `container-died`
+   doesn't keep running against the new fields: `apply-monitors.py --dry-run`,
+   then `apply-monitors.py`.
 
 Check between steps: an nginx line in Discover should have `host` and
 `upstream_addr`, and a `docker container start …` event should have
 `compose_project`. Until step 3 is live, `container-died` sees no events
 (it requires `compose_project`), so don't apply the monitors early.
+
+`--dry-run` itself is quiet, but dry-running *bucket-level* probe monitors makes
+OpenSearch log "Failed to retrieve sample documents for alert …" at ERROR
+(~40 lines in 5 min, 2026-11-05). `error-rate-5m` excludes that message from
+`opensearch` so experiments don't self-page.
 
 ## Destinations
 
@@ -221,9 +232,19 @@ single combined search. Two triggers share the condition:
   first line "During restart of … - likely deploy noise", tags
   `arrows_counterclockwise`, `deploy-noise`.
 
-"Real containers" excludes the reseed-cron demos (`tallied-demo`, `tasks-demo`),
-`zz-scratch-*`, `*-test` (incl. `*-nginx-test`), `*nginx-run-*`, Docker's
-auto-names (`adjective_name`) and Compose's temporary `<12 hex>_name` renames.
+**A crash loop is not a deploy.** A third filter aggregation, `aggregations.cl`,
+lists real containers with 3+ `die` events in the last 15 min. If there is one,
+the gate counts as closed: the normal-priority trigger fires and its message
+says "Crash-looping: X died N× in 15 min, so this is not deploy noise". Without
+this, a container in a restart loop would keep the gate open forever and turn
+every other alert into priority 2.
+
+"Real containers" means Docker events with a `compose_project` label, minus
+Compose one-offs (`compose_oneoff: True`, i.e. `docker compose run`, and as a
+fallback any `*-run-*` name), the reseed-cron demos (`tallied-demo`,
+`tasks-demo`), `zz-scratch-*`, `*-test` (incl. `*-nginx-test`), Docker's
+auto-names (`adjective_name`), Compose's temporary `<12 hex>_name` renames,
+`watchtower` and `uptime-kuma`. The same list is used by `container-died`.
 
 **Every message** carries: a title with the service and count; the time of the
 first and last matching event in ET (computed by a Painless script field; Mustache
@@ -238,25 +259,35 @@ because Mustache here does no JSON escaping and the message is a JSON body.
 |---|---|---|---|
 | `nginx-5xx-burst` | > 5 nginx 5xx in 5 min | Home Assistant 502/504 (upstream `192.168.1.121:*` or vhost `home.markcheli.com`). Restart: priority 2 | status split, vhosts, top 3 paths, clients, upstream |
 | `error-rate-5m` | > 10 ERROR/CRITICAL/FATAL lines in 5 min | known scanner noise on `*-db` and plex; Docker die/kill events (they're `container-died`'s job). Restart: priority 2 | top services with their top 3 messages |
-| `healthcheck-failure` | ≥ 3 genuine probe failures in 5 min | 200/301/404, and anything with an external X-Forwarded-For. Restart: priority 2 | per-service status, top probes as "container status path from client UA" |
-| `container-died` | (a) an `oom` event in the last 5 min, or (b) a `die` 3-8 min ago with no later `start` (it stayed down for 3+ min) | containers without a compose project label, the excluded names above, `watchtower`, `uptime-kuma` | per container: time, exit code, whether it came back (OOM) |
+| `healthcheck-failure` | ≥ 3 genuine probe failures (5xx, 401, 403 or 404) in 5 min | 2xx/3xx. Restart: priority 2 | per-service status, top probes as "container status path from client UA" |
+| `container-died` | (a) an `oom` event in the last 5 min (priority 4, throttled 30 min), (b) a `die` 3-8 min ago with no later `start` (priority 5), or (c) 3+ `die`s of one container in 15 min, a crash loop (priority 4, throttled 30 min) | everything that isn't a "real container" (above) | per container: time, exit code, whether it came back (OOM), die count (crash loop) |
 
-Clients are summarised as "your own devices" (XFF `173.48.155.66`), "LAN
-client" (no XFF, private IP), or "internet <ip>".
+Clients are summarised as "your own devices" (XFF is exactly `173.48.155.66`),
+"LAN client" (no XFF, private IP), "internet <ip>", or "internet (bad XFF)" when
+the value isn't an IP. Cloudflare appends the address it saw to any XFF the
+client sent, so only the last hop is used, and a multi-hop chain is labelled
+"client-set XFF" (and never counts as your own devices).
 
 `container-died` is a query-level monitor whose search does the "stayed down"
 logic itself: per container, a `bucket_selector` keeps only those whose latest
-start is older than their latest die. The die window (3-8 min ago) moves with
-the 5-minute schedule, so each death is judged once, which is why it has no
-throttle. (Bucket-level monitors were tried: their Mustache context only has
+start is older than their latest die. The die window (`{{period_end}}` -8 min
+to -3 min, half-open) moves with the 5-minute schedule and is anchored to the
+scheduled period rather than `now`, so windows tile exactly and each death is
+judged once; that's why stayed-down has no throttle. "Stayed down 3+ min"
+really means "no start between the die and the evaluation": a container that
+was down for 6 min but is back by the time the monitor runs stays silent. A
+crash loop (die, auto-restart, die …) always has a later start, which is why
+it has its own `container-crash-loop` trigger. (Bucket-level monitors were tried: their Mustache context only has
 the bucket key, not the per-bucket numbers.) Exit codes: 137 = SIGKILL
 (OOM-kill or `docker kill`), 143 = SIGTERM (`docker stop`), 0 = clean exit,
 -1 = not recorded.
 
 **healthcheck:true** is set by the ingest pipeline only for a health path plus
-one of: an Uptime Kuma UA; a loopback client (Docker HEALTHCHECK inside the
-container); or, at nginx, a LAN client with no X-Forwarded-For and a probe UA
-(curl/wget/python). Before 2026-11 any request to `/api/health` counted, so an
+one of: an Uptime Kuma UA (no XFF, or XFF starting with our own `173.48.155.66`:
+Kuma hairpins through Cloudflare); a loopback client (Docker HEALTHCHECK inside
+the container); or, at nginx, a LAN client with no X-Forwarded-For and a probe
+UA (curl/wget/python). Since only genuine probes are tagged, the monitor doesn't
+filter on XFF again, and a probe getting 404 counts (a route broke). Before 2026-11 any request to `/api/health` counted, so an
 internet scanner getting 404/301 paged as a healthcheck failure.
 
 **Home Assistant availability is owned by Uptime Kuma** (monitor "Home

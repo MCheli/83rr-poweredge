@@ -37,8 +37,9 @@
                 {
                   "range": {
                     "@timestamp": {
-                      "gte": "now-8m",
-                      "lte": "now"
+                      "gte": "{{period_end}}||-15m",
+                      "format": "epoch_millis",
+                      "lte": "{{period_end}}"
                     }
                   }
                 },
@@ -54,7 +55,9 @@
                     "container_name": [
                       "tallied-demo",
                       "tasks-demo",
-                      "docker-image-event"
+                      "docker-image-event",
+                      "watchtower",
+                      "uptime-kuma"
                     ]
                   }
                 },
@@ -70,7 +73,7 @@
                 },
                 {
                   "wildcard": {
-                    "container_name": "*nginx-run-*"
+                    "container_name": "*-run-*"
                   }
                 },
                 {
@@ -84,11 +87,8 @@
                   }
                 },
                 {
-                  "terms": {
-                    "container_name": [
-                      "watchtower",
-                      "uptime-kuma"
-                    ]
+                  "term": {
+                    "compose_oneoff": "True"
                   }
                 }
               ]
@@ -113,8 +113,9 @@
                         {
                           "range": {
                             "@timestamp": {
-                              "gte": "now-8m",
-                              "lte": "now-3m"
+                              "gte": "{{period_end}}||-8m",
+                              "format": "epoch_millis",
+                              "lt": "{{period_end}}||-3m"
                             }
                           }
                         }
@@ -200,8 +201,9 @@
                         {
                           "range": {
                             "@timestamp": {
-                              "gte": "now-5m",
-                              "lte": "now"
+                              "gte": "{{period_end}}||-5m",
+                              "format": "epoch_millis",
+                              "lte": "{{period_end}}"
                             }
                           }
                         }
@@ -242,8 +244,9 @@
                         {
                           "range": {
                             "@timestamp": {
-                              "gte": "now-5m",
-                              "lte": "now"
+                              "gte": "{{period_end}}||-5m",
+                              "format": "epoch_millis",
+                              "lte": "{{period_end}}"
                             }
                           }
                         }
@@ -278,6 +281,72 @@
                       "n": "ooms._count"
                     },
                     "script": "params.n > 0"
+                  }
+                }
+              }
+            },
+            "loop": {
+              "terms": {
+                "field": "container_name",
+                "size": 10
+              },
+              "aggs": {
+                "dies": {
+                  "filter": {
+                    "bool": {
+                      "filter": [
+                        {
+                          "term": {
+                            "event_type": "die"
+                          }
+                        },
+                        {
+                          "range": {
+                            "@timestamp": {
+                              "gte": "{{period_end}}||-15m",
+                              "format": "epoch_millis",
+                              "lte": "{{period_end}}"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "aggs": {
+                    "exit": {
+                      "terms": {
+                        "field": "exit_code",
+                        "size": 3,
+                        "missing": -1
+                      }
+                    },
+                    "et": {
+                      "top_hits": {
+                        "size": 1,
+                        "sort": [
+                          {
+                            "@timestamp": "desc"
+                          }
+                        ],
+                        "_source": false,
+                        "script_fields": {
+                          "et": {
+                            "script": {
+                              "lang": "painless",
+                              "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "keep": {
+                  "bucket_selector": {
+                    "buckets_path": {
+                      "n": "dies._count"
+                    },
+                    "script": "params.n >= 3"
                   }
                 }
               }
@@ -364,12 +433,41 @@
             "source": "{\"topic\": \"homelab\", \"title\": \"Out of memory:{{#ctx.results.0.aggregations.oom.buckets}} {{key}}{{/ctx.results.0.aggregations.oom.buckets}}\", \"message\": \"{{#ctx.results.0.aggregations.oom.buckets}}{{key}}: OOM at {{ooms.et.hits.hits.0.fields.et.0}}; {{#starts.et.hits.hits}}came back (started {{fields.et.0}}){{/starts.et.hits.hits}}{{^starts.et.hits.hits}}has NOT started again{{/starts.et.hits.hits}}\\n{{/ctx.results.0.aggregations.oom.buckets}}Likely cause: the container hit its memory limit (or the host ran low) and the kernel killed it.\\nDo: docker stats --no-stream <container>; docker logs --tail 100 <container>; check its mem_limit in docker-compose.yml and the host's free -h.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\", \"priority\": 4, \"tags\": [\"rotating_light\", \"container-died\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
             "lang": "mustache"
           },
-          "throttle_enabled": false
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    },
+    {
+      "name": "container-crash-loop",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "lang": "painless",
+          "source": "ctx.results[0].aggregations.loop.buckets.size() > 0"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"Crash loop:{{#ctx.results.0.aggregations.loop.buckets}} {{key}}{{/ctx.results.0.aggregations.loop.buckets}}\", \"message\": \"{{#ctx.results.0.aggregations.loop.buckets}}{{key}} has died {{dies.doc_count}} times in 15 min (last at {{dies.et.hits.hits.0.fields.et.0}}, exit code{{#dies.exit.buckets}} {{key}}{{/dies.exit.buckets}}) - it is crash-looping: Docker keeps restarting it and it keeps exiting.\\n{{/ctx.results.0.aggregations.loop.buckets}}Gated alerts (5xx, error rate, healthcheck) are NOT treated as deploy noise while this lasts.\\nLikely cause: the app fails at startup (bad config or env, a dependency or DB it needs is down, a failed migration, a bad new image from Watchtower).\\nDo: docker logs --tail 100 <container> (the reason is usually in the last lines); docker ps -a --filter name=<container>; if a new image broke it, pin the previous digest and docker compose up -d <service>.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\", \"priority\": 4, \"tags\": [\"rotating_light\", \"crash-loop\", \"container-died\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
         }
       ]
     }
   ],
   "ui_metadata": {
-    "description": "A compose-managed container OOMed, or died and did not start again within 3 min. Scratch/test/auto-named containers and the tallied-demo/tasks-demo reseed cron are ignored."
+    "description": "A compose-managed container OOMed, died and did not start again within 3 min, or died 3+ times in 15 min (crash loop). Compose one-offs (docker compose run), scratch/test/auto-named containers and the tallied-demo/tasks-demo reseed cron are ignored."
   }
 }

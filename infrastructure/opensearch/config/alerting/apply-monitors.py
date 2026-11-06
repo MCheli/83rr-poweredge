@@ -19,6 +19,7 @@ import os
 import shlex
 import subprocess
 import sys
+from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SSH = None
@@ -39,7 +40,12 @@ def os_api(method, path, body=None):
 def live_by_name():
     hits = os_api("POST", "/_plugins/_alerting/monitors/_search",
                   {"size": 200, "query": {"match_all": {}}})["hits"]["hits"]
-    return {h["_source"].get("monitor", h["_source"])["name"]: h for h in hits}
+    names = [h["_source"].get("monitor", h["_source"])["name"] for h in hits]
+    dupes = sorted(n for n, c in Counter(names).items() if c > 1)
+    if dupes:
+        print(f"WARNING: duplicate live monitor names {dupes}; only one of each gets updated. "
+              "Delete the extras in OpenSearch Dashboards > Alerting.", file=sys.stderr)
+    return dict(zip(names, hits))
 
 
 def dry_run(name, monitor):
@@ -75,6 +81,8 @@ def main():
     args = sys.argv[1:]
     if "--ssh" in args:
         i = args.index("--ssh")
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
+            sys.exit("--ssh needs a host, e.g. --ssh 83rr-poweredge")
         SSH = args[i + 1]
         del args[i:i + 2]
     dry = "--dry-run" in args

@@ -35,34 +35,28 @@
                             "lte": "now"
                           }
                         }
-                      }
-                    ],
-                    "must_not": [
-                      {
-                        "terms": {
-                          "status": [
-                            200,
-                            301,
-                            404
-                          ]
-                        }
                       },
                       {
                         "bool": {
-                          "must": [
+                          "should": [
                             {
-                              "exists": {
-                                "field": "x_forwarded_for"
+                              "range": {
+                                "status": {
+                                  "gte": 500
+                                }
+                              }
+                            },
+                            {
+                              "terms": {
+                                "status": [
+                                  401,
+                                  403,
+                                  404
+                                ]
                               }
                             }
                           ],
-                          "must_not": [
-                            {
-                              "term": {
-                                "x_forwarded_for": "-"
-                              }
-                            }
-                          ]
+                          "minimum_should_match": 1
                         }
                       }
                     ]
@@ -91,9 +85,14 @@
                       {
                         "range": {
                           "@timestamp": {
-                            "gte": "now-10m",
+                            "gte": "now-15m",
                             "lte": "now"
                           }
+                        }
+                      },
+                      {
+                        "exists": {
+                          "field": "compose_project"
                         }
                       }
                     ],
@@ -103,7 +102,9 @@
                           "container_name": [
                             "tallied-demo",
                             "tasks-demo",
-                            "docker-image-event"
+                            "docker-image-event",
+                            "watchtower",
+                            "uptime-kuma"
                           ]
                         }
                       },
@@ -119,7 +120,7 @@
                       },
                       {
                         "wildcard": {
-                          "container_name": "*nginx-run-*"
+                          "container_name": "*-run-*"
                         }
                       },
                       {
@@ -130,6 +131,11 @@
                       {
                         "regexp": {
                           "container_name": "[0-9a-f]{12}_.+"
+                        }
+                      },
+                      {
+                        "term": {
+                          "compose_oneoff": "True"
                         }
                       }
                     ]
@@ -156,34 +162,28 @@
                           "lte": "now"
                         }
                       }
-                    }
-                  ],
-                  "must_not": [
-                    {
-                      "terms": {
-                        "status": [
-                          200,
-                          301,
-                          404
-                        ]
-                      }
                     },
                     {
                       "bool": {
-                        "must": [
+                        "should": [
                           {
-                            "exists": {
-                              "field": "x_forwarded_for"
+                            "range": {
+                              "status": {
+                                "gte": 500
+                              }
+                            }
+                          },
+                          {
+                            "terms": {
+                              "status": [
+                                401,
+                                403,
+                                404
+                              ]
                             }
                           }
                         ],
-                        "must_not": [
-                          {
-                            "term": {
-                              "x_forwarded_for": "-"
-                            }
-                          }
-                        ]
+                        "minimum_should_match": 1
                       }
                     }
                   ]
@@ -281,6 +281,11 @@
                           "lte": "now"
                         }
                       }
+                    },
+                    {
+                      "exists": {
+                        "field": "compose_project"
+                      }
                     }
                   ],
                   "must_not": [
@@ -289,7 +294,9 @@
                         "container_name": [
                           "tallied-demo",
                           "tasks-demo",
-                          "docker-image-event"
+                          "docker-image-event",
+                          "watchtower",
+                          "uptime-kuma"
                         ]
                       }
                     },
@@ -305,7 +312,7 @@
                     },
                     {
                       "wildcard": {
-                        "container_name": "*nginx-run-*"
+                        "container_name": "*-run-*"
                       }
                     },
                     {
@@ -316,6 +323,11 @@
                     {
                       "regexp": {
                         "container_name": "[0-9a-f]{12}_.+"
+                      }
+                    },
+                    {
+                      "term": {
+                        "compose_oneoff": "True"
                       }
                     }
                   ]
@@ -337,6 +349,89 @@
                   }
                 }
               }
+            },
+            "cl": {
+              "filter": {
+                "bool": {
+                  "must": [
+                    {
+                      "term": {
+                        "event_scope": "container"
+                      }
+                    },
+                    {
+                      "term": {
+                        "event_type": "die"
+                      }
+                    },
+                    {
+                      "range": {
+                        "@timestamp": {
+                          "gte": "now-15m",
+                          "lte": "now"
+                        }
+                      }
+                    },
+                    {
+                      "exists": {
+                        "field": "compose_project"
+                      }
+                    }
+                  ],
+                  "must_not": [
+                    {
+                      "terms": {
+                        "container_name": [
+                          "tallied-demo",
+                          "tasks-demo",
+                          "docker-image-event",
+                          "watchtower",
+                          "uptime-kuma"
+                        ]
+                      }
+                    },
+                    {
+                      "prefix": {
+                        "container_name": "zz-scratch-"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-test"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-run-*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[a-z]+_[a-z]+[0-9]*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[0-9a-f]{12}_.+"
+                      }
+                    },
+                    {
+                      "term": {
+                        "compose_oneoff": "True"
+                      }
+                    }
+                  ]
+                }
+              },
+              "aggs": {
+                "loops": {
+                  "terms": {
+                    "field": "container_name",
+                    "size": 5,
+                    "min_doc_count": 3
+                  }
+                }
+              }
             }
           }
         }
@@ -350,7 +445,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count >= 3) && ctx.results[0].aggregations.lc.doc_count == 0"
+          "source": "(ctx.results[0].aggregations.p.doc_count >= 3) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0)"
         }
       },
       "actions": [
@@ -358,7 +453,7 @@
           "name": "ntfy-homelab",
           "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"topic\": \"homelab\", \"title\": \"Healthcheck failing: {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"When: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nBy service:{{#ctx.results.0.aggregations.p.by_service.buckets}} {{key}}:{{#by_status.buckets}} {{key}} ({{doc_count}}){{/by_status.buckets}};{{/ctx.results.0.aggregations.p.by_service.buckets}}\\nProbes (container status path from client, UA):\\n{{#ctx.results.0.aggregations.p.probes.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.probes.buckets}}(Only genuine probes count: Docker HEALTHCHECK on loopback, Uptime Kuma, LAN curl/wget with no XFF; 404/301 ignored.)\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{^ctx.results.0.aggregations.lc.by_container.buckets}} none{{/ctx.results.0.aggregations.lc.by_container.buckets}}\\nLikely cause: a real probe got a non-200 from {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} with nothing restarting - the service is probably unhealthy.\\nDo: docker ps --filter name={{ctx.results.0.aggregations.p.by_service.buckets.0.key}} (look for 'unhealthy'), docker inspect {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} | grep -A8 Health, docker compose logs --tail 100 {{ctx.results.0.aggregations.p.by_service.buckets.0.key}}\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20not%20status%3A%28200%20or%20301%20or%20404%29'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 4, \"tags\": [\"rotating_light\", \"healthcheck-failure\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20not%20status%3A%28200%20or%20301%20or%20404%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20not%20status%3A%28200%20or%20301%20or%20404%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"Healthcheck failing: {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"When: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nBy service:{{#ctx.results.0.aggregations.p.by_service.buckets}} {{key}}:{{#by_status.buckets}} {{key}} ({{doc_count}}){{/by_status.buckets}};{{/ctx.results.0.aggregations.p.by_service.buckets}}\\nProbes (container status path from client, UA):\\n{{#ctx.results.0.aggregations.p.probes.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.probes.buckets}}(Only genuine probes count: Docker HEALTHCHECK on loopback, Uptime Kuma, LAN curl/wget with no XFF. Counts 5xx and 401/403/404.)\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{^ctx.results.0.aggregations.lc.by_container.buckets}} none{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{#ctx.results.0.aggregations.cl.loops.buckets}}\\nCrash-looping: {{key}} died {{doc_count}}x in 15 min, so this is not deploy noise.{{/ctx.results.0.aggregations.cl.loops.buckets}}\\nLikely cause: a real probe got a non-200 from {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} with nothing restarting - the service is probably unhealthy.\\nDo: docker ps --filter name={{ctx.results.0.aggregations.p.by_service.buckets.0.key}} (look for 'unhealthy'), docker inspect {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} | grep -A8 Health, docker compose logs --tail 100 {{ctx.results.0.aggregations.p.by_service.buckets.0.key}}\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20%28status%20%3E%3D%20500%20or%20status%3A%28401%20or%20403%20or%20404%29%29'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 4, \"tags\": [\"rotating_light\", \"healthcheck-failure\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20%28status%20%3E%3D%20500%20or%20status%3A%28401%20or%20403%20or%20404%29%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20%28status%20%3E%3D%20500%20or%20status%3A%28401%20or%20403%20or%20404%29%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
@@ -375,7 +470,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count >= 3) && ctx.results[0].aggregations.lc.doc_count > 0"
+          "source": "(ctx.results[0].aggregations.p.doc_count >= 3) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0"
         }
       },
       "actions": [
@@ -383,7 +478,7 @@
           "name": "ntfy-homelab",
           "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"topic\": \"homelab\", \"title\": \"[deploy noise] Healthcheck failing: {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"During restart of{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}{{/ctx.results.0.aggregations.lc.by_container.buckets}} - likely deploy noise.\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}\\nWhen: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nBy service:{{#ctx.results.0.aggregations.p.by_service.buckets}} {{key}}:{{#by_status.buckets}} {{key}} ({{doc_count}}){{/by_status.buckets}};{{/ctx.results.0.aggregations.p.by_service.buckets}}\\nProbes (container status path from client, UA):\\n{{#ctx.results.0.aggregations.p.probes.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.probes.buckets}}(Only genuine probes count: Docker HEALTHCHECK on loopback, Uptime Kuma, LAN curl/wget with no XFF; 404/301 ignored.)\\nLikely cause: containers restarted in the same window (Watchtower, compose up, a cron restart), so these are most likely requests that hit them mid-restart.\\nDo: nothing, unless it keeps happening after the restart settles (then the next run pages at normal priority).\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20not%20status%3A%28200%20or%20301%20or%20404%29'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 2, \"tags\": [\"arrows_counterclockwise\", \"deploy-noise\", \"healthcheck-failure\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20not%20status%3A%28200%20or%20301%20or%20404%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20not%20status%3A%28200%20or%20301%20or%20404%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"[deploy noise] Healthcheck failing: {{ctx.results.0.aggregations.p.by_service.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"During restart of{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}{{/ctx.results.0.aggregations.lc.by_container.buckets}} - likely deploy noise.\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}\\nWhen: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nBy service:{{#ctx.results.0.aggregations.p.by_service.buckets}} {{key}}:{{#by_status.buckets}} {{key}} ({{doc_count}}){{/by_status.buckets}};{{/ctx.results.0.aggregations.p.by_service.buckets}}\\nProbes (container status path from client, UA):\\n{{#ctx.results.0.aggregations.p.probes.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.probes.buckets}}(Only genuine probes count: Docker HEALTHCHECK on loopback, Uptime Kuma, LAN curl/wget with no XFF. Counts 5xx and 401/403/404.)\\nLikely cause: containers restarted in the same window (Watchtower, compose up, a cron restart), so these are most likely requests that hit them mid-restart.\\nDo: nothing, unless it keeps happening after the restart settles (then the next run pages at normal priority).\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20%28status%20%3E%3D%20500%20or%20status%3A%28401%20or%20403%20or%20404%29%29'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 2, \"tags\": [\"arrows_counterclockwise\", \"deploy-noise\", \"healthcheck-failure\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20%28status%20%3E%3D%20500%20or%20status%3A%28401%20or%20403%20or%20404%29%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'healthcheck%3Atrue%20and%20%28status%20%3E%3D%20500%20or%20status%3A%28401%20or%20403%20or%20404%29%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
@@ -396,6 +491,6 @@
     }
   ],
   "ui_metadata": {
-    "description": "3+ failed genuine healthchecks in 5 min. Priority 2 instead of 4 when a real container restarted in the last 10 min."
+    "description": "3+ failed genuine healthchecks (5xx or 401/403/404) in 5 min. Priority 2 instead of 4 when a real container restarted in the last 10 min, unless a container is crash-looping."
   }
 }

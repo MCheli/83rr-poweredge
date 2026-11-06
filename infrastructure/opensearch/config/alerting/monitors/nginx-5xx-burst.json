@@ -99,9 +99,14 @@
                       {
                         "range": {
                           "@timestamp": {
-                            "gte": "now-10m",
+                            "gte": "now-15m",
                             "lte": "now"
                           }
+                        }
+                      },
+                      {
+                        "exists": {
+                          "field": "compose_project"
                         }
                       }
                     ],
@@ -111,7 +116,9 @@
                           "container_name": [
                             "tallied-demo",
                             "tasks-demo",
-                            "docker-image-event"
+                            "docker-image-event",
+                            "watchtower",
+                            "uptime-kuma"
                           ]
                         }
                       },
@@ -127,7 +134,7 @@
                       },
                       {
                         "wildcard": {
-                          "container_name": "*nginx-run-*"
+                          "container_name": "*-run-*"
                         }
                       },
                       {
@@ -138,6 +145,11 @@
                       {
                         "regexp": {
                           "container_name": "[0-9a-f]{12}_.+"
+                        }
+                      },
+                      {
+                        "term": {
+                          "compose_oneoff": "True"
                         }
                       }
                     ]
@@ -233,7 +245,7 @@
                     "size": 3,
                     "script": {
                       "lang": "painless",
-                      "source": "String x = doc.containsKey('x_forwarded_for') && doc['x_forwarded_for'].size() > 0 ? doc['x_forwarded_for'].value : '-'; String c = doc.containsKey('client_ip') && doc['client_ip'].size() > 0 ? doc['client_ip'].value : '?'; if (x != '-' && x != '') { String ip = x.splitOnToken(',')[0].trim(); return ip == '173.48.155.66' ? 'your own devices (173.48.155.66)' : 'internet ' + ip; } if (c.startsWith('192.168.') || c.startsWith('10.') || c.startsWith('172.') || c.startsWith('127.')) { return 'LAN client ' + c; } return 'internet ' + c + ' (no XFF: hit the origin directly)';"
+                      "source": "String x = doc.containsKey('x_forwarded_for') && doc['x_forwarded_for'].size() > 0 ? doc['x_forwarded_for'].value : '-'; String c = doc.containsKey('client_ip') && doc['client_ip'].size() > 0 ? doc['client_ip'].value : '?'; if (x != '-' && x != '') { String[] hops = x.splitOnToken(','); String ip = hops[hops.length - 1].trim(); if (!/^[0-9a-fA-F:.]{3,45}$/.matcher(ip).matches() || !(ip.contains('.') || ip.contains(':'))) { return 'internet (bad XFF)'; } if (hops.length == 1 && ip == '173.48.155.66') { return 'your own devices (173.48.155.66)'; } return hops.length == 1 ? 'internet ' + ip : 'internet ' + ip + ' (client-set XFF, ' + hops.length + ' hops)'; } if (c.startsWith('192.168.') || c.startsWith('10.') || /^172\\.(1[6-9]|2[0-9]|3[01])\\./.matcher(c).find() || c.startsWith('127.')) { return 'LAN client ' + c; } return 'internet ' + c + ' (no XFF: hit the origin directly)';"
                     }
                   }
                 },
@@ -312,6 +324,11 @@
                           "lte": "now"
                         }
                       }
+                    },
+                    {
+                      "exists": {
+                        "field": "compose_project"
+                      }
                     }
                   ],
                   "must_not": [
@@ -320,7 +337,9 @@
                         "container_name": [
                           "tallied-demo",
                           "tasks-demo",
-                          "docker-image-event"
+                          "docker-image-event",
+                          "watchtower",
+                          "uptime-kuma"
                         ]
                       }
                     },
@@ -336,7 +355,7 @@
                     },
                     {
                       "wildcard": {
-                        "container_name": "*nginx-run-*"
+                        "container_name": "*-run-*"
                       }
                     },
                     {
@@ -347,6 +366,11 @@
                     {
                       "regexp": {
                         "container_name": "[0-9a-f]{12}_.+"
+                      }
+                    },
+                    {
+                      "term": {
+                        "compose_oneoff": "True"
                       }
                     }
                   ]
@@ -368,6 +392,89 @@
                   }
                 }
               }
+            },
+            "cl": {
+              "filter": {
+                "bool": {
+                  "must": [
+                    {
+                      "term": {
+                        "event_scope": "container"
+                      }
+                    },
+                    {
+                      "term": {
+                        "event_type": "die"
+                      }
+                    },
+                    {
+                      "range": {
+                        "@timestamp": {
+                          "gte": "now-15m",
+                          "lte": "now"
+                        }
+                      }
+                    },
+                    {
+                      "exists": {
+                        "field": "compose_project"
+                      }
+                    }
+                  ],
+                  "must_not": [
+                    {
+                      "terms": {
+                        "container_name": [
+                          "tallied-demo",
+                          "tasks-demo",
+                          "docker-image-event",
+                          "watchtower",
+                          "uptime-kuma"
+                        ]
+                      }
+                    },
+                    {
+                      "prefix": {
+                        "container_name": "zz-scratch-"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-test"
+                      }
+                    },
+                    {
+                      "wildcard": {
+                        "container_name": "*-run-*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[a-z]+_[a-z]+[0-9]*"
+                      }
+                    },
+                    {
+                      "regexp": {
+                        "container_name": "[0-9a-f]{12}_.+"
+                      }
+                    },
+                    {
+                      "term": {
+                        "compose_oneoff": "True"
+                      }
+                    }
+                  ]
+                }
+              },
+              "aggs": {
+                "loops": {
+                  "terms": {
+                    "field": "container_name",
+                    "size": 5,
+                    "min_doc_count": 3
+                  }
+                }
+              }
             }
           }
         }
@@ -381,7 +488,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count > 5) && ctx.results[0].aggregations.lc.doc_count == 0"
+          "source": "(ctx.results[0].aggregations.p.doc_count > 5) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0)"
         }
       },
       "actions": [
@@ -389,7 +496,7 @@
           "name": "ntfy-homelab",
           "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"topic\": \"homelab\", \"title\": \"{{ctx.results.0.aggregations.p.by_status.buckets.0.key}}s from {{ctx.results.0.aggregations.p.by_host.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"When: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nStatus:{{#ctx.results.0.aggregations.p.by_status.buckets}} {{key}} ({{doc_count}}){{/ctx.results.0.aggregations.p.by_status.buckets}}\\nVhosts:{{#ctx.results.0.aggregations.p.by_host.buckets}} {{key}} ({{doc_count}}){{/ctx.results.0.aggregations.p.by_host.buckets}}\\nTop paths:\\n{{#ctx.results.0.aggregations.p.top_paths.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.top_paths.buckets}}Clients:\\n{{#ctx.results.0.aggregations.p.clients.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.clients.buckets}}Upstream:{{#ctx.results.0.aggregations.p.upstreams.buckets}} {{key}} ({{doc_count}}){{/ctx.results.0.aggregations.p.upstreams.buckets}}\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{^ctx.results.0.aggregations.lc.by_container.buckets}} none{{/ctx.results.0.aggregations.lc.by_container.buckets}}\\nLikely cause: the upstream behind {{ctx.results.0.aggregations.p.by_host.buckets.0.key}} is failing and nothing was restarting. 502 = upstream refused or unreachable, 504 = upstream timed out, 500/503 = the app itself errored.\\nDo: docker ps --filter name=<service> and docker compose logs --tail 100 <service> for the vhost's container; if the upstream is a LAN IP (not 172.x), check that box instead.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'container_name%3Anginx%20and%20status%20%3E%3D%20500'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 5, \"tags\": [\"rotating_light\", \"nginx-5xx-burst\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'container_name%3Anginx%20and%20status%20%3E%3D%20500'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'container_name%3Anginx%20and%20status%20%3E%3D%20500'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"{{ctx.results.0.aggregations.p.by_status.buckets.0.key}}s from {{ctx.results.0.aggregations.p.by_host.buckets.0.key}} - {{ctx.results.0.aggregations.p.doc_count}} in 5 min\", \"message\": \"When: {{ctx.results.0.aggregations.p.first.hits.hits.0.fields.et.0}} to {{ctx.results.0.aggregations.p.last.hits.hits.0.fields.et.0}} (monitor window {{ctx.periodStart}} to {{ctx.periodEnd}} UTC)\\nStatus:{{#ctx.results.0.aggregations.p.by_status.buckets}} {{key}} ({{doc_count}}){{/ctx.results.0.aggregations.p.by_status.buckets}}\\nVhosts:{{#ctx.results.0.aggregations.p.by_host.buckets}} {{key}} ({{doc_count}}){{/ctx.results.0.aggregations.p.by_host.buckets}}\\nTop paths:\\n{{#ctx.results.0.aggregations.p.top_paths.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.top_paths.buckets}}Clients:\\n{{#ctx.results.0.aggregations.p.clients.buckets}}  {{doc_count}}x {{key}}\\n{{/ctx.results.0.aggregations.p.clients.buckets}}Upstream:{{#ctx.results.0.aggregations.p.upstreams.buckets}} {{key}} ({{doc_count}}){{/ctx.results.0.aggregations.p.upstreams.buckets}}\\nRestarted in last 10 min:{{#ctx.results.0.aggregations.lc.by_container.buckets}} {{key}}:{{#events.buckets}} {{key}}{{/events.buckets}};{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{^ctx.results.0.aggregations.lc.by_container.buckets}} none{{/ctx.results.0.aggregations.lc.by_container.buckets}}{{#ctx.results.0.aggregations.cl.loops.buckets}}\\nCrash-looping: {{key}} died {{doc_count}}x in 15 min, so this is not deploy noise.{{/ctx.results.0.aggregations.cl.loops.buckets}}\\nLikely cause: the upstream behind {{ctx.results.0.aggregations.p.by_host.buckets.0.key}} is failing and nothing was restarting. 502 = upstream refused or unreachable, 504 = upstream timed out, 500/503 = the app itself errored.\\nDo: docker ps --filter name=<service> and docker compose logs --tail 100 <service> for the vhost's container; if the upstream is a LAN IP (not 172.x), check that box instead.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'container_name%3Anginx%20and%20status%20%3E%3D%20500'))\\nDashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\", \"priority\": 5, \"tags\": [\"rotating_light\", \"nginx-5xx-burst\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'container_name%3Anginx%20and%20status%20%3E%3D%20500'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.periodStart}}',to:'{{ctx.periodEnd}}'))&_q=(filters:!(),query:(language:kuery,query:'container_name%3Anginx%20and%20status%20%3E%3D%20500'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
@@ -406,7 +513,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count > 5) && ctx.results[0].aggregations.lc.doc_count > 0"
+          "source": "(ctx.results[0].aggregations.p.doc_count > 5) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0"
         }
       },
       "actions": [

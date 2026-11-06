@@ -21,9 +21,12 @@ function normalize_docker_event(tag, timestamp, record)
         -- Container labels ride along in Actor.Attributes. The compose
         -- project tells real services from scratch/`docker run` containers,
         -- and die events carry the exit code (both used by container-died).
+        -- oneoff is "True" for `docker compose run` containers.
         local project = string.match(raw, '"com%.docker%.compose%.project":"([^"]+)"')
+        local oneoff = string.match(raw, '"com%.docker%.compose%.oneoff":"([^"]+)"')
         local exit_code = string.match(raw, '"exitCode":"(%-?%d+)"')
         if project then record["compose_project"] = project end
+        if oneoff then record["compose_oneoff"] = oneoff end
         if exit_code then record["exit_code"] = tonumber(exit_code) end
         if action then record["Action"] = action end
         if etype then record["Type"] = etype end
@@ -58,6 +61,8 @@ function normalize_docker_event(tag, timestamp, record)
             if image then record["image"] = image end
             local project = actor["Attributes"]["com.docker.compose.project"]
             if project then record["compose_project"] = project end
+            local oneoff = actor["Attributes"]["com.docker.compose.oneoff"]
+            if oneoff then record["compose_oneoff"] = oneoff end
             local exit_code = tonumber(actor["Attributes"]["exitCode"] or "")
             if exit_code then record["exit_code"] = exit_code end
         end

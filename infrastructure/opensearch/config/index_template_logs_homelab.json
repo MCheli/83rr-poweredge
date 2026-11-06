@@ -63,6 +63,7 @@
         "event_type": { "type": "keyword" },
         "event_scope": { "type": "keyword" },
         "compose_project": { "type": "keyword" },
+        "compose_oneoff": { "type": "keyword" },
         "exit_code": { "type": "integer" },
         "wt_failed": { "type": "integer" },
         "wt_updated": { "type": "integer" },
