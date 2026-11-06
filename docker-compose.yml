@@ -116,9 +116,14 @@ services:
       - app:app
     environment:
       - FLASK_ENV=production
-      - DATABASE_URL=postgresql://user:pass@postgres:5432/dbname
       # Empty = /weather serves demo data.
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
+      # POST /contact (the site's contact form) publishes to ntfy. Same
+      # write-only token OpenSearch/Kuma/Dependency-Track use. Empty token =
+      # /contact returns 503 instead of silently dropping messages.
+      - NTFY_URL=http://ntfy
+      - NTFY_TOPIC=homelab
+      - NTFY_PUBLISH_TOKEN=${NTFY_PUBLISH_TOKEN:-}
     networks:
       - infrastructure
     healthcheck:
@@ -154,6 +159,14 @@ services:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - "DISABLE_INSTALL_DEMO_CONFIG=true"
       - "DISABLE_SECURITY_PLUGIN=true"
+      # Quiet the per-minute INFO chatter from the job-scheduler and ISM
+      # plugins (~94% of OpenSearch's own ~165k log lines/day on 3.9; it was
+      # ~82k/day on 3.2). These loggers still emit WARN and ERROR, and every
+      # other logger stays at INFO. The entrypoint turns dotted env vars into
+      # -E settings. Revert by deleting these lines and recreating opensearch.
+      - logger.org.opensearch.jobscheduler=WARN
+      - logger.org.opensearch.indexmanagement=WARN
+      - logger.org.opensearch.remote.metadata=WARN
     ulimits:
       memlock:
         soft: -1
@@ -341,6 +354,16 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
+      # SQLite "database is locked" (SQLITE_BUSY) -> 500s on /api/ds/query and
+      # /api/annotations under dashboard refresh, seen since 2026-10-30 on
+      # 11.5 / 12.4 / 13.3 (docs/grafana-sqlite-locked.md). WAL lets readers
+      # run alongside the single writer. It's stored in grafana.db itself and
+      # adds grafana.db-wal / -shm next to it on the local ext4 volume.
+      # query_retries (default 0) retries single queries on SQLITE_BUSY the
+      # way transaction_retries already does for transactions. cache_mode
+      # stays private, because shared cache uses table locks and contends more.
+      - GF_DATABASE_WAL=true
+      - GF_DATABASE_QUERY_RETRIES=5
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
@@ -1006,7 +1029,7 @@ services:
       - infrastructure
 
   seafile:
-    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.28@sha256:b0c90832126bf432db908449f1bb450211e6bbf75a2193bab3399e2a9636eccf}
+    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.29@sha256:9506f49d5e5065082c134e6348498eed5a5866ddbd94bd5a3e479a6c285bc61a}
     container_name: seafile
     restart: unless-stopped
     logging: *default-logging
@@ -1058,7 +1081,7 @@ services:
   # Real-time sync notifications for desktop/web clients (own image since 12.0).
   # Edge nginx routes files.markcheli.com/notification here.
   seafile-notification:
-    image: ${SEAFILE_NOTIFICATION_IMAGE:-seafileltd/notification-server:13.0.21@sha256:1cac4101d0f4527ad08c00b5452ceb05d790db95d6c8ab6bbace82429c1e5217}
+    image: ${SEAFILE_NOTIFICATION_IMAGE:-seafileltd/notification-server:13.0.29@sha256:5b06f58b9e67d7429a4ca5488610501b0ebc5286982c2934183d27543ebd1ccb}
     container_name: seafile-notification
     restart: unless-stopped
     logging: *default-logging

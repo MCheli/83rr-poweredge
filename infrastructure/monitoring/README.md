@@ -51,7 +51,6 @@ The monitoring stack provides metrics collection, visualization, and alerting fo
 ```
 monitoring/
 ├── prometheus.yml                 # Prometheus configuration
-├── docker-compose.yml             # Standalone deployment (optional)
 ├── grafana/
 │   └── provisioning/
 │       ├── datasources/
@@ -218,12 +217,12 @@ nginx_connections_accepted - nginx_connections_handled
 
 ## Data Retention
 
-- **Prometheus**: 30-day retention (configured in docker-compose.yml)
+- **Prometheus**: 30-day retention (configured in the root `docker-compose.yml`)
 - **Storage**: Data stored in `prometheus_data` Docker volume
 
 To change retention:
 ```yaml
-# In docker-compose.yml
+# In the root docker-compose.yml (prometheus service)
 command:
   - '--storage.tsdb.retention.time=30d'  # Adjust as needed
 ```

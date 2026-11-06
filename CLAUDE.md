@@ -183,8 +183,8 @@ Each service can use `.env` files from its infrastructure directory:
 
 ### NGINX Routing
 All HTTPS traffic is handled by NGINX:
-- **Public routes**: Defined in `infrastructure/nginx/conf.d/production.conf`
-- **LAN routes**: Defined in `infrastructure/nginx/conf.d/local.conf`
+- **All routes**: Defined in `infrastructure/nginx/conf.d/production.conf`, public and `*.ops` LAN vhosts alike (there is no separate `local.conf`; every `*.ops` server block carries `allow 192.168.1.0/24; deny all;`)
+- `conf.d/production.conf.full` and `default.conf.disabled` are not loaded (nginx only includes `conf.d/*.conf`)
 - **SSL certificates**: Located in `infrastructure/nginx/certs/`
 
 ---
@@ -336,7 +336,7 @@ container_memory_usage_bytes{name!=""} / 1024 / 1024 / 1024
    ```
 
 4. **Add NGINX routing** (if web service):
-   - Edit `infrastructure/nginx/conf.d/production.conf` or `local.conf`
+   - Edit `infrastructure/nginx/conf.d/production.conf` (public and `*.ops` vhosts both live here)
    - Add upstream and server block
    - Reload NGINX: `docker compose exec nginx nginx -s reload`
 
@@ -419,7 +419,7 @@ docker ps
 # 2. Test service health
 curl -I https://www.markcheli.com
 curl -I https://flask.markcheli.com
-curl http://localhost:9090/-/healthy  # Prometheus
+docker exec prometheus wget -qO- http://localhost:9090/-/healthy  # Prometheus (port not published)
 
 # 3. Check for errors in logs
 docker compose logs --tail 100 | grep -i error
@@ -522,8 +522,7 @@ docker compose up -d --build
 ├── infrastructure/
 │   ├── nginx/                     # NGINX reverse proxy
 │   │   ├── conf.d/
-│   │   │   ├── production.conf    # Public service routing
-│   │   │   └── local.conf         # LAN service routing
+│   │   │   └── production.conf    # All vhosts: public + *.ops (LAN-only)
 │   │   └── certs/                 # SSL certificates
 │   │       ├── wildcard-markcheli.crt
 │   │       ├── wildcard-markcheli.key
@@ -667,7 +666,7 @@ docker compose exec nginx nginx -t
 
 # Health check
 curl -I https://www.markcheli.com
-curl http://localhost:9090/-/healthy  # Prometheus
+docker exec prometheus wget -qO- http://localhost:9090/-/healthy  # Prometheus (port not published)
 
 # Clean up unused resources
 docker system prune -a --volumes  # ⚠️  DANGER: removes unused data
