@@ -159,6 +159,14 @@ services:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - "DISABLE_INSTALL_DEMO_CONFIG=true"
       - "DISABLE_SECURITY_PLUGIN=true"
+      # Quiet the per-minute INFO chatter from the job-scheduler and ISM
+      # plugins (~94% of OpenSearch's own ~165k log lines/day on 3.9; it was
+      # ~82k/day on 3.2). These loggers still emit WARN and ERROR, and every
+      # other logger stays at INFO. The entrypoint turns dotted env vars into
+      # -E settings. Revert by deleting these lines and recreating opensearch.
+      - logger.org.opensearch.jobscheduler=WARN
+      - logger.org.opensearch.indexmanagement=WARN
+      - logger.org.opensearch.remote.metadata=WARN
     ulimits:
       memlock:
         soft: -1

@@ -2,93 +2,110 @@
 local container_cache = {}
 
 -- For docker daemon events (input plugin: docker_events).
--- Fluent Bit's docker_events ships the entire event as a JSON string in
--- `message`. We parse it manually here (parser filter was unreliable),
--- then pull container_name/container_id/event_type out of the nested
--- Actor field so they're at top level for aggregation.
+-- docker_events does a single read() of up to Buffer_Size bytes from the
+-- /events stream and packs whatever it got as ONE record under `message`;
+-- it does no line framing. Docker writes one JSON object per line, so a read
+-- can hold several events, or start/end mid-event when a burst (every
+-- healthcheck's exec_* events land together) is bigger than the buffer. The
+-- old code parsed the whole buffer as one event: a buffer that began with an
+-- exec_ event was dropped along with any die/stop behind it, and a buffer that
+-- began mid-event became "docker ? ? unknown" (~850 docs/day). Now each line
+-- is handled on its own and lines that aren't the start of an event are
+-- dropped. Buffer_Size in fluent-bit.conf is raised so splits are rare.
 -- Fluent Bit's lua filter doesn't ship cjson, so we extract the fields
 -- we need from the raw JSON string with simple string.match patterns.
 -- Field shape per docker events: status / id / from / Type / Action /
--- Actor.ID / Actor.Attributes.name. We pull the four flat fields directly
--- and parse Actor.Attributes.name with a nested pattern.
-function normalize_docker_event(tag, timestamp, record)
-    local raw = record["message"]
-    if type(raw) == "string" then
-        local action = string.match(raw, '"Action":"([^"]+)"')
-        local etype = string.match(raw, '"Type":"([^"]+)"')
-        local actor_id = string.match(raw, '"Actor":%s*{[^}]*"ID":"([^"]+)"')
-        local actor_name = string.match(raw, '"Attributes":%s*{[^}]-"name":"([^"]+)"')
-        if action then record["Action"] = action end
-        if etype then record["Type"] = etype end
-        if actor_id then record["actor_id"] = actor_id end
-        if actor_name then record["actor_name"] = actor_name end
-        record["message"] = nil
-    end
+-- Actor.ID / Actor.Attributes.name.
 
-    -- For Type=image events the "name" is actually the image name/sha and
-    -- shouldn't masquerade as a container_name (would pollute aggregations).
-    -- Move it to an `image` field instead.
-    if record["actor_name"] then
-        if record["Type"] == "image" then
-            record["image"] = record["actor_name"]
-            record["container_name"] = "docker-image-event"
-        else
-            record["container_name"] = record["actor_name"]
-        end
-        record["actor_name"] = nil
-    end
-    if record["actor_id"] then
-        record["container_id"] = string.sub(record["actor_id"], 1, 12)
-        record["actor_id"] = nil
-    end
-
-    local actor = record["Actor"]
-    if type(actor) == "table" then
-        if type(actor["Attributes"]) == "table" then
-            local name = actor["Attributes"]["name"]
-            if name then record["container_name"] = name end
-            local image = actor["Attributes"]["image"]
-            if image then record["image"] = image end
-        end
-        if actor["ID"] then
-            record["container_id"] = string.sub(actor["ID"], 1, 12)
-        end
-    end
-    if record["Action"] then record["event_type"] = record["Action"] end
-    if record["Type"] then record["event_scope"] = record["Type"] end
-
+-- Turn one event's fields into a record, or nil to drop it.
+local function build_event(action, etype, actor_id, actor_name)
     -- Filter out the firehose of healthcheck exec_create/exec_start/exec_die
     -- events — Docker emits one per probe per container, ~5k/day of noise
     -- that overwhelms the actually-useful lifecycle events. Also drop
     -- network connect/disconnect on every container start (we infer those
     -- from container start/stop anyway).
-    local action = record["Action"] or "?"
-    if string.sub(action, 1, 5) == "exec_" then
-        return -1, timestamp, record  -- drop record
-    end
-    if action == "connect" or action == "disconnect" then
-        return -1, timestamp, record
+    if string.sub(action, 1, 5) == "exec_" then return nil end
+    if action == "connect" or action == "disconnect" then return nil end
+
+    local rec = { event_type = action }
+    if etype then rec["event_scope"] = etype end
+    if etype == "container" then
+        rec["container_name"] = actor_name
+        if actor_id then rec["container_id"] = string.sub(actor_id, 1, 12) end
+    elseif etype == "image" then
+        -- For image events the "name" is the image name/sha and shouldn't
+        -- masquerade as a container_name (would pollute aggregations).
+        rec["image"] = actor_name or actor_id
+        rec["container_name"] = "docker-image-event"
+    else
+        -- volume / network / builder / daemon: the actor isn't a container.
+        rec["docker_object"] = actor_name or actor_id
+        rec["container_name"] = "docker-" .. (etype or "daemon") .. "-event"
     end
 
     -- Build a human-readable `log` line + level mapping for what's left:
     -- start, stop, restart, kill, die, oom, create, destroy, pull, etc.
-    local cname  = record["container_name"] or "?"
-    record["log"] = "docker " .. (record["event_scope"] or "?") .. " " .. action .. " " .. cname
+    rec["log"] = "docker " .. (etype or "?") .. " " .. action .. " "
+        .. (rec["container_name"] or rec["docker_object"] or "?")
     if action == "die" or action == "kill" or action == "oom" then
-        record["level"] = "ERROR"
+        rec["level"] = "ERROR"
     elseif action == "stop" or action == "destroy" then
-        record["level"] = "WARNING"
+        rec["level"] = "WARNING"
     else
-        record["level"] = "INFO"
+        rec["level"] = "INFO"
     end
-    return 1, timestamp, record
+    return rec
+end
+
+local function parse_event_line(line)
+    -- A fragment (the tail of an event cut by the previous read) doesn't
+    -- start with '{' or has no Action; there's nothing usable in it.
+    if string.sub(line, 1, 1) ~= "{" then return nil end
+    local action = string.match(line, '"Action":"([^"]+)"')
+    if not action then return nil end
+    return build_event(
+        action,
+        string.match(line, '"Type":"([^"]+)"'),
+        string.match(line, '"Actor":%s*{[^}]*"ID":"([^"]+)"'),
+        string.match(line, '"Attributes":%s*{[^}]-"name":"([^"]+)"'))
+end
+
+function normalize_docker_event(tag, timestamp, record)
+    local raw = record["message"]
+    local out = {}
+    if type(raw) == "string" then
+        for line in string.gmatch(raw, "[^\r\n]+") do
+            local rec = parse_event_line(line)
+            if rec then out[#out + 1] = rec end
+        end
+    elseif type(record["Action"]) == "string" then
+        -- Already structured (a Parser set on the input).
+        local actor = record["Actor"]
+        local actor_id, actor_name
+        if type(actor) == "table" then
+            actor_id = actor["ID"]
+            if type(actor["Attributes"]) == "table" then
+                actor_name = actor["Attributes"]["name"]
+            end
+        end
+        local rec = build_event(record["Action"], record["Type"], actor_id, actor_name)
+        if rec then out[1] = rec end
+    end
+
+    if #out == 0 then return -1, timestamp, record end
+    if #out == 1 then return 1, timestamp, out[1] end
+    -- A table of records splits one input record into several.
+    return 1, timestamp, out
 end
 
 function add_container_name(tag, timestamp, record)
     -- Extract container ID from tag (docker.<container_id>)
-    local container_id = string.match(tag, "docker%.([a-z0-9]+)")
+    -- Only docker.<64-hex id> tags from the tail input; docker.events also
+    -- matches docker.* and would otherwise get container_name "unknown" and
+    -- a failed config.v2.json lookup per event.
+    local container_id = string.match(tag, "^docker%.(%x+)$")
 
-    if container_id then
+    if container_id and #container_id == 64 then
         -- Add short container ID
         record["container_id"] = string.sub(container_id, 1, 12)
 
