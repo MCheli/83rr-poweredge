@@ -354,6 +354,16 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
+      # SQLite "database is locked" (SQLITE_BUSY) -> 500s on /api/ds/query and
+      # /api/annotations under dashboard refresh, seen since 2026-10-30 on
+      # 11.5 / 12.4 / 13.3 (docs/grafana-sqlite-locked.md). WAL lets readers
+      # run alongside the single writer. It's stored in grafana.db itself and
+      # adds grafana.db-wal / -shm next to it on the local ext4 volume.
+      # query_retries (default 0) retries single queries on SQLITE_BUSY the
+      # way transaction_retries already does for transactions. cache_mode
+      # stays private, because shared cache uses table locks and contends more.
+      - GF_DATABASE_WAL=true
+      - GF_DATABASE_QUERY_RETRIES=5
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
