@@ -22,10 +22,20 @@
         "if": "ctx.container_name == 'nginx'",
         "field": "log",
         "patterns": [
+          "^%{IP:client_ip} - (?:%{DATA:remote_user}|-) \\[%{HTTPDATE:nginx_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} \"%{DATA:referrer}\" \"%{DATA:user_agent}\" \"%{DATA:x_forwarded_for}\" host=\"%{DATA:host}\" upstream=\"%{DATA:upstream_addr}\" upstream_status=\"%{DATA:upstream_status}\" upstream_rt=\"%{DATA:_upstream_rt}\" rt=%{NUMBER:request_time:float}",
           "^%{IP:client_ip} - (?:%{DATA:remote_user}|-) \\[%{HTTPDATE:nginx_time}\\] \"%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}\" %{INT:status:int} %{INT:bytes:int} \"%{DATA:referrer}\" \"%{DATA:user_agent}\" \"%{DATA:x_forwarded_for}\""
         ],
         "ignore_failure": true,
-        "description": "nginx combined access log + X-Forwarded-For"
+        "description": "nginx 'main' log_format: combined + XFF, then (since 2026-11) a host/upstream/timing key=\"value\" tail. The second pattern keeps older lines parsing."
+      }
+    },
+    {
+      "script": {
+        "if": "ctx.container_name == 'nginx' && ctx.status != null",
+        "lang": "painless",
+        "source": "if (ctx._upstream_rt != null) { double t = 0; boolean any = false; for (String part : /[,:]/.split(ctx._upstream_rt)) { String v = part.trim(); if (v.length() > 0 && v != '-') { try { t += Double.parseDouble(v); any = true; } catch (NumberFormatException e) {} } } if (any) { ctx.upstream_response_time = (float) t; } ctx.remove('_upstream_rt'); } for (String f : ['upstream_addr', 'upstream_status', 'host']) { if (ctx[f] == '-' || ctx[f] == '') { ctx.remove(f); } }",
+        "ignore_failure": true,
+        "description": "nginx: upstream_response_time = sum of the upstream tries ('0.001, 0.003'; '-' = none), and drop '-' placeholders so exists-queries mean something"
       }
     },
 
@@ -314,11 +324,12 @@
     },
 
     {
-      "set": {
-        "if": "ctx.path != null && (ctx.path == '/health' || ctx.path == '/api/health' || ctx.path == '/api/v1/health' || ctx.path.startsWith('/api/health/') || ctx.path.startsWith('/health/'))",
-        "field": "healthcheck",
-        "value": true,
-        "description": "Tag synthetic-probe traffic so dashboards can include or exclude"
+      "script": {
+        "if": "ctx.path != null",
+        "lang": "painless",
+        "source": "String p = ctx.path; int q = p.indexOf('?'); if (q >= 0) { p = p.substring(0, q); } if (!(p == '/health' || p == '/healthz' || p == '/api/health' || p == '/api/v1/health' || p.startsWith('/api/health/') || p.startsWith('/health/'))) { return; } String xff = ctx.x_forwarded_for == null ? '-' : ctx.x_forwarded_for.toString().trim(); String ua = ctx.user_agent == null ? '' : ctx.user_agent.toString(); String ip = ctx.client_ip == null ? '' : ctx.client_ip.toString(); boolean noXff = xff == '-' || xff == ''; boolean loopback = ip.startsWith('127.') || ip == '::1'; boolean lan = loopback || ip.startsWith('10.') || ip.startsWith('192.168.') || /^172\\.(1[6-9]|2[0-9]|3[01])\\./.matcher(ip).find(); boolean kuma = ua.startsWith('Uptime-Kuma') && (noXff || xff.startsWith('173.48.155.66')); boolean probeUa = /^(curl\\/|Wget|Python-urllib|python-requests|Go-http-client|kube-probe)/.matcher(ua).find(); if (kuma || (noXff && loopback) || (ctx.container_name == 'nginx' && noXff && lan && probeUa)) { ctx.healthcheck = true; }",
+        "ignore_failure": true,
+        "description": "Tag genuine probe traffic (healthcheck:true): a health path AND one of: Uptime Kuma UA; a loopback client (Docker HEALTHCHECK inside the container); or, at nginx, a LAN client with no X-Forwarded-For and a probe UA (curl/wget/python). Internet scanners on /api/health (2026-11 audit) and requests nginx proxies to an app no longer count."
       }
     },
 

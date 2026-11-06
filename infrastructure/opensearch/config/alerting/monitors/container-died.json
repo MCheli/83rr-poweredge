@@ -3,29 +3,390 @@
   "monitor_type": "query_level_monitor",
   "name": "container-died",
   "enabled": true,
-  "schedule": { "period": { "interval": 5, "unit": "MINUTES" } },
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
   "inputs": [
     {
       "search": {
-        "indices": ["logs-homelab-*"],
+        "indices": [
+          "logs-homelab-*"
+        ],
         "query": {
           "size": 0,
           "query": {
             "bool": {
               "must": [
-                { "terms": { "event_type": ["die", "kill", "oom"] } },
-                { "range": { "@timestamp": { "gte": "now-5m" } } }
+                {
+                  "term": {
+                    "event_scope": "container"
+                  }
+                },
+                {
+                  "terms": {
+                    "event_type": [
+                      "die",
+                      "start",
+                      "oom"
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "{{period_end}}||-15m",
+                      "format": "epoch_millis",
+                      "lte": "{{period_end}}"
+                    }
+                  }
+                },
+                {
+                  "exists": {
+                    "field": "compose_project"
+                  }
+                }
               ],
               "must_not": [
-                { "terms": { "container_name": ["watchtower", "uptime-kuma"] } }
+                {
+                  "terms": {
+                    "container_name": [
+                      "tallied-demo",
+                      "tasks-demo",
+                      "docker-image-event",
+                      "watchtower",
+                      "uptime-kuma"
+                    ]
+                  }
+                },
+                {
+                  "prefix": {
+                    "container_name": "zz-scratch-"
+                  }
+                },
+                {
+                  "wildcard": {
+                    "container_name": "*-test"
+                  }
+                },
+                {
+                  "wildcard": {
+                    "container_name": "*-run-*"
+                  }
+                },
+                {
+                  "regexp": {
+                    "container_name": "[a-z]+_[a-z]+[0-9]*"
+                  }
+                },
+                {
+                  "regexp": {
+                    "container_name": "[0-9a-f]{12}_.+"
+                  }
+                },
+                {
+                  "term": {
+                    "compose_oneoff": "True"
+                  }
+                }
               ]
             }
           },
           "aggs": {
-            "by_container": {
-              "terms": { "field": "container_name", "size": 20 },
+            "down": {
+              "terms": {
+                "field": "container_name",
+                "size": 10
+              },
               "aggs": {
-                "by_action": { "terms": { "field": "event_type", "size": 5 } }
+                "dies": {
+                  "filter": {
+                    "bool": {
+                      "filter": [
+                        {
+                          "term": {
+                            "event_type": "die"
+                          }
+                        },
+                        {
+                          "range": {
+                            "@timestamp": {
+                              "gte": "{{period_end}}||-8m",
+                              "format": "epoch_millis",
+                              "lt": "{{period_end}}||-3m"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "aggs": {
+                    "last": {
+                      "max": {
+                        "field": "@timestamp"
+                      }
+                    },
+                    "exit": {
+                      "terms": {
+                        "field": "exit_code",
+                        "size": 3,
+                        "missing": -1
+                      }
+                    },
+                    "et": {
+                      "top_hits": {
+                        "size": 1,
+                        "sort": [
+                          {
+                            "@timestamp": "desc"
+                          }
+                        ],
+                        "_source": false,
+                        "script_fields": {
+                          "et": {
+                            "script": {
+                              "lang": "painless",
+                              "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "starts": {
+                  "filter": {
+                    "term": {
+                      "event_type": "start"
+                    }
+                  },
+                  "aggs": {
+                    "last": {
+                      "max": {
+                        "field": "@timestamp"
+                      }
+                    }
+                  }
+                },
+                "keep": {
+                  "bucket_selector": {
+                    "gap_policy": "insert_zeros",
+                    "buckets_path": {
+                      "n": "dies._count",
+                      "d": "dies>last",
+                      "s": "starts>last"
+                    },
+                    "script": "params.n > 0 && params.s < params.d"
+                  }
+                }
+              }
+            },
+            "oom": {
+              "terms": {
+                "field": "container_name",
+                "size": 10
+              },
+              "aggs": {
+                "ooms": {
+                  "filter": {
+                    "bool": {
+                      "filter": [
+                        {
+                          "term": {
+                            "event_type": "oom"
+                          }
+                        },
+                        {
+                          "range": {
+                            "@timestamp": {
+                              "gte": "{{period_end}}||-5m",
+                              "format": "epoch_millis",
+                              "lte": "{{period_end}}"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "aggs": {
+                    "et": {
+                      "top_hits": {
+                        "size": 1,
+                        "sort": [
+                          {
+                            "@timestamp": "desc"
+                          }
+                        ],
+                        "_source": false,
+                        "script_fields": {
+                          "et": {
+                            "script": {
+                              "lang": "painless",
+                              "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "starts": {
+                  "filter": {
+                    "bool": {
+                      "filter": [
+                        {
+                          "term": {
+                            "event_type": "start"
+                          }
+                        },
+                        {
+                          "range": {
+                            "@timestamp": {
+                              "gte": "{{period_end}}||-5m",
+                              "format": "epoch_millis",
+                              "lte": "{{period_end}}"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "aggs": {
+                    "et": {
+                      "top_hits": {
+                        "size": 1,
+                        "sort": [
+                          {
+                            "@timestamp": "desc"
+                          }
+                        ],
+                        "_source": false,
+                        "script_fields": {
+                          "et": {
+                            "script": {
+                              "lang": "painless",
+                              "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "keep": {
+                  "bucket_selector": {
+                    "buckets_path": {
+                      "n": "ooms._count"
+                    },
+                    "script": "params.n > 0"
+                  }
+                }
+              }
+            },
+            "loop": {
+              "terms": {
+                "field": "container_name",
+                "size": 10
+              },
+              "aggs": {
+                "dies": {
+                  "filter": {
+                    "bool": {
+                      "filter": [
+                        {
+                          "term": {
+                            "event_type": "die"
+                          }
+                        },
+                        {
+                          "range": {
+                            "@timestamp": {
+                              "gte": "{{period_end}}||-15m",
+                              "format": "epoch_millis",
+                              "lte": "{{period_end}}"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "aggs": {
+                    "exit": {
+                      "terms": {
+                        "field": "exit_code",
+                        "size": 3,
+                        "missing": -1
+                      }
+                    },
+                    "et": {
+                      "top_hits": {
+                        "size": 1,
+                        "sort": [
+                          {
+                            "@timestamp": "desc"
+                          }
+                        ],
+                        "_source": false,
+                        "script_fields": {
+                          "et": {
+                            "script": {
+                              "lang": "painless",
+                              "source": "doc['@timestamp'].value.withZoneSameInstant(ZoneId.of('America/New_York')).format(DateTimeFormatter.ofPattern('MMM d h:mm a z'))"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "keep": {
+                  "bucket_selector": {
+                    "buckets_path": {
+                      "n": "dies._count"
+                    },
+                    "script": "params.n >= 3"
+                  }
+                }
+              }
+            },
+            "from": {
+              "top_hits": {
+                "size": 1,
+                "sort": [
+                  {
+                    "@timestamp": "asc"
+                  }
+                ],
+                "_source": false,
+                "script_fields": {
+                  "iso": {
+                    "script": {
+                      "lang": "painless",
+                      "source": "doc['@timestamp'].value.plusMinutes(-10).withZoneSameInstant(ZoneId.of('Z')).format(DateTimeFormatter.ISO_INSTANT)"
+                    }
+                  }
+                }
+              }
+            },
+            "to": {
+              "top_hits": {
+                "size": 1,
+                "sort": [
+                  {
+                    "@timestamp": "desc"
+                  }
+                ],
+                "_source": false,
+                "script_fields": {
+                  "iso": {
+                    "script": {
+                      "lang": "painless",
+                      "source": "doc['@timestamp'].value.plusMinutes(5).withZoneSameInstant(ZoneId.of('Z')).format(DateTimeFormatter.ISO_INSTANT)"
+                    }
+                  }
+                }
               }
             }
           }
@@ -35,12 +396,12 @@
   ],
   "triggers": [
     {
-      "name": "container-down-event",
+      "name": "container-stayed-down",
       "severity": "1",
       "condition": {
         "script": {
-          "source": "ctx.results[0].hits.total.value > 0",
-          "lang": "painless"
+          "lang": "painless",
+          "source": "ctx.results[0].aggregations.down.buckets.size() > 0"
         }
       },
       "actions": [
@@ -48,13 +409,65 @@
           "name": "ntfy-homelab",
           "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] container die/kill/oom: {{ctx.results.0.hits.total.value}} event(s)\", \"message\": \"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\nWindow: last 5 minutes\\nTotal events: {{ctx.results.0.hits.total.value}}\\n\\n=== By container ===\\n{{#ctx.results.0.aggregations.by_container.buckets}}\\n[{{key}}] {{doc_count}} event(s):{{#by_action.buckets}} {{key}}={{doc_count}}{{/by_action.buckets}}\\n{{/ctx.results.0.aggregations.by_container.buckets}}\\nNote: kill+die in quick succession usually means an operator-initiated restart (docker compose up -d <svc>). A standalone die or oom is more interesting.\\n\\n=== Investigate ===\\n  docker ps -a --filter name=<container>\\n  docker logs --tail 200 <container>\\n  docker inspect <container> | grep -A3 -i exit\\n\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\", \"priority\": 5, \"tags\": [\"rotating_light\"]}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"Container down:{{#ctx.results.0.aggregations.down.buckets}} {{key}}{{/ctx.results.0.aggregations.down.buckets}}\", \"message\": \"{{#ctx.results.0.aggregations.down.buckets}}{{key}} died at {{dies.et.hits.hits.0.fields.et.0}} with exit code{{#dies.exit.buckets}} {{key}}{{/dies.exit.buckets}} and did NOT come back within 3 min.\\n{{/ctx.results.0.aggregations.down.buckets}}Exit codes: 137 = SIGKILL (OOM-kill or docker kill), 143 = SIGTERM (docker stop), 0 = exited cleanly, 1/2 = the app crashed, -1 = not recorded.\\nLikely cause: it crashed and nothing restarted it (restart policy 'no', or on-failure gave up), or someone ran docker stop / compose stop and left it.\\nDo: docker ps -a --filter name=<container>; docker logs --tail 100 <container>; then docker compose up -d <service> if it should be running.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\", \"priority\": 5, \"tags\": [\"rotating_light\", \"container-died\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": false
+        }
+      ]
+    },
+    {
+      "name": "container-oom",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "lang": "painless",
+          "source": "ctx.results[0].aggregations.oom.buckets.size() > 0"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"Out of memory:{{#ctx.results.0.aggregations.oom.buckets}} {{key}}{{/ctx.results.0.aggregations.oom.buckets}}\", \"message\": \"{{#ctx.results.0.aggregations.oom.buckets}}{{key}}: OOM at {{ooms.et.hits.hits.0.fields.et.0}}; {{#starts.et.hits.hits}}came back (started {{fields.et.0}}){{/starts.et.hits.hits}}{{^starts.et.hits.hits}}has NOT started again{{/starts.et.hits.hits}}\\n{{/ctx.results.0.aggregations.oom.buckets}}Likely cause: the container hit its memory limit (or the host ran low) and the kernel killed it.\\nDo: docker stats --no-stream <container>; docker logs --tail 100 <container>; check its mem_limit in docker-compose.yml and the host's free -h.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\", \"priority\": 4, \"tags\": [\"rotating_light\", \"container-died\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
-          "throttle": { "value": 30, "unit": "MINUTES" }
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    },
+    {
+      "name": "container-crash-loop",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "lang": "painless",
+          "source": "ctx.results[0].aggregations.loop.buckets.size() > 0"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"Crash loop:{{#ctx.results.0.aggregations.loop.buckets}} {{key}}{{/ctx.results.0.aggregations.loop.buckets}}\", \"message\": \"{{#ctx.results.0.aggregations.loop.buckets}}{{key}} has died {{dies.doc_count}} times in 15 min (last at {{dies.et.hits.hits.0.fields.et.0}}, exit code{{#dies.exit.buckets}} {{key}}{{/dies.exit.buckets}}) - it is crash-looping: Docker keeps restarting it and it keeps exiting.\\n{{/ctx.results.0.aggregations.loop.buckets}}Gated alerts (5xx, error rate, healthcheck) are NOT treated as deploy noise while this lasts.\\nLikely cause: the app fails at startup (bad config or env, a dependency or DB it needs is down, a failed migration, a bad new image from Watchtower).\\nDo: docker logs --tail 100 <container> (the reason is usually in the last lines); docker ps -a --filter name=<container>; if a new image broke it, pin the previous digest and docker compose up -d <service>.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\\nLifecycle dashboard: https://logs.ops.markcheli.com/app/dashboards#/view/dash-lifecycle\", \"priority\": 4, \"tags\": [\"rotating_light\", \"crash-loop\", \"container-died\"], \"click\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\", \"actions\": [{\"action\": \"view\", \"label\": \"Discover\", \"url\": \"https://logs.ops.markcheli.com/app/data-explorer/discover#?_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:logs-homelab,view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'{{ctx.results.0.aggregations.from.hits.hits.0.fields.iso.0}}',to:'{{ctx.results.0.aggregations.to.hits.hits.0.fields.iso.0}}'))&_q=(filters:!(),query:(language:kuery,query:'event_scope%3Acontainer%20and%20event_type%3A%28die%20or%20oom%20or%20start%20or%20kill%20or%20stop%29'))\"}, {\"action\": \"view\", \"label\": \"Dashboard\", \"url\": \"https://logs.ops.markcheli.com/app/dashboards#/view/dash-service-health\"}]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
         }
       ]
     }
-  ]
+  ],
+  "ui_metadata": {
+    "description": "A compose-managed container OOMed, died and did not start again within 3 min, or died 3+ times in 15 min (crash loop). Compose one-offs (docker compose run), scratch/test/auto-named containers and the tallied-demo/tasks-demo reseed cron are ignored."
+  }
 }
