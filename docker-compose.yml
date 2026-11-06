@@ -1011,7 +1011,7 @@ services:
       - infrastructure
 
   seafile:
-    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.28@sha256:b0c90832126bf432db908449f1bb450211e6bbf75a2193bab3399e2a9636eccf}
+    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.29@sha256:9506f49d5e5065082c134e6348498eed5a5866ddbd94bd5a3e479a6c285bc61a}
     container_name: seafile
     restart: unless-stopped
     logging: *default-logging
@@ -1063,7 +1063,7 @@ services:
   # Real-time sync notifications for desktop/web clients (own image since 12.0).
   # Edge nginx routes files.markcheli.com/notification here.
   seafile-notification:
-    image: ${SEAFILE_NOTIFICATION_IMAGE:-seafileltd/notification-server:13.0.21@sha256:1cac4101d0f4527ad08c00b5452ceb05d790db95d6c8ab6bbace82429c1e5217}
+    image: ${SEAFILE_NOTIFICATION_IMAGE:-seafileltd/notification-server:13.0.29@sha256:5b06f58b9e67d7429a4ca5488610501b0ebc5286982c2934183d27543ebd1ccb}
     container_name: seafile-notification
     restart: unless-stopped
     logging: *default-logging
