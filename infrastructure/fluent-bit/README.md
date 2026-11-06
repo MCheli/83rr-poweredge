@@ -99,6 +99,13 @@ Each log entry includes:
 | `environment` | Environment label | homelab |
 | `infrastructure` | Infrastructure label | 83rr-poweredge |
 
+Docker daemon events (`docker_events` input, `normalize_docker_event` in
+`docker_metadata.lua`) also get `event_type` (die, start, oom…), `event_scope`
+(container, image…), `compose_project` (the `com.docker.compose.project` label;
+absent for `docker run` scratch containers) and, on die events, `exit_code`.
+The `container-died` alert relies on the last two
+(`infrastructure/opensearch/config/alerting/README.md`).
+
 ## Management Commands
 
 ```bash

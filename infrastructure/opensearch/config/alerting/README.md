@@ -19,19 +19,51 @@ OpenSearch ───query───▶ Monitor ──fires─▶ Trigger ──se
 
 ## Apply monitors
 
+`apply-monitors.py` upserts `monitors/*.json` by monitor name: it PUTs over the
+live monitor with the same name (same id, so alert history stays attached) or
+POSTs a new one. It never deletes. `--dry-run` changes nothing: it runs every
+monitor once through `_execute?dryrun=true` and prints, per trigger, whether
+it fired and the rendered ntfy message (and fails if a query, trigger script or
+template errors, or if the rendered body isn't valid JSON).
+
 ```bash
-# From the host (uses LAN-only OpenSearch endpoint inside the container)
-for f in infrastructure/opensearch/config/alerting/monitors/*.json; do
-  name=$(basename "$f" .json)
-  docker cp "$f" opensearch:/tmp/monitor.json
-  docker exec opensearch curl -s -X POST \
-    "http://localhost:9200/_plugins/_alerting/monitors" \
-    -H 'Content-Type: application/json' -d @/tmp/monitor.json \
-    | python3 -c "import json,sys; r=json.load(sys.stdin); print('${name}:', r.get('_id','FAILED'), r.get('error',''))"
-done
+# On the server, from the repo root
+python3 infrastructure/opensearch/config/alerting/apply-monitors.py --dry-run
+python3 infrastructure/opensearch/config/alerting/apply-monitors.py                  # all
+python3 infrastructure/opensearch/config/alerting/apply-monitors.py nginx-5xx-burst   # just one
+# From the Mac mini
+python3 infrastructure/opensearch/config/alerting/apply-monitors.py --ssh 83rr-poweredge --dry-run
 ```
 
-To update an existing monitor, use `PUT /_plugins/_alerting/monitors/<id>`.
+`wire-ntfy.py` is separate: it owns the `ntfy-homelab` channel (token) and only
+rewrites leftover SendGrid-format actions; it leaves these monitors alone.
+
+### Rollout order for log-format / pipeline changes
+
+The monitors read fields that only exist once the log pipeline produces them
+(`host`, `upstream_addr`, `upstream_status`, `upstream_response_time`,
+`request_time` from nginx; `compose_project`, `exit_code` from Docker events),
+so apply in this order:
+
+1. **Index template + ingest pipeline** (new mappings, nginx parsing, the
+   stricter `healthcheck` tag). The template only affects indices created after
+   it (tomorrow's daily index); the pipeline applies to new documents at once.
+   ```bash
+   docker cp infrastructure/opensearch/config/index_template_logs_homelab.json opensearch:/tmp/t.json
+   docker exec opensearch curl -s -X PUT localhost:9200/_index_template/logs-homelab -H 'Content-Type: application/json' -d @/tmp/t.json
+   docker cp infrastructure/opensearch/config/ingest_pipeline_homelab_logs.json opensearch:/tmp/p.json
+   docker exec opensearch curl -s -X PUT localhost:9200/_ingest/pipeline/homelab-logs -H 'Content-Type: application/json' -d @/tmp/p.json
+   ```
+2. **nginx log format**: reload, don't recreate.
+   `docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`
+3. **Fluent Bit** (Lua filter adds `compose_project` / `exit_code`):
+   `docker compose restart fluent-bit`
+4. **Monitors**: `apply-monitors.py --dry-run`, then `apply-monitors.py`.
+
+Check between steps: an nginx line in Discover should have `host` and
+`upstream_addr`, and a `docker container start …` event should have
+`compose_project`. Until step 3 is live, `container-died` sees no events
+(it requires `compose_project`), so don't apply the monitors early.
 
 ## Destinations
 
@@ -158,13 +190,76 @@ docker exec opensearch curl -s -X POST "http://localhost:9200/_plugins/_alerting
 
 | File | What | Severity |
 |---|---|---|
-| `error-rate-5m.json` | ERROR/CRITICAL/FATAL count > 10 in 5 min, per-service | 2 |
-| `nginx-5xx-burst.json` | nginx status 500-599 count > 5 in 5 min | 1 |
+| `error-rate-5m.json` | ERROR/CRITICAL/FATAL count > 10 in 5 min, per-service (see below) | 2 |
+| `nginx-5xx-burst.json` | nginx 5xx > 5 in 5 min (see below) | 1 |
+| `container-died.json` | a compose container OOMed, or died and stayed down (see below) | 1 |
+| `healthcheck-failure.json` | 3+ failed genuine healthchecks in 5 min (see below) | 2 |
 | `auth-bruteforce.json` | nginx status 401 from same client_ip > 30 in 5 min | 2 |
-| `healthcheck-failure.json` | healthcheck:true AND status != 200, any in 5 min | 2 |
 | `watchtower-update-failure.json` | watchtower Failed != 0 in last 1h | 3 |
 
 The files' actions already point at `ntfy-homelab`; run `wire-ntfy.py` once
-after a fresh deploy so the channel exists. Live today: 9 of the 12 files
-(`docker-exec-into-sock-container`, `security-external-db-conn` and
-`security-unexpected-listen-port` are not applied).
+after a fresh deploy so the channel exists. As of 2026-11-05 all 12 files are
+live.
+
+### Phone alerts: what each one means (redesign, 2026-11)
+
+A 2026-11-05 audit found 86% of alerts since the ntfy cutover fired within 10
+minutes of a container restart (Watchtower, compose up, the demo reseed cron,
+backup/SBOM scratch containers). So the noisy monitors now look at restarts
+before deciding how loudly to tell you.
+
+**Restart gating** (`nginx-5xx-burst`, `error-rate-5m`, `healthcheck-failure`).
+Each monitor runs one search that is "primary condition OR lifecycle events";
+filter aggregations split it into `aggregations.p` (the primary hits) and
+`aggregations.lc` (start/die/kill/stop/restart/oom events in the last 10 min for
+real containers). Alerting only allows one search input per monitor, hence the
+single combined search. Two triggers share the condition:
+
+- no restart in the last 10 min: normal priority (5 for 5xx, 4 for the others),
+  tag `rotating_light`;
+- a restart happened: priority 2 (no buzz), title prefixed `[deploy noise]`,
+  first line "During restart of … - likely deploy noise", tags
+  `arrows_counterclockwise`, `deploy-noise`.
+
+"Real containers" excludes the reseed-cron demos (`tallied-demo`, `tasks-demo`),
+`zz-scratch-*`, `*-test` (incl. `*-nginx-test`), `*nginx-run-*`, Docker's
+auto-names (`adjective_name`) and Compose's temporary `<12 hex>_name` renames.
+
+**Every message** carries: a title with the service and count; the time of the
+first and last matching event in ET (computed by a Painless script field; Mustache
+can't convert time zones), plus the monitor window in UTC; the breakdowns below;
+which containers restarted in the last 10 min; a likely cause and what to do; and a
+Discover link with the query and time range filled in (also the notification's
+tap action and a button, next to a Dashboard button). Log values are cleaned up
+by script (quotes, backslashes and control characters removed, length capped)
+because Mustache here does no JSON escaping and the message is a JSON body.
+
+| Monitor | Fires when | Suppressed / ignored | Message shows |
+|---|---|---|---|
+| `nginx-5xx-burst` | > 5 nginx 5xx in 5 min | Home Assistant 502/504 (upstream `192.168.1.121:*` or vhost `home.markcheli.com`). Restart: priority 2 | status split, vhosts, top 3 paths, clients, upstream |
+| `error-rate-5m` | > 10 ERROR/CRITICAL/FATAL lines in 5 min | known scanner noise on `*-db` and plex; Docker die/kill events (they're `container-died`'s job). Restart: priority 2 | top services with their top 3 messages |
+| `healthcheck-failure` | ≥ 3 genuine probe failures in 5 min | 200/301/404, and anything with an external X-Forwarded-For. Restart: priority 2 | per-service status, top probes as "container status path from client UA" |
+| `container-died` | (a) an `oom` event in the last 5 min, or (b) a `die` 3-8 min ago with no later `start` (it stayed down for 3+ min) | containers without a compose project label, the excluded names above, `watchtower`, `uptime-kuma` | per container: time, exit code, whether it came back (OOM) |
+
+Clients are summarised as "your own devices" (XFF `173.48.155.66`), "LAN
+client" (no XFF, private IP), or "internet <ip>".
+
+`container-died` is a query-level monitor whose search does the "stayed down"
+logic itself: per container, a `bucket_selector` keeps only those whose latest
+start is older than their latest die. The die window (3-8 min ago) moves with
+the 5-minute schedule, so each death is judged once, which is why it has no
+throttle. (Bucket-level monitors were tried: their Mustache context only has
+the bucket key, not the per-bucket numbers.) Exit codes: 137 = SIGKILL
+(OOM-kill or `docker kill`), 143 = SIGTERM (`docker stop`), 0 = clean exit,
+-1 = not recorded.
+
+**healthcheck:true** is set by the ingest pipeline only for a health path plus
+one of: an Uptime Kuma UA; a loopback client (Docker HEALTHCHECK inside the
+container); or, at nginx, a LAN client with no X-Forwarded-For and a probe UA
+(curl/wget/python). Before 2026-11 any request to `/api/health` counted, so an
+internet scanner getting 404/301 paged as a healthcheck failure.
+
+**Home Assistant availability is owned by Uptime Kuma** (monitor "Home
+Assistant", 60 s interval with retries), not by `nginx-5xx-burst`. HA runs on
+its own box and is restarted by hand; the HA phone app's reconnect loop then
+produces dozens of 502s that say nothing Kuma doesn't already know.
