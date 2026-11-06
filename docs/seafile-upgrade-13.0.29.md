@@ -100,23 +100,32 @@ COUNT_SQL="SELECT 'users',COUNT(*) FROM ccnet_db.EmailUser UNION ALL SELECT 'rep
 
 ## 1. Before: record the rollback state (no downtime)
 
+This block is **re-run safe**. The state file and the `-rollback` tags are written only when no state file
+exists and both running containers are still the known old images. Pasting it again after step 3 therefore
+can't point the rollback at 13.0.29.
+
 ```bash
 # PRELUDE first
-[ -f ~/seafile-13029.state ] && echo "!! state file exists from an earlier run: check it, don't overwrite"
+OLD_SF_EXPECT=sha256:d3b8f07584d05a6cc1443bb86b48f916b452bbd49b0d6fea9f127fcf354bb490   # seafile-mc 13.0.28 (amd64)
+OLD_NS_EXPECT=sha256:d756e205de28bcb032bd06f35dbd38e77955a2f95a429fae579917b50d269713   # notification-server 13.0.21 (amd64)
 git status --porcelain | grep -v '^??' && echo "!! tracked changes in the checkout: stop"
 findmnt /mnt/nas >/dev/null && echo "OK NAS mounted" || echo "!! NAS not mounted"
-BK=/data/backups/seafile-13029-$(date +%Y%m%d)
-OLD_SF_ID=$(docker inspect seafile --format '{{.Image}}')
-OLD_NS_ID=$(docker inspect seafile-notification --format '{{.Image}}')
-HEAD0=$(git rev-parse HEAD)
-printf 'BK=%s\nOLD_SF_ID=%s\nOLD_NS_ID=%s\nHEAD0=%s\n' "$BK" "$OLD_SF_ID" "$OLD_NS_ID" "$HEAD0" > ~/seafile-13029.state
-command cat ~/seafile-13029.state
-[ "$OLD_SF_ID" = sha256:d3b8f07584d05a6cc1443bb86b48f916b452bbd49b0d6fea9f127fcf354bb490 ] && echo "OK seafile is 13.0.28" || echo "!! seafile is not the expected 13.0.28 image"
-[ "$OLD_NS_ID" = sha256:d756e205de28bcb032bd06f35dbd38e77955a2f95a429fae579917b50d269713 ] && echo "OK notification is 13.0.21" || echo "!! notification is not the expected 13.0.21 image"
+CUR_SF_ID=$(docker inspect seafile --format '{{.Image}}')
+CUR_NS_ID=$(docker inspect seafile-notification --format '{{.Image}}')
+if [ -f ~/seafile-13029.state ]; then
+  echo "!! state file exists from an earlier run: NOT overwritten, tags NOT touched. Check it:"; command cat ~/seafile-13029.state
+elif [ "$CUR_SF_ID" != "$OLD_SF_EXPECT" ] || [ "$CUR_NS_ID" != "$OLD_NS_EXPECT" ]; then
+  echo "!! running images are not the expected 13.0.28 / 13.0.21 (seafile=$CUR_SF_ID notif=$CUR_NS_ID): nothing written, stop"
+else
+  BK=/data/backups/seafile-13029-$(date +%Y%m%d)
+  OLD_SF_ID=$CUR_SF_ID; OLD_NS_ID=$CUR_NS_ID; HEAD0=$(git rev-parse HEAD)
+  printf 'BK=%s\nOLD_SF_ID=%s\nOLD_NS_ID=%s\nHEAD0=%s\n' "$BK" "$OLD_SF_ID" "$OLD_NS_ID" "$HEAD0" > ~/seafile-13029.state
+  # keep the old images from being pruned, under names the rollback uses
+  docker tag "$OLD_SF_ID" seafileltd/seafile-mc:13.0.28-rollback
+  docker tag "$OLD_NS_ID" seafileltd/notification-server:13.0.21-rollback
+  echo "OK state written, rollback tags set"; command cat ~/seafile-13029.state
+fi
 docker exec seafile cat /shared/seafile/seafile-data/current_version          # 13.0.28
-# keep the old images from being pruned, under names the rollback uses
-docker tag "$OLD_SF_ID" seafileltd/seafile-mc:13.0.28-rollback
-docker tag "$OLD_NS_ID" seafileltd/notification-server:13.0.21-rollback
 # pre-pull the new images (cuts the downtime to the container start)
 docker pull seafileltd/seafile-mc:13.0.29@sha256:9506f49d5e5065082c134e6348498eed5a5866ddbd94bd5a3e479a6c285bc61a
 docker pull seafileltd/notification-server:13.0.29@sha256:5b06f58b9e67d7429a4ca5488610501b0ebc5286982c2934183d27543ebd1ccb
@@ -151,7 +160,7 @@ NAS=/mnt/nas/83rr-backup/databases
 if findmnt /mnt/nas >/dev/null && [ -d "$NAS" ]; then
   (cd "$BK" && sha256sum seafile-3db.sql.gz seafile-conf.tgz > SHA256SUMS)
   for f in seafile-3db.sql.gz seafile-conf.tgz; do cp "$BK/$f" "$NAS/pre-seafile-13.0.29-${BK##*-}-$f"; done
-  (cd "$BK" && sed "s#  #  $NAS/pre-seafile-13.0.29-${BK##*-}-#" SHA256SUMS | sha256sum -c) && echo "OK NAS copy"
+  (cd "$BK" && sed "s#  #  $NAS/pre-seafile-13.0.29-${BK##*-}-#" SHA256SUMS | sha256sum -c) && echo "OK NAS copy" || echo "!! NAS copy checksum mismatch"
 else
   echo "!! NAS NOT MOUNTED: no off-host copy. Stop and fix the mount (or get Mark's OK to continue with the local copy only)"
 fi
@@ -219,7 +228,7 @@ docker logs --since "$T0" seafile-notification 2>&1 | grep -iE 'error|fatal|fail
 # 4c. Did anything touch the DB? (expected: no)
 q "$SCHEMA_SQL" | diff - "$BK/schema.txt" && echo "OK schema unchanged" || echo "!! SCHEMA CHANGED: a migration ran; a rollback must include 6b"
 q "$MIGR_SQL" | diff - "$BK/migrations.txt" && echo "OK no new Django migrations" || echo "!! NEW MIGRATIONS: a rollback must include 6b"
-q "$COUNT_SQL" | diff - "$BK/baseline.txt" && echo "OK counts match"      # differs only if someone created a library meanwhile
+q "$COUNT_SQL" | diff - "$BK/baseline.txt" && echo "OK counts match" || echo "!! counts differ: fine only if someone created a library meanwhile"
 # 4d. Logs clean: seahub lines written since step 3, plus the other server logs
 docker exec seafile sh -c "tail -n +$((SEAHUB_LINES+1)) /shared/seafile/logs/seahub.log" | grep -iE 'error|traceback|critical' | tail -10   # nothing
 docker exec seafile sh -c 'grep -hiE "error|traceback|critical" /shared/seafile/logs/seafile.log /shared/seafile/logs/fileserver.log /shared/seafile/logs/seafevents.log 2>/dev/null' | tail -10   # nothing new (look at timestamps)
@@ -233,7 +242,7 @@ fails and the fix isn't obvious, go to [Rollback](#6-rollback).
 **Optional (Mark, afterwards, not a gate): authenticated library list.** The password is read without echoing:
 
 ```bash
-U=<admin email>; read -rsp 'Seafile password: ' PW; echo
+read -rp 'Seafile admin email: ' U; read -rsp 'Seafile password: ' PW; echo
 TOKEN=$(curl -s -m 10 -d "username=$U" --data-urlencode "password=$PW" https://files.markcheli.com/api2/auth-token/ | jq -r .token); unset PW
 curl -s -m 10 -H "Authorization: Token $TOKEN" https://files.markcheli.com/api2/repos/ | jq -r '.[].name'   # the 3 libraries
 unset TOKEN
@@ -280,15 +289,20 @@ If every line shows `healthy/0 running/0 200 200`, it's done.
 # PRELUDE first
 rb=1
 [ -n "$BK" ] && [ -n "$OLD_SF_ID" ] && [ -n "$OLD_NS_ID" ] || { echo "!! state not loaded: check ~/seafile-13029.state"; rb=0; }
-docker image inspect seafileltd/seafile-mc:13.0.28-rollback >/dev/null 2>&1 || { echo "!! rollback image missing: docker pull seafileltd/seafile-mc:13.0.28@sha256:b0c90832126bf432db908449f1bb450211e6bbf75a2193bab3399e2a9636eccf and tag it"; rb=0; }
-docker image inspect seafileltd/notification-server:13.0.21-rollback >/dev/null 2>&1 || { echo "!! rollback image missing: docker pull seafileltd/notification-server:13.0.21@sha256:1cac4101d0f4527ad08c00b5452ceb05d790db95d6c8ab6bbace82429c1e5217 and tag it"; rb=0; }
+# the tags must exist AND be the real old images (a mis-tag would "roll back" to 13.0.29)
+[ "$(docker image inspect seafileltd/seafile-mc:13.0.28-rollback --format '{{.Id}}' 2>/dev/null)" = sha256:d3b8f07584d05a6cc1443bb86b48f916b452bbd49b0d6fea9f127fcf354bb490 ] || \
+  { echo "!! seafile-mc:13.0.28-rollback missing or wrong: docker pull seafileltd/seafile-mc:13.0.28@sha256:b0c90832126bf432db908449f1bb450211e6bbf75a2193bab3399e2a9636eccf and re-tag it"; rb=0; }
+[ "$(docker image inspect seafileltd/notification-server:13.0.21-rollback --format '{{.Id}}' 2>/dev/null)" = sha256:d756e205de28bcb032bd06f35dbd38e77955a2f95a429fae579917b50d269713 ] || \
+  { echo "!! notification-server:13.0.21-rollback missing or wrong: docker pull seafileltd/notification-server:13.0.21@sha256:1cac4101d0f4527ad08c00b5452ceb05d790db95d6c8ab6bbace82429c1e5217 and re-tag it"; rb=0; }
 zcat "$BK/seafile-3db.sql.gz" 2>/dev/null | tail -1 | grep -q 'Dump completed' || { echo "!! no complete dump in $BK"; rb=0; }
 [ "$rb" = 1 ] && echo GUARDS_OK
 ```
 
 **6a. Image rollback** (the usual case). Compose already honours `SEAFILE_IMAGE` / `SEAFILE_NOTIFICATION_IMAGE`.
 The rollback file sets them, and the PRELUDE keeps loading it, so later `dc` calls don't bring 13.0.29 back
-before main is reverted. On start, 13.0.28 sees the stamp 13.0.29, treats it as a same-major change, and runs
+before main is reverted. **Only shells that ran the PRELUDE see it.** A plain `docker compose up -d`, `make up`
+or any other compose call without the PRELUDE would bring 13.0.29 back. Until main is reverted, run every compose
+command through the PRELUDE (or `. ~/seafile-13029.rollback` first). On start, 13.0.28 sees the stamp 13.0.29, treats it as a same-major change, and runs
 only `minor-upgrade.sh` (symlinks) again, which is harmless.
 
 ```bash
@@ -318,9 +332,9 @@ in between may need their library re-synced.
 dc stop -t 60 seafile-notification seafile
 for d in ccnet_db seafile_db seahub_db; do q "DROP DATABASE IF EXISTS $d"; done
 zcat "$BK/seafile-3db.sql.gz" | docker exec -i seafile-db sh -c 'exec mariadb -uroot -p"$MYSQL_ROOT_PASSWORD"'
-q "$SCHEMA_SQL" | diff - "$BK/schema.txt" && echo "OK schema restored"
-q "$MIGR_SQL" | diff - "$BK/migrations.txt" && echo "OK migrations restored"
-q "$COUNT_SQL" | diff - "$BK/baseline.txt" && echo "OK counts restored"
+q "$SCHEMA_SQL" | diff - "$BK/schema.txt" && echo "OK schema restored" || echo "!! schema differs from the step 2 baseline"
+q "$MIGR_SQL" | diff - "$BK/migrations.txt" && echo "OK migrations restored" || echo "!! migrations differ from the step 2 baseline"
+q "$COUNT_SQL" | diff - "$BK/baseline.txt" && echo "OK counts restored" || echo "!! counts differ from the step 2 baseline"
 dc up -d --no-deps seafile seafile-notification                     # still the -rollback images (PRELUDE loaded the file)
 s=; for i in $(seq 1 60); do s=$(docker inspect seafile --format '{{.State.Health.Status}}'); [ "$s" = healthy ] && break; sleep 5; done
 echo "seafile: $s"
