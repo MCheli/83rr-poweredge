@@ -73,7 +73,7 @@ OSV_ECOSYSTEMS='["Alpine", "Debian", "Ubuntu", "npm", "PyPI", "Go", "Maven", "cr
 # in infrastructure/nginx/conf.d/production.conf, or a port forwarded on the
 # router (minecraft 25565, asa 7777/udp). Keep in sync when that changes.
 INTERNET_PROJECTS=(nginx personal-website flask-api cookbook plex tallied tallied-demo
-    tasks tasks-demo uptime-kuma ntfy seafile minecraft asa)
+    tasks tasks-demo uptime-kuma ntfy seafile seafile-notification minecraft asa)
 POLICY_NAME="alert: KEV, or HIGH/CRITICAL with EPSS >= 0.1 on internet-exposed"
 # Policy CEL (component scope; `vulns` already excludes suppressed findings):
 # any KEV finding, or a HIGH/CRITICAL one with EPSS >= 0.1 in an internet-

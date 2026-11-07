@@ -43,26 +43,26 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch:
     ports:
-      - "9200:9200"  # Direct access to OpenSearch API
-      - "9300:9300"  # OpenSearch cluster communication
+      - "127.0.0.1:9200:9200"  # Direct access to OpenSearch API
+      - "127.0.0.1:9300:9300"  # OpenSearch cluster communication
     volumes:
       - opensearch_data_local:/usr/share/opensearch/data  # Separate volume for local data
 
   opensearch-dashboards:
     ports:
-      - "5601:5601"  # Direct access to dashboards
+      - "127.0.0.1:5601:5601"  # Direct access to dashboards
 
   prometheus:
     ports:
-      - "9090:9090"  # Direct access to Prometheus
+      - "127.0.0.1:9090:9090"  # Direct access to Prometheus
 
   grafana:
     ports:
-      - "3001:3000"  # Direct access to Grafana (avoid conflict with website)
+      - "127.0.0.1:3001:3000"  # Direct access to Grafana (avoid conflict with website)
 
   cadvisor:
     ports:
-      - "8081:8080"  # Direct access to cAdvisor
+      - "127.0.0.1:8081:8080"  # Direct access to cAdvisor
 
   minecraft:
     ports:
