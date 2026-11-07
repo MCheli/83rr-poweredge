@@ -144,8 +144,9 @@ curl -sI https://logs.ops.markcheli.com | head -1
 curl -sI https://opensearch.ops.markcheli.com | head -1
 
 # Test with credentials (should return 200)
-curl -sI -u admin:oKTMhb8B https://dashboard.ops.markcheli.com | head -1
-curl -sI -u admin:oKTMhb8B https://prometheus.ops.markcheli.com | head -1
+# Load OPS_USER / OPS_PASS from the server .env or the password manager first
+curl -sI -u "$OPS_USER:$OPS_PASS" https://dashboard.ops.markcheli.com | head -1
+curl -sI -u "$OPS_USER:$OPS_PASS" https://prometheus.ops.markcheli.com | head -1
 ```
 
 **Credentials**: `admin` / `oKTMhb8B`
@@ -194,7 +195,7 @@ sudo fail2ban-client status sshd
 
 ```bash
 # Check Prometheus targets (with auth)
-curl -s -u admin:oKTMhb8B https://prometheus.ops.markcheli.com/api/v1/targets | \
+curl -s -u "$OPS_USER:$OPS_PASS" https://prometheus.ops.markcheli.com/api/v1/targets | \
   python3 -c "import sys,json; d=json.load(sys.stdin); print('\n'.join([f\"{t['labels']['job']}: {t['health']}\" for t in d['data']['activeTargets']]))"
 ```
 
@@ -213,7 +214,7 @@ curl -s -u admin:oKTMhb8B https://prometheus.ops.markcheli.com/api/v1/targets | 
 docker logs fluent-bit --tail 10
 
 # Check OpenSearch cluster health (with auth)
-curl -s -u admin:oKTMhb8B https://opensearch.ops.markcheli.com/_cluster/health | python3 -m json.tool
+curl -s -u "$OPS_USER:$OPS_PASS" https://opensearch.ops.markcheli.com/_cluster/health | python3 -m json.tool
 ```
 
 ---
