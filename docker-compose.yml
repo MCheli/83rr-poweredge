@@ -267,7 +267,7 @@ services:
   # ARK: Survival Ascended dedicated server (Wine/Proton via mschnitzer image)
   # ═════════════════════════════════════════════════════════════════════════════
   asa:
-    image: mschnitzer/asa-linux-server:1.5.1
+    image: mschnitzer/asa-linux-server:1.5.1@sha256:6a62f7c6eb77ba4b4b79ef6c2981a0bd9fab287e744d9797e66efc762ebb811e
     container_name: asa
     # On boot: render GameUserSettings.ini from template (substituting password env vars),
     # chown to the gameserver UID, then exec the upstream start_server.
@@ -821,10 +821,11 @@ services:
   # message format: infrastructure/opensearch/config/alerting/README.md.
   # ═════════════════════════════════════════════════════════════════════════════
   ntfy:
-    # v2.36.0 (2026-11-01, was v2.11.0 from 2024-05). server.yml needed no
-    # changes. The upgrade migrates cache.db/user.db: to roll back, restore the
-    # ntfy_data tarball (v2.11 can't read the newer schema).
-    image: binwiederhier/ntfy:v2.36.0@sha256:fb48c413eb11d50339962b5d62cddce0f800e7f77c626d638a7c20cb7e9c4465
+    # v2.37.2 (2026-11-07, was v2.36.0). server.yml needed no changes. v2.37
+    # adds an additive user.db table (schema 10 -> 11); v2.36 still runs on it.
+    # The 2026-11-01 v2.11 -> v2.36 upgrade migrated cache.db/user.db: rolling
+    # back past v2.36 means restoring the ntfy_data tarball.
+    image: binwiederhier/ntfy:v2.37.2@sha256:1875ddcf815c8a3c981d6d78c67a93452d0abba79b1ab9520b1f5f5238902bd7
     container_name: ntfy
     command: serve
     restart: unless-stopped

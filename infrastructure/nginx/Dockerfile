@@ -5,7 +5,7 @@
 # CVE-2026-97629 (F5 out-of-band release, 2026-10-14).
 FROM nginx:1.30.6-alpine
 
-# Pick up Alpine security fixes newer than the base image (e.g. brotli-libs
+# Pick up Alpine security fixes newer than the base image (e.g. zlib 1.4-r0, brotli-libs
 # for CVE-2026-111497). Install OpenSSL for certificate generation and
 # envsubst for environment substitution
 RUN apk upgrade --no-cache && apk add --no-cache openssl gettext

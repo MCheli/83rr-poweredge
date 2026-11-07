@@ -9,13 +9,13 @@ services:
       TYPE: "VANILLA"
       MEMORY: "2G"
       SERVER_NAME: "Mark Cheli's Minecraft Server"
-      MOTD: "Welcome to Mark Cheli's Minecraft Server! Password: MarkCheli"
+      MOTD: "Welcome to Mark Cheli's Minecraft Server!"
       DIFFICULTY: "normal"
       MODE: "survival"
       MAX_PLAYERS: "20"
       OVERRIDE_SERVER_PROPERTIES: "true"
       ONLINE_MODE: "true"
-      SERVER_PASSWORD: "MarkCheli"
+      SERVER_PASSWORD: "${MINECRAFT_SERVER_PASSWORD}"
     volumes:
       - minecraft_data:/data
     networks:
