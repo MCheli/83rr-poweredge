@@ -35,7 +35,7 @@ With `BUS_SSH_TARGET` set, these are added (otherwise they don't exist):
 
 | Tool | What it does |
 | --- | --- |
-| `bus_spawn(task, repo or cwd, …)` | Start a Claude Code session on the mini (marked destructive, so claude.ai asks first) |
+| `bus_spawn(task, name, repo or cwd, …)` | Start a Claude Code session on the mini (marked destructive, so claude.ai asks first) |
 | `bus_sessions`, `bus_status`, `bus_logs`, `bus_wait` | See what's running, read output, wait for a report |
 | `bus_send`, `bus_stop` | Message or stop a session (also marked destructive) |
 | `bus_doctor` | Diagnose the bus on the mini |
@@ -52,12 +52,23 @@ so the key can't open a shell, a pty or any forwarding; it can only pass one
 JSON request to the gateway. The mini's host key is pinned here
 (`StrictHostKeyChecking=yes`), so a spoofed host on the LAN gets nothing.
 
-The gateway re-checks every request on the mini, so even a compromised server
-can only use the eight tools above: no `bypassPermissions` (every spawn gets an
-explicit mode, default `default`, which asks Mark before anything not
-pre-allowed), folders inside `~/repos` and `MCheli` repos only, at most three
-sessions running, and nothing while `~/.session-bus/remote-off` exists. It logs
-each call (never task text) to `~/Library/Logs/bus-gateway/audit.jsonl`.
+The gateway is installed root-owned outside `~/repos` and re-checks every
+request on the mini, so even a compromised server can only use the eight tools
+above, and only in ways that leave Mark in control:
+
+- permission modes `default`, `plan` and `dontAsk` only (more is an opt-in on
+  the mini), so no session edits or runs a command his rules don't allow
+  without his approval; never `bypassPermissions`;
+- folders inside `~/repos` only, never `~/repos` itself or the gateway's own
+  repo; `MCheli` repos already cloned there; no cloning from here;
+- status, logs, messages and stops reach only bus sessions in those folders;
+- at most three sessions running, idle ones included;
+- sessions don't get Mark's ssh agent;
+- nothing but `bus_stop` while `~/.session-bus/remote-off` exists.
+
+It logs each call (never task text) to `~/Library/Logs/bus-gateway/audit.jsonl`.
+Calls are kept under Cloudflare's 100 s limit (ssh gives up at 95 s); a spawn
+needs a unique name, so a retry after a timeout can't start a second session.
 
 ## Security model
 
@@ -115,7 +126,9 @@ dates without an offset in `find_files`), `LOG_LEVEL`.
 3. **Signing key:** `openssl rand -hex 32` → `HOMELAB_MCP_JWT_SIGNING_KEY`.
 4. **DNS:** Cloudflare → `mcp.markcheli.com` A `173.48.155.66`, **proxied**
    (the dashboard; `cloudflare_dns_manager.py` creates unproxied records).
-5. **Deploy** (on the server, after the PR is merged and pulled):
+5. **Deploy** (on the server, after the PR is merged and pulled). The service
+   has the compose profile `mcp`, so add `COMPOSE_PROFILES=mcp` to `.env` (keeps
+   it running on later plain `up -d` runs); naming it, as below, also starts it:
    ```bash
    cd ~/83rr-poweredge
    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build homelab-mcp
@@ -130,11 +143,13 @@ dates without an offset in `find_files`), `LOG_LEVEL`.
 7. **Session bus (optional, after 1–6 work):**
    1. On the mini: pull `mac-mini-collector` and run `bus-gateway/scripts/install.sh`
       (expect `socket ok`); turn on System Settings → General → Sharing →
-      Remote Login, allowed for your user only.
+      Remote Login, allowed for your user only; then
+      `sudo bus-gateway/scripts/harden-sshd.sh` (keys only, that user only).
    2. On the server: `ssh-keygen -t ed25519 -N '' -C homelab-mcp -f /tmp/homelab-mcp-bus`,
-      store it in 1Password (vault Agents), put `base64 -w0 /tmp/homelab-mcp-bus`
-      in `.env` as `HOMELAB_MCP_BUS_SSH_KEY_B64`, then `shred -u /tmp/homelab-mcp-bus`
-      after copying the `.pub`.
+      put `base64 -w0 /tmp/homelab-mcp-bus` in `.env` as
+      `HOMELAB_MCP_BUS_SSH_KEY_B64`, then `shred -u /tmp/homelab-mcp-bus` after
+      copying the `.pub`. (No other copy is needed: if `.env` is lost, make a new
+      key and replace the line on the mini.)
    3. On the mini: add the line `install.sh` printed to `~/.ssh/authorized_keys`,
       with this server's LAN IP in `from=` and the `.pub` contents as the key.
    4. Mini's host key → `HOMELAB_MCP_BUS_SSH_HOST_KEY`

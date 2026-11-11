@@ -33,7 +33,7 @@ class BusError(Exception):
 
 class MiniBus:
     def __init__(self, *, target: str, private_key_b64: str, host_key: str, port: int = 22,
-                 timeout: float = 420.0, ssh_bin: str = "ssh", workdir: str | None = None):
+                 timeout: float = 95.0, ssh_bin: str = "ssh", workdir: str | None = None):
         if not TARGET_RE.match(target):
             raise ValueError("BUS_SSH_TARGET must look like user@192.168.1.20")
         host_key = " ".join(host_key.split()[:2])  # drop a trailing comment
@@ -73,6 +73,15 @@ class MiniBus:
             self.target,
         ]
 
+    @staticmethod
+    async def _kill(proc) -> None:
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+        await proc.wait()
+
     async def call(self, tool: str, args: dict, caller: str = ""):
         """Send one request; return the gateway's result or raise BusError with its message."""
         req = json.dumps({"tool": tool, "args": args, "caller": caller}) + "\n"
@@ -86,9 +95,12 @@ class MiniBus:
         try:
             out, err = await asyncio.wait_for(proc.communicate(req.encode()), self.timeout)
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            raise BusError(f"The Mac mini didn't answer within {int(self.timeout)} s.")
+            await self._kill(proc)
+            raise BusError(f"The Mac mini didn't answer within {int(self.timeout)} s. It may still finish; "
+                           "check bus_sessions before retrying.")
+        except asyncio.CancelledError:
+            await self._kill(proc)  # the client went away; don't leave ssh running
+            raise
         line = out.decode(errors="replace").strip().splitlines()[-1:] if out else []
         if not line:
             hint = err.decode(errors="replace").strip().splitlines()[-1:] or [f"ssh exit {proc.returncode}"]

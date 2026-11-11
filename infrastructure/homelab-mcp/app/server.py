@@ -185,14 +185,14 @@ and read_file to read one. Nothing here can change, move or share files.\
 
 BUS_INSTRUCTIONS = """\
  The bus_* tools start and manage Claude Code sessions on Mark's Mac mini, which \
-is on his home network and can reach his repos (~/repos), his server (ssh \
-83rr-poweredge), Home Assistant and his local files. Use them when a task needs \
-something local. Give bus_spawn complete, standalone instructions (the session \
-sees only your task text), then poll bus_wait (45 s per call) or bus_status for \
-its report, and use bus_send for follow-ups. Mark can also open each session from \
-the Claude app (Code tab). Sessions never bypass permission checks, at most three \
-run at once, and they must not merge, deploy or delete unless Mark agreed to it \
-in this chat.\
+is on his home network and works in his repos (~/repos, already cloned there). \
+Use them when a task needs something local. Give bus_spawn a unique name and \
+complete, standalone instructions (the session sees only your task text), then \
+poll bus_wait (30 s per call) or bus_status for its report, and use bus_send for \
+follow-ups. If a call times out, check bus_sessions before retrying. Sessions ask \
+Mark (in the Claude app, Code tab) before edits or commands his rules don't \
+allow, never bypass permission checks, at most three run at once, and they must \
+not merge, deploy or delete unless Mark agreed to it in this chat.\
 """
 
 
@@ -378,35 +378,36 @@ async def bus_doctor(repo: str | None = None) -> dict:
 
 async def bus_spawn(
     task: str,
+    name: str,
     repo: str | None = None,
     cwd: str | None = None,
-    name: str | None = None,
     mode: Literal["background", "remote"] | None = None,
-    permission_mode: Literal["default", "plan", "acceptEdits", "auto", "dontAsk", "manual"] | None = None,
+    permission_mode: Literal["default", "plan", "dontAsk", "acceptEdits", "auto", "manual"] | None = None,
     model: str | None = None,
     isolation: Literal["worktree", "none"] | None = None,
     base: str | None = None,
-    clone_if_missing: bool | None = None,
 ) -> dict:
     """Start a Claude Code session on the Mac mini to carry out a task.
 
     task: complete, standalone instructions (the session sees nothing else).
-    Give one of repo (a repo name under ~/repos such as "83rr-poweredge",
-    cloned from Mark's GitHub if missing) or cwd (a folder inside ~/repos).
+    name: required, unique, lowercase letters, digits and hyphens (max 40). A
+    retry with the same name can't start a second session.
+    Give one of repo (a repo already cloned under ~/repos, such as
+    "83rr-poweredge") or cwd (a folder inside one).
     mode: "background" (default; shows in the Claude app) or "remote" (tmux).
-    permission_mode defaults to "default", which asks Mark before anything that
-    isn't pre-allowed; bypassing permissions isn't possible. At most three
+    permission_mode defaults to "default", which asks Mark before anything his
+    rules don't allow. The Mac mini only accepts default, plan and dontAsk unless
+    Mark enabled more; bypassing permissions isn't possible. At most three
     sessions run at once.
     """
     return await bus_call("bus_spawn", {
         "task": task, "repo": repo, "cwd": cwd, "name": name, "mode": mode, "permission_mode": permission_mode,
-        "model": model, "isolation": isolation, "base": base, "clone_if_missing": clone_if_missing,
-        "parent": "claude.ai"})
+        "model": model, "isolation": isolation, "base": base, "parent": "claude.ai"})
 
 
 async def bus_sessions(all: bool = False, limit: int = 30) -> dict:
-    """List sessions started through the session bus, with state and report status, plus
-    Claude Code's background sessions on the Mac mini. all=true includes stopped ones."""
+    """List sessions started through the session bus in ~/repos on the Mac mini, with state
+    and report status. all=true includes stopped ones."""
     return await bus_call("bus_sessions", {"all": all, "limit": limit})
 
 
@@ -420,15 +421,16 @@ async def bus_logs(target: str, lines: int = 40) -> dict:
     return await bus_call("bus_logs", {"target": target, "lines": lines})
 
 
-async def bus_send(target: str, message: str, wait_seconds: int = 30) -> dict:
+async def bus_send(target: str, message: str, wait_seconds: int = 20) -> dict:
     """Send a follow-up message to a session. A background session continues the same
-    conversation once it's idle (waits up to 30 s). Then call bus_wait with newer_than
+    conversation once it's idle (waits up to 20 s); a stopped one is resumed, which
+    counts toward the three-session limit. Then call bus_wait with newer_than
     set to the time you sent it, to collect the updated report."""
     return await bus_call("bus_send", {"target": target, "message": message, "wait_seconds": wait_seconds})
 
 
-async def bus_wait(target: str, timeout_seconds: int = 45, newer_than: str | None = None) -> dict:
-    """Wait up to 45 s for a session's report (or for it to stop). Call again to keep waiting.
+async def bus_wait(target: str, timeout_seconds: int = 30, newer_than: str | None = None) -> dict:
+    """Wait up to 30 s for a session's report (or for it to stop). Call again to keep waiting.
     newer_than: an ISO time; only a report written after it counts."""
     return await bus_call("bus_wait", {"target": target, "timeout_seconds": timeout_seconds,
                                        "newer_than": newer_than})

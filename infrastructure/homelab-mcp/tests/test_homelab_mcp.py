@@ -7,6 +7,7 @@ Run from infrastructure/homelab-mcp:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -301,8 +302,16 @@ async def test_bus_call_sends_one_request_and_pins_host(ssh, tools):
 
 async def test_spawn_drops_unset_args(ssh, tools):
     ssh.reply({"ok": True, "result": {"name": "x", "state": "running"}})
-    await tools.bus_spawn(task="Check ARK", repo="83rr-poweredge")
-    assert ssh.sent()["args"] == {"task": "Check ARK", "repo": "83rr-poweredge", "parent": "claude.ai"}
+    await tools.bus_spawn(task="Check ARK", name="ark-check", repo="83rr-poweredge")
+    assert ssh.sent()["args"] == {"task": "Check ARK", "name": "ark-check", "repo": "83rr-poweredge",
+                                  "parent": "claude.ai"}
+
+
+async def test_spawn_schema_requires_name_and_has_no_clone(tools):
+    listed = {t.name: t for t in await tools.mcp.list_tools()}
+    params = listed["bus_spawn"].parameters
+    assert "name" in params["required"] and "task" in params["required"]
+    assert "clone_if_missing" not in params["properties"]
 
 
 async def test_gateway_refusal_is_a_tool_error(ssh, tools):
@@ -310,7 +319,7 @@ async def test_gateway_refusal_is_a_tool_error(ssh, tools):
 
     ssh.reply({"ok": False, "error": "3 sessions are already running"})
     with pytest.raises(ToolError, match="already running"):
-        await tools.bus_spawn(task="x", repo="83rr-poweredge")
+        await tools.bus_spawn(task="x", name="x", repo="83rr-poweredge")
 
 
 async def test_unreachable_mini_is_explained(ssh, tools):
@@ -319,6 +328,66 @@ async def test_unreachable_mini_is_explained(ssh, tools):
     (ssh.dir / "reply").write_text("")
     with pytest.raises(ToolError, match="Couldn't reach the Mac mini"):
         await tools.bus_status("x")
+
+
+SLOW_SSH = """#!/bin/sh
+echo $$ > "$1"
+exec sleep 30
+"""
+
+
+@pytest.fixture
+def slow_mini(tmp_path):
+    import bus
+
+    script = tmp_path / "ssh"
+    script.write_text(SLOW_SSH)
+    script.chmod(0o755)
+    pidfile = tmp_path / "pid"
+    mini = bus.MiniBus(target="mark@192.0.2.10", private_key_b64=os.environ["BUS_SSH_KEY_B64"],
+                       host_key=os.environ["BUS_SSH_HOST_KEY"], ssh_bin=str(script), workdir=str(tmp_path / "k"),
+                       timeout=1.0)
+    mini.command = lambda: [str(script), str(pidfile)]
+    return mini, pidfile
+
+
+def _gone(pidfile):
+    pid = int(pidfile.read_text())
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    return False
+
+
+def test_default_timeout_fits_cloudflare():
+    import bus
+    import inspect
+
+    assert inspect.signature(bus.MiniBus).parameters["timeout"].default < 100
+
+
+async def test_timeout_kills_ssh(slow_mini):
+    import bus
+
+    mini, pidfile = slow_mini
+    with pytest.raises(bus.BusError, match="didn't answer"):
+        await mini.call("bus_sessions", {})
+    assert _gone(pidfile)
+
+
+async def test_cancel_kills_ssh(slow_mini):
+    mini, pidfile = slow_mini
+    mini.timeout = 30
+    task = asyncio.ensure_future(mini.call("bus_sessions", {}))
+    for _ in range(50):
+        await asyncio.sleep(0.05)
+        if pidfile.exists() and pidfile.read_text().strip():
+            break
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert _gone(pidfile)
 
 
 @pytest.mark.parametrize("kwargs,match", [

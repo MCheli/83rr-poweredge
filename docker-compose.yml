@@ -1114,6 +1114,9 @@ services:
   # infrastructure/homelab-mcp/README.md
   # ═════════════════════════════════════════════════════════════════════════════
   homelab-mcp:
+    # Only started once COMPOSE_PROFILES=mcp is in .env (or when named explicitly),
+    # so a plain `up -d` on a server that hasn't configured it doesn't crash-loop it.
+    profiles: ["mcp"]
     build:
       context: ./infrastructure/homelab-mcp
     image: homelab-mcp:local
