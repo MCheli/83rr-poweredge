@@ -135,6 +135,7 @@ docker compose down -v
 23. **openclaw** - Self-hosted agent/automation runtime (image `ghcr.io/openclaw/openclaw`, pinned by digest in `infrastructure/openclaw/docker-compose.yml`), on `openclaw-net` (egress) plus the internal `openclaw_nginx-openclaw` network; runtime data (secrets, credentials, workspace, agent state) under `infrastructure/openclaw/` (gitignored). Only the Discord channel is in use; the control UI is proxied by the main nginx at https://openclaw.ops.markcheli.com (LAN-only, :443 only — the old :80 ESP32 WebSocket path was removed 2026-11-01).
 25. **ntfy** - Push notifications for homelab alerts (ntfy.markcheli.com, deny-all auth). OpenSearch alerting + Uptime Kuma publish to topic `homelab`; replaced SendGrid 2026-10-31. Setup: `infrastructure/opensearch/config/alerting/README.md`
 26. **deptrack-apiserver / deptrack-frontend / deptrack-db** - OWASP Dependency-Track v5 (LAN-only, deptrack.ops.markcheli.com): CVE tracking of every running container's SBOM. `scripts/sbom-scan.sh` (Syft, cron 03:30) uploads nightly; new HIGH/CRITICAL findings go to ntfy. Images pinned by digest, not watchtower-managed. Docs + runbook: `docs/dependency-track.md`
+27. **homelab-mcp** - Read-only claude.ai connector (remote MCP server) for the Seafile "AI Context" library, built locally from `infrastructure/homelab-mcp` (not GHCR, not watchtower-managed). Google OAuth sign-in limited to `HOMELAB_MCP_ALLOWED_EMAILS`; Seafile access via a read-only library token (startup refuses an rw token). Edge-routed at https://mcp.markcheli.com (MCP endpoint `/mcp`). Docs: `infrastructure/homelab-mcp/README.md`
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -159,6 +160,7 @@ Each service can use `.env` files from its infrastructure directory:
 - **https://home.markcheli.com** - Home Assistant smart home platform
 - **https://money.markcheli.com** - Tallied personal finance dashboard (Google SSO)
 - **https://tasks.markcheli.com** - Tasks cycle-based todo app (Google SSO)
+- **https://mcp.markcheli.com/mcp** - homelab-mcp claude.ai connector (OAuth required; read-only AI Context library)
 - **https://ntfy.markcheli.com** - ntfy push alerts (deny-all; publish token `NTFY_PUBLISH_TOKEN` in `.env`)
 - **minecraft.markcheli.com:25565** - Minecraft server
 
