@@ -1,13 +1,17 @@
-"""homelab-mcp: a read-only claude.ai connector for Mark's Seafile "AI Context" library.
+"""homelab-mcp: Mark's claude.ai connector for his homelab.
+
+It always offers read-only tools for the Seafile "AI Context" library. When
+BUS_SSH_TARGET is set it also offers session-bus tools that start and manage
+Claude Code sessions on the Mac mini, reached over the LAN by ssh (see bus.py);
+the mini itself is never exposed to the internet.
 
 Auth: claude.ai talks OAuth 2.1 (dynamic client registration + PKCE) to this
 server. FastMCP's GoogleProvider proxies the actual sign-in to Google, and
 AllowlistGoogleProvider below then rejects every token whose verified Google
 email isn't in ALLOWED_EMAILS, so the only person who can use it is Mark.
 
-Tools are read-only: list, find, read and grep files in one library. There is
-no write, delete, share or shell tool, and the Seafile token itself must be a
-read-only library token (checked at startup).
+Seafile tools are read-only: list, find, read and grep files in one library.
+The Seafile token itself must be a read-only library token (checked at startup).
 """
 
 from __future__ import annotations
@@ -18,20 +22,25 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.auth.auth import AccessToken
 from fastmcp.server.auth.providers.google import GoogleProvider
+from fastmcp.server.dependencies import get_access_token
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from bus import BusError, MiniBus
 from seafile import SeafileError, SeafileLibrary, normalize_path
 
 log = logging.getLogger("homelab-mcp")
 
 READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+# Starting, messaging or stopping a session changes things; claude.ai asks before these by default.
+ACTS = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
 
 
 def env(name: str, default: str | None = None, *, required: bool = False) -> str:
@@ -174,7 +183,34 @@ Use find_files to locate files by name or date, search_text to grep contents, \
 and read_file to read one. Nothing here can change, move or share files.\
 """
 
-mcp = FastMCP("homelab", instructions=INSTRUCTIONS, auth=build_auth(), lifespan=lifespan)
+BUS_INSTRUCTIONS = """\
+ The bus_* tools start and manage Claude Code sessions on Mark's Mac mini, which \
+is on his home network and can reach his repos (~/repos), his server (ssh \
+83rr-poweredge), Home Assistant and his local files. Use them when a task needs \
+something local. Give bus_spawn complete, standalone instructions (the session \
+sees only your task text), then poll bus_wait (45 s per call) or bus_status for \
+its report, and use bus_send for follow-ups. Mark can also open each session from \
+the Claude app (Code tab). Sessions never bypass permission checks, at most three \
+run at once, and they must not merge, deploy or delete unless Mark agreed to it \
+in this chat.\
+"""
+
+
+def build_bus() -> MiniBus | None:
+    target = env("BUS_SSH_TARGET")
+    if not target:
+        return None
+    try:
+        return MiniBus(target=target, private_key_b64=env("BUS_SSH_KEY_B64", required=True),
+                       host_key=env("BUS_SSH_HOST_KEY", required=True), port=int(env("BUS_SSH_PORT", "22")))
+    except ValueError as e:
+        sys.exit(f"homelab-mcp: {e}")
+
+
+mini_bus = build_bus()
+
+mcp = FastMCP("homelab", instructions=INSTRUCTIONS + (BUS_INSTRUCTIONS if mini_bus else ""),
+              auth=build_auth(), lifespan=lifespan)
 
 
 @mcp.custom_route("/health", methods=["GET"])
@@ -312,6 +348,103 @@ async def search_text(query: str, path: str = "/", case_sensitive: bool = False,
         "match_limit_reached": len(matches) >= max_matches,
         "matches": matches,
     }
+
+
+# ── session bus on the Mac mini (only when BUS_SSH_TARGET is set) ─────────
+
+
+def caller_email() -> str:
+    tok = get_access_token()
+    return str(((tok.claims or {}).get("email") if tok else "") or "")
+
+
+async def bus_call(tool: str, args: dict):
+    if mini_bus is None:
+        raise ToolError("The Mac mini session bus isn't configured on this server.")
+    try:
+        return await mini_bus.call(tool, {k: v for k, v in args.items() if v is not None}, caller_email())
+    except BusError as e:
+        raise ToolError(str(e)) from e
+
+
+async def bus_doctor(repo: str | None = None) -> dict:
+    """Check the session bus on the Mac mini: Claude Code version and sign-in, repos, settings.
+
+    Pass `repo` (a repo name under ~/repos) to check that folder's workspace
+    trust. Run this first if a spawn fails.
+    """
+    return await bus_call("bus_doctor", {"repo": repo})
+
+
+async def bus_spawn(
+    task: str,
+    repo: str | None = None,
+    cwd: str | None = None,
+    name: str | None = None,
+    mode: Literal["background", "remote"] | None = None,
+    permission_mode: Literal["default", "plan", "acceptEdits", "auto", "dontAsk", "manual"] | None = None,
+    model: str | None = None,
+    isolation: Literal["worktree", "none"] | None = None,
+    base: str | None = None,
+    clone_if_missing: bool | None = None,
+) -> dict:
+    """Start a Claude Code session on the Mac mini to carry out a task.
+
+    task: complete, standalone instructions (the session sees nothing else).
+    Give one of repo (a repo name under ~/repos such as "83rr-poweredge",
+    cloned from Mark's GitHub if missing) or cwd (a folder inside ~/repos).
+    mode: "background" (default; shows in the Claude app) or "remote" (tmux).
+    permission_mode defaults to "default", which asks Mark before anything that
+    isn't pre-allowed; bypassing permissions isn't possible. At most three
+    sessions run at once.
+    """
+    return await bus_call("bus_spawn", {
+        "task": task, "repo": repo, "cwd": cwd, "name": name, "mode": mode, "permission_mode": permission_mode,
+        "model": model, "isolation": isolation, "base": base, "clone_if_missing": clone_if_missing,
+        "parent": "claude.ai"})
+
+
+async def bus_sessions(all: bool = False, limit: int = 30) -> dict:
+    """List sessions started through the session bus, with state and report status, plus
+    Claude Code's background sessions on the Mac mini. all=true includes stopped ones."""
+    return await bus_call("bus_sessions", {"all": all, "limit": limit})
+
+
+async def bus_status(target: str) -> dict:
+    """One session's state and, once written, its final report. target: session name or task id."""
+    return await bus_call("bus_status", {"target": target})
+
+
+async def bus_logs(target: str, lines: int = 40) -> dict:
+    """The recent output of a session on the Mac mini (up to 300 lines)."""
+    return await bus_call("bus_logs", {"target": target, "lines": lines})
+
+
+async def bus_send(target: str, message: str, wait_seconds: int = 30) -> dict:
+    """Send a follow-up message to a session. A background session continues the same
+    conversation once it's idle (waits up to 30 s). Then call bus_wait with newer_than
+    set to the time you sent it, to collect the updated report."""
+    return await bus_call("bus_send", {"target": target, "message": message, "wait_seconds": wait_seconds})
+
+
+async def bus_wait(target: str, timeout_seconds: int = 45, newer_than: str | None = None) -> dict:
+    """Wait up to 45 s for a session's report (or for it to stop). Call again to keep waiting.
+    newer_than: an ISO time; only a report written after it counts."""
+    return await bus_call("bus_wait", {"target": target, "timeout_seconds": timeout_seconds,
+                                       "newer_than": newer_than})
+
+
+async def bus_stop(target: str, remove: bool = False) -> dict:
+    """Stop a session on the Mac mini. Its branch and commits are kept; remove=true also
+    drops it from Claude Code's agent list."""
+    return await bus_call("bus_stop", {"target": target, "remove": remove})
+
+
+BUS_TOOLS = {bus_doctor: READ_ONLY, bus_spawn: ACTS, bus_sessions: READ_ONLY, bus_status: READ_ONLY,
+             bus_logs: READ_ONLY, bus_send: ACTS, bus_wait: READ_ONLY, bus_stop: ACTS}
+if mini_bus is not None:
+    for fn, hints in BUS_TOOLS.items():
+        mcp.tool(fn, annotations=hints)
 
 
 def main() -> None:

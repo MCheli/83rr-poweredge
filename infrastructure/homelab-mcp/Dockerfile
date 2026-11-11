@@ -1,4 +1,4 @@
-# homelab-mcp: read-only claude.ai connector for the Seafile "AI Context" library.
+# homelab-mcp: claude.ai connector (Seafile "AI Context" reader + Mac mini session bus over LAN ssh).
 # Built on the server from this repo (not published to GHCR, not watchtower-managed):
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml build homelab-mcp
 FROM python:3.13-slim
@@ -8,6 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     FASTMCP_HOME=/data
+
+# ssh client only, for the optional session-bus tools (outbound to the Mac mini on the LAN).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-client \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --uid 10001 --home-dir /data --shell /usr/sbin/nologin mcp \
     && mkdir -p /data && chown mcp /data

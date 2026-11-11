@@ -7,8 +7,10 @@ Run from infrastructure/homelab-mcp:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -24,6 +26,10 @@ os.environ.setdefault("GOOGLE_CLIENT_SECRET", "test-secret")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://mcp.example.com")
 os.environ.setdefault("JWT_SIGNING_KEY", "test-signing-key-test-signing-key")
 os.environ.setdefault("SEAFILE_REPO_TOKEN", "test-token")
+FAKE_KEY = b"-----BEGIN OPENSSH PRIVATE KEY-----\nZmFrZQ==\n-----END OPENSSH PRIVATE KEY-----\n"
+os.environ.setdefault("BUS_SSH_TARGET", "mark@192.0.2.10")
+os.environ.setdefault("BUS_SSH_KEY_B64", base64.b64encode(FAKE_KEY).decode())
+os.environ.setdefault("BUS_SSH_HOST_KEY", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeHostKeyFakeHostKeyFakeHostKey mini")
 
 from seafile import SeafileError, SeafileLibrary, normalize_path  # noqa: E402
 
@@ -190,12 +196,18 @@ async def test_missing_file_is_a_tool_error(tools):
         await tools.read_file("/nope.md")
 
 
-async def test_only_read_only_tools_registered(tools):
-    listed = await tools.mcp.list_tools()
-    names = {t.name for t in listed}
-    assert names == {"library_info", "list_directory", "find_files", "read_file", "search_text"}
-    for t in listed:
-        assert t.annotations.read_only_hint is True
+SEAFILE_TOOLS = {"library_info", "list_directory", "find_files", "read_file", "search_text"}
+BUS_TOOLS = {"bus_doctor", "bus_spawn", "bus_sessions", "bus_status", "bus_logs", "bus_send", "bus_wait", "bus_stop"}
+
+
+async def test_registered_tools(tools):
+    listed = {t.name: t for t in await tools.mcp.list_tools()}
+    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS  # never bus_config or bus_setup
+    for name in SEAFILE_TOOLS | {"bus_sessions", "bus_status", "bus_logs", "bus_wait", "bus_doctor"}:
+        assert listed[name].annotations.read_only_hint is True
+    for name in ("bus_spawn", "bus_send", "bus_stop"):
+        assert listed[name].annotations.destructive_hint is True
+    assert "bypassPermissions" not in json.dumps(listed["bus_spawn"].parameters)
 
 
 # ── auth ───────────────────────────────────────────────────────────────────
@@ -240,3 +252,86 @@ async def test_mcp_endpoint_requires_auth(tools):
         meta = await c.get("/.well-known/oauth-authorization-server")
         assert meta.status_code == 200
         assert meta.json()["registration_endpoint"] == "https://mcp.example.com/register"
+
+
+# ── session bus over ssh ───────────────────────────────────────────────────
+
+FAKE_SSH = """#!/bin/sh
+# records argv and stdin, answers like bus-gateway
+printf '%s\\n' "$@" > "$FAKE_SSH_DIR/argv"
+cat > "$FAKE_SSH_DIR/stdin"
+cat "$FAKE_SSH_DIR/reply"
+"""
+
+
+@pytest.fixture
+def ssh(tools, monkeypatch, tmp_path):
+    import bus
+
+    script = tmp_path / "ssh"
+    script.write_text(FAKE_SSH)
+    script.chmod(0o755)
+    monkeypatch.setenv("FAKE_SSH_DIR", str(tmp_path))
+    mini = bus.MiniBus(target="mark@192.0.2.10", private_key_b64=os.environ["BUS_SSH_KEY_B64"],
+                       host_key=os.environ["BUS_SSH_HOST_KEY"], ssh_bin=str(script), workdir=str(tmp_path / "k"))
+    monkeypatch.setattr(tools, "mini_bus", mini)
+    # the fake only sees PATH and HOME, so give it the dir through argv instead
+    real = mini.command
+    monkeypatch.setattr(mini, "command", lambda: ["/usr/bin/env", f"FAKE_SSH_DIR={tmp_path}"] + real())
+
+    def reply(obj):
+        (tmp_path / "reply").write_text(json.dumps(obj) + "\n")
+
+    def sent():
+        return json.loads((tmp_path / "stdin").read_text())
+
+    reply({"ok": True, "result": {"session_bus": []}})
+    return type("S", (), {"reply": staticmethod(reply), "sent": staticmethod(sent), "dir": tmp_path, "mini": mini})
+
+
+async def test_bus_call_sends_one_request_and_pins_host(ssh, tools):
+    out = await tools.bus_sessions()
+    assert out == {"session_bus": []}
+    assert ssh.sent() == {"tool": "bus_sessions", "args": {"all": False, "limit": 30}, "caller": ""}
+    argv = (ssh.dir / "argv").read_text().split("\n")
+    assert "StrictHostKeyChecking=yes" in argv and "BatchMode=yes" in argv and argv[-2] == "mark@192.0.2.10"
+    assert (ssh.mini.known_hosts.read_text().split()[0]) == "192.0.2.10"
+    assert stat.S_IMODE(ssh.mini.key_path.stat().st_mode) == 0o600
+
+
+async def test_spawn_drops_unset_args(ssh, tools):
+    ssh.reply({"ok": True, "result": {"name": "x", "state": "running"}})
+    await tools.bus_spawn(task="Check ARK", repo="83rr-poweredge")
+    assert ssh.sent()["args"] == {"task": "Check ARK", "repo": "83rr-poweredge", "parent": "claude.ai"}
+
+
+async def test_gateway_refusal_is_a_tool_error(ssh, tools):
+    from fastmcp.exceptions import ToolError
+
+    ssh.reply({"ok": False, "error": "3 sessions are already running"})
+    with pytest.raises(ToolError, match="already running"):
+        await tools.bus_spawn(task="x", repo="83rr-poweredge")
+
+
+async def test_unreachable_mini_is_explained(ssh, tools):
+    from fastmcp.exceptions import ToolError
+
+    (ssh.dir / "reply").write_text("")
+    with pytest.raises(ToolError, match="Couldn't reach the Mac mini"):
+        await tools.bus_status("x")
+
+
+@pytest.mark.parametrize("kwargs,match", [
+    ({"target": "mini"}, "user@"),
+    ({"target": "a@b; rm -rf /"}, "user@"),
+    ({"host_key": "not a key"}, "host key"),
+    ({"private_key_b64": "%%%"}, "base64"),
+    ({"private_key_b64": base64.b64encode(b"hello").decode()}, "private key"),
+])
+def test_bus_config_validation(tmp_path, kwargs, match):
+    import bus
+
+    base = dict(target="mark@192.0.2.10", private_key_b64=os.environ["BUS_SSH_KEY_B64"],
+                host_key=os.environ["BUS_SSH_HOST_KEY"], workdir=str(tmp_path))
+    with pytest.raises(ValueError, match=match):
+        bus.MiniBus(**{**base, **kwargs})

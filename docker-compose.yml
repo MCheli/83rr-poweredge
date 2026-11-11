@@ -1102,8 +1102,10 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # homelab-mcp: read-only claude.ai connector (remote MCP server)
-  # Lets Claude list and read the Seafile "AI Context" library from any chat.
+  # homelab-mcp: claude.ai connector (remote MCP server)
+  # Lets Claude list and read the Seafile "AI Context" library from any chat and,
+  # when HOMELAB_MCP_BUS_SSH_TARGET is set, start Claude Code sessions on the Mac
+  # mini over the LAN (ssh to its bus-gateway; the mini has no public port).
   # Sign-in is Google OAuth limited to HOMELAB_MCP_ALLOWED_EMAILS; Seafile access
   # is a read-only token for that one library (startup fails on an rw token).
   # Built locally from infrastructure/homelab-mcp (no GHCR image, so watchtower
@@ -1130,6 +1132,10 @@ services:
       - SEAFILE_URL=http://seafile
       - SEAFILE_PUBLIC_URL=https://files.markcheli.com
       - SEAFILE_HOST_HEADER=files.markcheli.com
+      # Optional Mac mini session bus (empty target = tools not offered)
+      - BUS_SSH_TARGET=${HOMELAB_MCP_BUS_SSH_TARGET:-}
+      - BUS_SSH_KEY_B64=${HOMELAB_MCP_BUS_SSH_KEY_B64:-}
+      - BUS_SSH_HOST_KEY=${HOMELAB_MCP_BUS_SSH_HOST_KEY:-}
     volumes:
       # OAuth client registrations + encrypted upstream tokens (FASTMCP_HOME)
       - homelab_mcp_data:/data

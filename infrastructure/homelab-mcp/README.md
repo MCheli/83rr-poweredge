@@ -1,19 +1,25 @@
 # homelab-mcp
 
-A read-only **claude.ai custom connector** (remote MCP server) that lets Claude
-list and read the Seafile **AI Context** library from any chat, including chats
-that run in Anthropic's cloud and can't see the LAN.
+A **claude.ai custom connector** (remote MCP server) for chats that run in
+Anthropic's cloud and can't see the LAN. It lets Claude:
+
+- list and read the Seafile **AI Context** library (read-only), and
+- optionally, start and manage **Claude Code sessions on the Mac mini** through
+  its session bus, reached over the LAN by ssh. Those sessions do the local
+  work (repos, files, ssh back to this server, Home Assistant). The mini has no
+  public port and no tunnel.
 
 ```
 claude.ai ──HTTPS──▶ Cloudflare ──▶ nginx (mcp.markcheli.com) ──▶ homelab-mcp:8000
                                                                      │  Google OAuth (sign-in)
-                                                                     └─▶ seafile:80 (read-only library token)
+                                                                     ├─▶ seafile:80 (read-only library token)
+                                                                     └─▶ ssh (LAN) ─▶ Mac mini bus-gateway ─▶ session-bus
 ```
 
 ## Tools
 
-All tools are read-only (`readOnlyHint`), and they only see the one library the
-token belongs to.
+The Seafile tools are read-only (`readOnlyHint`), and they only see the one
+library the token belongs to.
 
 | Tool | What it does |
 | --- | --- |
@@ -23,7 +29,35 @@ token belongs to.
 | `read_file(path, offset, max_chars)` | Text file contents, paged; binaries are reported, not returned |
 | `search_text(query, path)` | Grep text files (`.md`, `.txt`, `.json`, …) under a folder |
 
-No write, move, delete, share-link or shell tools exist.
+No write, move, delete or share-link tools exist for Seafile.
+
+With `BUS_SSH_TARGET` set, these are added (otherwise they don't exist):
+
+| Tool | What it does |
+| --- | --- |
+| `bus_spawn(task, repo or cwd, …)` | Start a Claude Code session on the mini (marked destructive, so claude.ai asks first) |
+| `bus_sessions`, `bus_status`, `bus_logs`, `bus_wait` | See what's running, read output, wait for a report |
+| `bus_send`, `bus_stop` | Message or stop a session (also marked destructive) |
+| `bus_doctor` | Diagnose the bus on the mini |
+
+`bus_config` and `bus_setup` are never offered.
+
+## Session bus on the Mac mini
+
+The mini runs **bus-gateway** (private repo `MCheli/mac-mini-collector`,
+`bus-gateway/`): a LaunchAgent that serves the session-bus plugin on a 0600 Unix
+socket. This container connects with a dedicated ed25519 key that the mini's
+`authorized_keys` pins with `from="<this server's LAN IP>",restrict,command="…relay.py"`,
+so the key can't open a shell, a pty or any forwarding; it can only pass one
+JSON request to the gateway. The mini's host key is pinned here
+(`StrictHostKeyChecking=yes`), so a spoofed host on the LAN gets nothing.
+
+The gateway re-checks every request on the mini, so even a compromised server
+can only use the eight tools above: no `bypassPermissions` (every spawn gets an
+explicit mode, default `default`, which asks Mark before anything not
+pre-allowed), folders inside `~/repos` and `MCheli` repos only, at most three
+sessions running, and nothing while `~/.session-bus/remote-off` exists. It logs
+each call (never task text) to `~/Library/Logs/bus-gateway/audit.jsonl`.
 
 ## Security model
 
@@ -56,7 +90,15 @@ Set in the root `.env` (values live in 1Password):
 | `HOMELAB_MCP_JWT_SIGNING_KEY` | `openssl rand -hex 32`; signs the tokens this server hands claude.ai and derives the storage encryption key. Rotating it signs everyone out |
 | `HOMELAB_MCP_SEAFILE_TOKEN` | AI Context library → API Token, permission **Read-Only** |
 
-Optional (container env): `MAX_READ_BYTES` (2 MiB), `SEARCH_MAX_FILES` (400),
+Optional, for the session bus (leave the target empty to turn it off):
+
+| Variable | What |
+| --- | --- |
+| `HOMELAB_MCP_BUS_SSH_TARGET` | `<user>@<mini LAN IP>` |
+| `HOMELAB_MCP_BUS_SSH_KEY_B64` | `base64 -w0` of the dedicated private key; written to the container's tmpfs, mode 0600 |
+| `HOMELAB_MCP_BUS_SSH_HOST_KEY` | the mini's `/etc/ssh/ssh_host_ed25519_key.pub` (`ssh-ed25519 AAAA…`) |
+
+Optional (container env): `BUS_SSH_PORT` (22), `MAX_READ_BYTES` (2 MiB), `SEARCH_MAX_FILES` (400),
 `SEARCH_MAX_FILE_BYTES` (512 KiB), `TZ_NAME` (`America/New_York`, used for
 dates without an offset in `find_files`), `LOG_LEVEL`.
 
@@ -85,6 +127,23 @@ dates without an offset in `find_files`), `LOG_LEVEL`.
 6. **claude.ai:** Settings → Connectors → *Add custom connector* → URL
    `https://mcp.markcheli.com/mcp` → Connect → sign in with your Google account.
 
+7. **Session bus (optional, after 1–6 work):**
+   1. On the mini: pull `mac-mini-collector` and run `bus-gateway/scripts/install.sh`
+      (expect `socket ok`); turn on System Settings → General → Sharing →
+      Remote Login, allowed for your user only.
+   2. On the server: `ssh-keygen -t ed25519 -N '' -C homelab-mcp -f /tmp/homelab-mcp-bus`,
+      store it in 1Password (vault Agents), put `base64 -w0 /tmp/homelab-mcp-bus`
+      in `.env` as `HOMELAB_MCP_BUS_SSH_KEY_B64`, then `shred -u /tmp/homelab-mcp-bus`
+      after copying the `.pub`.
+   3. On the mini: add the line `install.sh` printed to `~/.ssh/authorized_keys`,
+      with this server's LAN IP in `from=` and the `.pub` contents as the key.
+   4. Mini's host key → `HOMELAB_MCP_BUS_SSH_HOST_KEY`
+      (`cat /etc/ssh/ssh_host_ed25519_key.pub` on the mini); the mini's LAN IP →
+      `HOMELAB_MCP_BUS_SSH_TARGET=<user>@<IP>` (give it a DHCP reservation).
+   5. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build homelab-mcp`,
+      then in claude.ai ask for `bus_sessions`. Off switch on the mini:
+      `touch ~/.session-bus/remote-off`.
+
 If claude.ai can't reach it but the curls work from outside, check Cloudflare
 Security → Bots / WAF for challenges on `mcp.markcheli.com` (API clients can't
 pass a browser challenge) and add a skip rule for that host.
@@ -98,4 +157,5 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-Tests run against a fake Seafile and a stubbed Google verifier; no network.
+Tests run against a fake Seafile, a stubbed Google verifier and a fake `ssh`;
+no network.
