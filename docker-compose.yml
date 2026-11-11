@@ -1102,6 +1102,57 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # homelab-mcp: claude.ai connector (remote MCP server)
+  # Lets Claude list and read the Seafile "AI Context" library from any chat and,
+  # when HOMELAB_MCP_BUS_SSH_TARGET is set, start Claude Code sessions on the Mac
+  # mini over the LAN (ssh to its bus-gateway; the mini has no public port).
+  # Sign-in is Google OAuth limited to HOMELAB_MCP_ALLOWED_EMAILS; Seafile access
+  # is a read-only token for that one library (startup fails on an rw token).
+  # Built locally from infrastructure/homelab-mcp (no GHCR image, so watchtower
+  # leaves it alone). HOMELAB_MCP_* use :- (not :?) so a missing value can't
+  # block `up` for every other service; the app itself exits naming what's unset. Edge nginx: mcp.markcheli.com. Docs:
+  # infrastructure/homelab-mcp/README.md
+  # ═════════════════════════════════════════════════════════════════════════════
+  homelab-mcp:
+    # Only started once COMPOSE_PROFILES=mcp is in .env (or when named explicitly),
+    # so a plain `up -d` on a server that hasn't configured it doesn't crash-loop it.
+    profiles: ["mcp"]
+    build:
+      context: ./infrastructure/homelab-mcp
+    image: homelab-mcp:local
+    container_name: homelab-mcp
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      - seafile
+    environment:
+      - PUBLIC_BASE_URL=https://mcp.markcheli.com
+      - ALLOWED_EMAILS=${HOMELAB_MCP_ALLOWED_EMAILS:-}
+      - GOOGLE_CLIENT_ID=${HOMELAB_MCP_GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${HOMELAB_MCP_GOOGLE_CLIENT_SECRET:-}
+      - JWT_SIGNING_KEY=${HOMELAB_MCP_JWT_SIGNING_KEY:-}
+      - SEAFILE_REPO_TOKEN=${HOMELAB_MCP_SEAFILE_TOKEN:-}
+      - SEAFILE_URL=http://seafile
+      - SEAFILE_PUBLIC_URL=https://files.markcheli.com
+      - SEAFILE_HOST_HEADER=files.markcheli.com
+      # Optional Mac mini session bus (empty target = tools not offered)
+      - BUS_SSH_TARGET=${HOMELAB_MCP_BUS_SSH_TARGET:-}
+      - BUS_SSH_KEY_B64=${HOMELAB_MCP_BUS_SSH_KEY_B64:-}
+      - BUS_SSH_HOST_KEY=${HOMELAB_MCP_BUS_SSH_HOST_KEY:-}
+    volumes:
+      # OAuth client registrations + encrypted upstream tokens (FASTMCP_HOME)
+      - homelab_mcp_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Watchtower (Automatic Container Updates)
   # Monitors ghcr.io images and auto-deploys when new versions are pushed
   # ═════════════════════════════════════════════════════════════════════════════
@@ -1175,6 +1226,7 @@ volumes:
   uptime_kuma_data:
   ntfy_data:
   seafile_db:
+  homelab_mcp_data:
   # ASA — Docker-managed (lives on / since steamcmd is fussy about bind mounts)
   asa_server_files:
   asa_steam:
