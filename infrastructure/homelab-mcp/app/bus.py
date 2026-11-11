@@ -113,3 +113,20 @@ class MiniBus:
         if not resp.get("ok"):
             raise BusError(resp.get("error") or "The Mac mini's gateway refused the request.")
         return resp.get("result")
+
+
+if __name__ == "__main__":
+    # Connectivity check from inside the container, without printing any secret:
+    #   docker compose exec -T homelab-mcp python bus.py
+    import sys
+
+    try:
+        mini = MiniBus(target=os.environ.get("BUS_SSH_TARGET", ""),
+                       private_key_b64=os.environ.get("BUS_SSH_KEY_B64", ""),
+                       host_key=os.environ.get("BUS_SSH_HOST_KEY", ""))
+        res = asyncio.run(mini.call("bus_sessions", {}, "connectivity check"))
+    except (ValueError, BusError) as e:
+        print(f"FAIL: {e}")
+        sys.exit(1)
+    rows = res.get("session_bus", []) if isinstance(res, dict) else []
+    print(f"OK: the Mac mini's gateway answered; {len(rows)} session(s) listed")

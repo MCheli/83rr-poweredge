@@ -404,3 +404,43 @@ def test_bus_config_validation(tmp_path, kwargs, match):
                 host_key=os.environ["BUS_SSH_HOST_KEY"], workdir=str(tmp_path))
     with pytest.raises(ValueError, match=match):
         bus.MiniBus(**{**base, **kwargs})
+
+
+# ── deploy helpers ─────────────────────────────────────────────────────────
+
+ENV_SET = Path(__file__).resolve().parent.parent / "scripts" / "env_set.py"
+
+
+def run_env_set(tmp_path, stdin, *args):
+    import subprocess
+
+    return subprocess.run([sys.executable, "-I", str(ENV_SET), "--file", str(tmp_path / ".env"), *args],
+                          input=stdin, capture_output=True, text=True)
+
+
+def test_env_set_replaces_appends_and_never_prints_values(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("A=1\nHOMELAB_MCP_X=old\n# c\nHOMELAB_MCP_X=dup\n")
+    env_file.chmod(0o600)
+    r = run_env_set(tmp_path, "HOMELAB_MCP_X=s3cret-value\nHOMELAB_MCP_KEY=ssh-ed25519 AAAAC3\n")
+    assert r.returncode == 0, r.stderr
+    assert "s3cret" not in r.stdout + r.stderr and "AAAAC3" not in r.stdout
+    assert env_file.read_text() == "A=1\nHOMELAB_MCP_X=s3cret-value\n# c\nHOMELAB_MCP_KEY='ssh-ed25519 AAAAC3'\n"
+    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
+    (backup,) = tmp_path.glob(".env.bak-*")
+    assert "old" in backup.read_text() and stat.S_IMODE(backup.stat().st_mode) == 0o600
+
+
+def test_env_set_if_missing_keeps_existing(tmp_path):
+    (tmp_path / ".env").write_text("K=keep\nE=\n")
+    r = run_env_set(tmp_path, "K=new\nE=filled\n", "--if-missing")
+    assert r.returncode == 0 and (tmp_path / ".env").read_text() == "K=keep\nE=filled\n"
+    assert "K: kept" in r.stdout
+
+
+@pytest.mark.parametrize("stdin", ["lower=x\n", "K=\n", "K=it's\n", "nonsense\n", ""])
+def test_env_set_refuses_bad_input(tmp_path, stdin):
+    (tmp_path / ".env").write_text("A=1\n")
+    r = run_env_set(tmp_path, stdin)
+    assert r.returncode == 2 and (tmp_path / ".env").read_text() == "A=1\n"
+    assert not list(tmp_path.glob(".env.bak-*"))
