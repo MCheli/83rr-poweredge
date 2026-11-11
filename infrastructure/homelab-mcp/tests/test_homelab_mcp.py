@@ -239,4 +239,4 @@ async def test_mcp_endpoint_requires_auth(tools):
         assert "resource_metadata" in r.headers.get("www-authenticate", "")
         meta = await c.get("/.well-known/oauth-authorization-server")
         assert meta.status_code == 200
-        assert meta.json()["registration_endpoint"].startswith("https://mcp.example.com")
+        assert meta.json()["registration_endpoint"] == "https://mcp.example.com/register"
