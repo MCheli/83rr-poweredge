@@ -14,7 +14,8 @@ x-logging: &default-logging
 # energy-monitor) share this pin. Minor bumps within 16.x keep the data
 # directory (no dump/restore); read the "Migration to Version 16.N" section of
 # the release notes first. 16.15: 2026-11-01 (was floating 16-alpine = 16.10).
-x-postgres16-image: &postgres16-image postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+# 16.16: 2026-11-14 (PostgreSQL 12 Nov security release).
+x-postgres16-image: &postgres16-image postgres:16.16-alpine@sha256:0adbf25a9e96d38823bb813f3ac0ed41fadb665c88f1df7fe6dbfb060cbdc106
 
 services:
   # ═════════════════════════════════════════════════════════════════════════════
@@ -905,7 +906,8 @@ services:
   # Docs + first boot: docs/dependency-track.md
   # ═════════════════════════════════════════════════════════════════════════════
   deptrack-db:
-    image: postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    # 17.12: 2026-11-14 (PostgreSQL 12 Nov security release; minor, same data dir).
+    image: postgres:17.12-alpine@sha256:34261f594522cf41dfcb76aefd42b9d201098b0e6b23c9c68733f169e4218b6f
     container_name: deptrack-db
     restart: unless-stopped
     logging: *default-logging
@@ -989,7 +991,9 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
     # Patch bumps within 10.11: docs/seafile-db-mariadb-10.11.19.md
-    image: mariadb:10.11.19@sha256:d769e37960821dfdcf096954f6e7ac89f747e116c1bba98e48edd265dfc7deae
+    # 2026-11-14: same-tag digest refresh (upstream rebuild 2026-11-11 on a
+    # fresh Ubuntu base; same MariaDB 10.11.19).
+    image: mariadb:10.11.19@sha256:7d829180b5b2a9ba74f6242876ab401a0d7dd338a807e522ef92bc9698760f20
     container_name: seafile-db
     restart: unless-stopped
     logging: *default-logging
