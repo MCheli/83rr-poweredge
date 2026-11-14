@@ -238,12 +238,13 @@ services:
   # Minecraft Server
   # ═════════════════════════════════════════════════════════════════════════════
   minecraft:
-    # java25 rebuild of 2026-10-29 (mc-image-helper 1.75.0), pinned by digest
-    # (2026-11-01). It's newer than the last release tag (2026.10.1-java25
-    # @d12aed7e, the rollback), so there's no YYYY.M.P name for it yet. The
-    # image upgrades Paper itself at startup (VERSION=LATEST); this pin only
-    # covers the OS/JRE/tooling layer. Bump to the next YYYY.M.P-java25 release.
-    image: itzg/minecraft-server:java25@sha256:f7f2222512810f0f0e85133913622cf639be77a5dd1d4b11f24ab675da6ba742
+    # java25 rebuild of 2026-11-11 (fresh Ubuntu base for the glibc fix in
+    # USN-9065-1), pinned by digest (2026-11-14). It's newer than the last
+    # release tag (2026.11.0-java25 @8d5080d8, built 2026-11-09, the rollback),
+    # so there's no YYYY.M.P name for it yet. The image upgrades Paper itself
+    # at startup (VERSION=LATEST); this pin only covers the OS/JRE/tooling
+    # layer. Bump to the next YYYY.M.P-java25 release.
+    image: itzg/minecraft-server:java25@sha256:7d4a888284c2f8d468f620f2534de648cb8eacba48df8d4d20b6ad1ef201f3a3
     container_name: minecraft
     restart: unless-stopped
     logging: *default-logging
@@ -334,11 +335,11 @@ services:
   # Monitoring: Grafana (Visualization Dashboards)
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
-    # 13.3.0: latest stable release (Mark asked for latest stable). Covers
-    # CVE-2026-14199 (Auth Proxy session takeover; upstream fixed it in
-    # 13.0.8, and Auth Proxy isn't used here) plus the later 13.x security
-    # fixes. Fallback if a 13.0.x pin is preferred:
-    # 13.0.12@sha256:28476aa8096cd8d0f658a05a443b605fffb450e57f444335216175d604cfd23d.
+    # 13.3.1 (2026-11-14, was 13.3.0): Grafana's 10 Nov security release
+    # (CVE-2026-102589/-106475/-111000/-111024, incl. datasource proxy SSRF).
+    # 13.3.x also covers CVE-2026-14199 (Auth Proxy session takeover; fixed
+    # upstream in 13.0.8, and Auth Proxy isn't used here). Patch bump within
+    # 13.3: no new migration beyond the 13.x one below.
     # Pinned by digest: watchtower only polls ghcr.io, so bump tag and digest
     # together by hand. The first 13.x start runs a ONE-WAY migration
     # of dashboards/folders into unified storage inside grafana.db. Back up
@@ -346,7 +347,7 @@ services:
     # Provisioned dashboards use only timeseries/stat/gauge/bargauge/table
     # panels, so React 19 and the removed Graph UI components don't affect
     # them. No image renderer, CLI calls or command override.
-    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
     container_name: grafana
     restart: unless-stopped
     logging: *default-logging
@@ -794,7 +795,8 @@ services:
     # monitors) and embedded MariaDB; we use neither (http/docker/gamedig
     # monitors on SQLite), and Chromium was most of the image's CVEs. Adding a
     # "Real Browser" monitor later means going back to the full image.
-    image: louislam/uptime-kuma:2.5.9-slim@sha256:c41c46667c116066ad252b4887e1c4c66cca8891ca17f3161c1d16540645d1cc
+    # 2026-11-14: 2.5.11-slim (Node 22.23.5, the 11 Nov Node security release).
+    image: louislam/uptime-kuma:2.5.11-slim@sha256:3c3a54a7338a41129163d933295076424e51b07f861a4cdf96a68b50bdde7a73
     container_name: uptime-kuma
     restart: unless-stopped
     logging: *default-logging
@@ -1005,7 +1007,7 @@ services:
   # seahub_settings.py). 13.0 uses seafile-redis. Remove this service in a
   # follow-up once 13.0 has been stable for two weeks (runbook step 6).
   seafile-memcached:
-    image: memcached:1.6.45@sha256:aea0d81d101a9b64fe30cf2cf2f96144e284f8e9552bb084a03f4e12e9043bab
+    image: memcached:1.6.45@sha256:a395a1bcf5e0e2b0fa4a0142e12b4e24a2320ba4b7c6ffa8655a1a86e8f29dee
     container_name: seafile-memcached
     restart: unless-stopped
     logging: *default-logging
@@ -1014,7 +1016,7 @@ services:
       - infrastructure
 
   seafile-redis:
-    image: redis:7.4.12-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
+    image: redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     container_name: seafile-redis
     restart: unless-stopped
     logging: *default-logging

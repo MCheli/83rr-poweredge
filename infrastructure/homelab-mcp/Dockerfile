@@ -1,7 +1,8 @@
 # homelab-mcp: claude.ai connector (Seafile "AI Context" reader + Mac mini session bus over LAN ssh).
 # Built on the server from this repo (not published to GHCR, not watchtower-managed):
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml build homelab-mcp
-FROM python:3.13-slim
+# Pinned (was floating 3.13-slim); rebuild picks up the current Debian base.
+FROM python:3.13.18-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
