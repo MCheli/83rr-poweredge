@@ -336,7 +336,8 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
     # 13.3.1 (2026-11-14, was 13.3.0): Grafana's 10 Nov security release
-    # (CVE-2026-102589/-106475/-111000/-111024, incl. datasource proxy SSRF).
+    # (CVE-2026-102589/-107509/-110992/-111024/-13721/-14242). -111000 was
+    # already fixed in 13.0.10; -106475 is the Elasticsearch plugin (not used).
     # 13.3.x also covers CVE-2026-14199 (Auth Proxy session takeover; fixed
     # upstream in 13.0.8, and Auth Proxy isn't used here). Patch bump within
     # 13.3: no new migration beyond the 13.x one below.
