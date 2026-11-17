@@ -84,6 +84,10 @@ docker compose logs -f house-transcriber
 
 Startup exits on purpose (and restarts) if the Seafile token is missing, wrong, or read-only.
 
+5. Once it's running, update `05-raw/house-transcripts/README.md` in AI Context: it still says
+   the Mac mini and MLX large-v3; make it the R630, CPU Whisper (the chosen model), and "when
+   the R630 is down" under gaps.
+
 ## Verify
 
 - **Streams:** `docker top house-transcriber | grep -c ffmpeg` → 5, and each ffmpeg command
