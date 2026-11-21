@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 5, 2026
+**Last Updated:** November 21, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -497,6 +497,25 @@ scripts/logq.sh errors 0.25 tasks || echo "new errors after deploy"
 
 **Referenced in:** docs/log-noise-2026-11.md, docs/grafana-sqlite-locked.md
 
+### 14. `cookbook-deploy.sh` 🏗️ DEPLOYMENT
+**Purpose:** By-hand deploy of the Cookbook app and its public demo, with a backup and checks
+**Size:** 2KB
+**Language:** Bash (runs on the server)
+
+**Description:**
+Dumps `cookbook-db` to `~/cookbook-backups/` (skipped on the first deploy), pulls `ghcr.io/mcheli/cookbook:latest`, starts `cookbook-db`/`cookbook` and `cookbook-demo-db`/`cookbook-demo` (migrations run in the entrypoint; the demo reseeds Claudius Banks), waits for both health checks, then checks the public URLs: health, auth config, the public recipe count, and that a write to the demo is refused with 403. Same shape as `tasks-deploy.sh`. Watchtower deploys new images on its own; this is the path with checks.
+
+**Usage:**
+```bash
+ssh 83rr-poweredge 'bash ~/83rr-poweredge/scripts/cookbook-deploy.sh'
+```
+
+**When to Use:**
+- First deploy of Cookbook 2.0, and any deploy you want verified end to end
+- Not needed for routine image updates (Watchtower)
+
+**Referenced in:** github.com/MCheli/cookbook docs/DEPLOYING.md
+
 ---
 
 ## 📁 Directory Structure
@@ -515,6 +534,7 @@ scripts/
 ├── sbom-scan.sh                     # 🔐 Nightly container SBOMs -> Dependency-Track
 ├── install-syft.sh                  # 🔐 Pinned, verified Syft install
 ├── deptrack-setup.sh                # 🏗️ Dependency-Track first boot / config
+├── cookbook-deploy.sh               # 🏗️ Cookbook app + demo deploy with checks
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
 ├── one-time/                        # One-time setup scripts
 │   ├── README.md

@@ -41,7 +41,7 @@ TASKS_DB_PASS="${TASKS_DB_PASSWORD:-}"
 DAILY_KEEP=7
 WEEKLY_KEEP=4
 MONTHLY_KEEP=3
-# Database dumps: newest N compressed dumps kept PER SERVICE (seafile, tallied,
+# Database dumps: newest N compressed dumps kept PER SERVICE (seafile, tallied, cookbook,
 # tasks, energy_monitor, ...). Count-based on purpose: a long run of failed
 # backups can never prune away the last good dumps.
 DB_DUMPS_KEEP_PER_SERVICE=14
@@ -200,6 +200,26 @@ backup_tasks_db() {
     success "Tasks database backed up: ${dump_file}.gz"
 }
 
+# Dump Cookbook PostgreSQL database (recipes, lists, products; users' Anthropic keys are encrypted)
+backup_cookbook_db() {
+    log "Backing up Cookbook database..."
+    local dump_file="${BACKUP_ROOT}/databases/cookbook_${TIMESTAMP}.sql"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would dump Cookbook PostgreSQL to ${dump_file}"
+        return
+    fi
+
+    docker exec cookbook-db pg_dump -U cookbook cookbook \
+        > "${dump_file}" 2>/dev/null || {
+        error "Failed to dump Cookbook database"
+        return 1
+    }
+
+    gzip -f "${dump_file}"
+    success "Cookbook database backed up: ${dump_file}.gz"
+}
+
 # Dump Energy Monitor PostgreSQL database
 backup_energy_monitor_db() {
     log "Backing up Energy Monitor database..."
@@ -262,6 +282,7 @@ backup_docker_volumes() {
         "83rr-poweredge_plex_config"
         "83rr-poweredge_tallied_db_data"
         "83rr-poweredge_tasks_db_data"
+        "83rr-poweredge_cookbook_db_data"
         "83rr-poweredge_energy_monitor_db_data"
         "83rr-poweredge_energy_monitor_data"
         "83rr-poweredge_asa_server_files"
@@ -567,6 +588,7 @@ main() {
     backup_seafile_db        || record_failure "Seafile DB dump"
     backup_tallied_db        || record_failure "Tallied DB dump"
     backup_tasks_db          || record_failure "Tasks DB dump"
+    backup_cookbook_db       || record_failure "Cookbook DB dump"
     backup_energy_monitor_db || record_failure "Energy Monitor DB dump"
     backup_deptrack_db       || record_failure "Dependency-Track DB dump"
 
