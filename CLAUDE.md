@@ -113,7 +113,7 @@ docker compose down -v
 ### Active Services
 1. **nginx** - Reverse proxy and SSL termination
 2. **personal-website** - Nuxt.js personal portfolio (image from ghcr.io/mcheli/personal-website)
-3. **cookbook** - Static recipe website (image from ghcr.io/mcheli/cookbook)
+3. **cookbook** / **cookbook-db** - Cookbook app (FastAPI + Vue, image from ghcr.io/mcheli/cookbook, port 8000): public recipes, Google sign-in for anyone, weekly lists, Whole Foods cart, AI on each user's own Anthropic key (no server AI key). **cookbook-demo** / **cookbook-demo-db**: the read-only public demo (Claudius Banks seed, internal network, explicit env only; cron restarts it nightly). Deploy with checks: `scripts/cookbook-deploy.sh`
 4. **flask-api** - Python Flask REST API (image from ghcr.io/mcheli/flask-api)
 6. **minecraft** - Minecraft Java Edition server
 7. **plex** - Plex Media Server for streaming movies/TV/music
@@ -153,7 +153,8 @@ Each service can use `.env` files from its infrastructure directory:
 
 ### Public Services (HTTPS via Cloudflare)
 - **https://www.markcheli.com** - Personal website
-- **https://cookbook.markcheli.com** - Recipe cookbook (static site)
+- **https://cookbook.markcheli.com** - Cookbook app (public recipes; Google SSO for lists, products, AI)
+- **https://cookbook-demo.markcheli.com** - Cookbook public demo (read-only, made-up data)
 - **https://flask.markcheli.com** - Flask API
 - **https://videos.markcheli.com** - Plex Media Server (streaming movies, TV, music)
 - **https://files.markcheli.com** - Seafile file sync and share
@@ -244,6 +245,7 @@ DNS records can be managed two ways: via the Cloudflare Dashboard (for one-offs 
 - `files.markcheli.com` → A record → `173.48.155.66`
 - `home.markcheli.com` → A record → `173.48.155.66`
 - `tasks.markcheli.com` → A record → `173.48.155.66`
+- `cookbook.markcheli.com`, `cookbook-demo.markcheli.com` → A record → `173.48.155.66`
 - `minecraft.markcheli.com` → A record → `173.48.155.66`
 
 **LAN Services** (DNS-only, not proxied):

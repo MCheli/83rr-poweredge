@@ -41,9 +41,14 @@ class InfrastructureHealthTest:
                 'description': 'Flask API health endpoint'
             },
             'cookbook': {
-                'url': 'https://cookbook.markcheli.com',
-                'expected_content': 'Cookbook',
-                'description': 'Recipe cookbook (static site)'
+                'url': 'https://cookbook.markcheli.com/api/health',
+                'expected_content': 'ok',
+                'description': 'Cookbook app (FastAPI + Vue)'
+            },
+            'cookbook-recipes': {
+                'url': 'https://cookbook.markcheli.com/r/garlic-butter-shrimp',
+                'expected_content': 'application/ld+json',
+                'description': 'Cookbook public recipe page with schema.org data'
             },
             'plex': {
                 # /web is the public login page; "/" returns 401 since
@@ -83,6 +88,11 @@ class InfrastructureHealthTest:
                 'url': 'https://tasks-demo.markcheli.com/api/auth/config',
                 'expected_content': '"demo_mode":true',
                 'description': 'Tasks public demo (read-only, made-up data)'
+            },
+            'cookbook-demo': {
+                'url': 'https://cookbook-demo.markcheli.com/api/auth/config',
+                'expected_content': '"demo_mode":true',
+                'description': 'Cookbook public demo (read-only, made-up data)'
             },
             'uptime-kuma': {
                 # "/" is a deliberate nginx 302 to the public status page.
@@ -165,6 +175,7 @@ class InfrastructureHealthTest:
             'money.markcheli.com',
             'tasks.markcheli.com',
             'tasks-demo.markcheli.com',
+            'cookbook-demo.markcheli.com',
             'status.markcheli.com',
             'minecraft.markcheli.com',
             'dashboard.ops.markcheli.com',
@@ -188,6 +199,9 @@ class InfrastructureHealthTest:
             'flask-api': {'status': 'running', 'health': 'healthy'},
             'personal-website': {'status': 'running', 'health': 'healthy'},
             'cookbook': {'status': 'running', 'health': 'healthy'},
+            'cookbook-db': {'status': 'running', 'health': 'healthy'},
+            'cookbook-demo': {'status': 'running', 'health': 'healthy'},
+            'cookbook-demo-db': {'status': 'running', 'health': 'healthy'},
             'minecraft': {'status': 'running', 'health': 'healthy'},
             'asa': {'status': 'running', 'health': None},
             'plex': {'status': 'running', 'health': 'healthy'},
