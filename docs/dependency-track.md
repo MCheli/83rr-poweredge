@@ -486,7 +486,7 @@ Verify from a LAN machine (e.g. the Mac mini):
 
 ```bash
 curl -sI https://deptrack.ops.markcheli.com/ | head -1          # HTTP/2 200 (frontend)
-curl -s https://deptrack.ops.markcheli.com/api/version          # JSON with "version":"5.2.1"
+curl -s https://deptrack.ops.markcheli.com/api/version          # JSON with "version":"5.2.2"
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Content-Encoding: br' -d x \
   https://deptrack.ops.markcheli.com/api/v1/bom                 # 415
 ```
