@@ -1,9 +1,11 @@
 # NGINX Reverse Proxy for 83RR PowerEdge Infrastructure
 # Supports both development (localhost) and production (domain) routing
 
-# Pinned (was floating nginx:alpine). 1.30.6 fixes CVE-2026-15176 and
-# CVE-2026-97629 (F5 out-of-band release, 2026-10-14).
-FROM nginx:1.30.6-alpine
+# Pinned (was floating nginx:alpine). 1.30.7 (2026-11-21, was 1.30.6) is the
+# 2026-11-18 nginx security release (HTTP/2, HTTP/3, resolver, TLS 1.3 fixes);
+# 1.30.6 already covered CVE-2026-15176 and CVE-2026-97629. Digest-pinned:
+# bump tag and digest together.
+FROM nginx:1.30.7-alpine@sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3
 
 # Pick up Alpine security fixes newer than the base image (e.g. zlib 1.4-r0, brotli-libs
 # for CVE-2026-111497). Install OpenSSL for certificate generation and

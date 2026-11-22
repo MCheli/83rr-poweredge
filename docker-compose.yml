@@ -14,8 +14,9 @@ x-logging: &default-logging
 # energy-monitor) share this pin. Minor bumps within 16.x keep the data
 # directory (no dump/restore); read the "Migration to Version 16.N" section of
 # the release notes first. 16.15: 2026-11-01 (was floating 16-alpine = 16.10).
-# 16.16: 2026-11-14 (PostgreSQL 12 Nov security release).
-x-postgres16-image: &postgres16-image postgres:16.16-alpine@sha256:0adbf25a9e96d38823bb813f3ac0ed41fadb665c88f1df7fe6dbfb060cbdc106
+# 16.16: 2026-11-14 (PostgreSQL 12 Nov security release); digest refreshed
+# 2026-11-21 (upstream Alpine rebuild 2026-11-19, same 16.16).
+x-postgres16-image: &postgres16-image postgres:16.16-alpine@sha256:1d5b02d3a9941fbd52437db4107f8c52d6297dac553ca1e5c299ebb3756b4857
 
 services:
   # ═════════════════════════════════════════════════════════════════════════════
@@ -890,7 +891,8 @@ services:
     # monitors on SQLite), and Chromium was most of the image's CVEs. Adding a
     # "Real Browser" monitor later means going back to the full image.
     # 2026-11-14: 2.5.11-slim (Node 22.23.5, the 11 Nov Node security release).
-    image: louislam/uptime-kuma:2.5.11-slim@sha256:3c3a54a7338a41129163d933295076424e51b07f861a4cdf96a68b50bdde7a73
+    # 2026-11-21: 2.5.12-slim (upstream security fixes; still Node 22.23.5).
+    image: louislam/uptime-kuma:2.5.12-slim@sha256:f2a9bc853deb2a6f37df229649f96d62efc3cb24e38b08eee79234f76613d063
     container_name: uptime-kuma
     restart: unless-stopped
     logging: *default-logging
@@ -1002,7 +1004,8 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   deptrack-db:
     # 17.12: 2026-11-14 (PostgreSQL 12 Nov security release; minor, same data dir).
-    image: postgres:17.12-alpine@sha256:34261f594522cf41dfcb76aefd42b9d201098b0e6b23c9c68733f169e4218b6f
+    # Digest refreshed 2026-11-21 (upstream rebuild 2026-11-19, same 17.12).
+    image: postgres:17.12-alpine@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
     container_name: deptrack-db
     restart: unless-stopped
     logging: *default-logging
@@ -1021,7 +1024,8 @@ services:
       retries: 5
 
   deptrack-apiserver:
-    image: ghcr.io/dependencytrack/apiserver:5.2.1@sha256:a7ce7a42928c6c03e94e8255e2ee871f5268f55b638a69729cae7afc47ef43b8
+    # 5.2.2 (2026-11-21): patch release, keep frontend on the same version.
+    image: ghcr.io/dependencytrack/apiserver:5.2.2@sha256:cd5bed12ff30fd36980dbee2d6c3b177c37b99c63b60f5a5b15fbca0b31d0f38
     container_name: deptrack-apiserver
     restart: unless-stopped
     logging: *default-logging
@@ -1059,7 +1063,8 @@ services:
       start_period: 180s
 
   deptrack-frontend:
-    image: ghcr.io/dependencytrack/frontend:5.2.1@sha256:1c0f63b083af8e89ff4ede5e7ed5cfc4e23ab871fa140ed101e8dc56f53eb51c
+    # 5.2.2: nginx-unprivileged 1.31.9 base (the 18 Nov nginx security release).
+    image: ghcr.io/dependencytrack/frontend:5.2.2@sha256:fd15b6cdc38692518a703eab0ed2867fa34e1276034cbe00773c61a9975cf719
     container_name: deptrack-frontend
     restart: unless-stopped
     logging: *default-logging
@@ -1086,9 +1091,9 @@ services:
   # ═════════════════════════════════════════════════════════════════════════════
   seafile-db:
     # Patch bumps within 10.11: docs/seafile-db-mariadb-10.11.19.md
-    # 2026-11-14: same-tag digest refresh (upstream rebuild 2026-11-11 on a
+    # 2026-11-21: same-tag digest refresh (upstream rebuild 2026-11-20 on a
     # fresh Ubuntu base; same MariaDB 10.11.19).
-    image: mariadb:10.11.19@sha256:7d829180b5b2a9ba74f6242876ab401a0d7dd338a807e522ef92bc9698760f20
+    image: mariadb:10.11.19@sha256:e5fe75b2b9de0eb9f6f9a4d9c97272fb3a7480e389ccd487a786bab2a12cc0d7
     container_name: seafile-db
     restart: unless-stopped
     logging: *default-logging
