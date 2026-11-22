@@ -1257,6 +1257,56 @@ services:
       - infrastructure
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # house-transcriber: speech heard by the 5 indoor UniFi cameras → AI Context
+  # Image published from: github.com/MCheli/house-transcriber (private GHCR package)
+  # ffmpeg pulls each allowlisted camera's RTSPS audio from Protect (UDM SE), Silero
+  # VAD + CPU Whisper transcribe it, lines go to the Seafile "AI Context" library
+  # through a read-write library token. Gated by HA input_boolean.house_transcription
+  # (fails closed). No ports, no nginx route: outbound only. Audio stays in memory;
+  # logs carry counts only, never transcript text. CPU-capped so Plex/Seafile/
+  # OpenSearch keep their headroom. Profile "transcriber": starts only once
+  # COMPOSE_PROFILES includes it. Docs: docs/house-transcriber.md
+  # ═════════════════════════════════════════════════════════════════════════════
+  house-transcriber:
+    profiles: ["transcriber"]
+    image: ghcr.io/mcheli/house-transcriber:latest
+    container_name: house-transcriber
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - seafile
+    environment:
+      - TZ=America/New_York
+      - HA_TOKEN=${HOUSE_TRANSCRIBER_HA_TOKEN:-}
+      - PROTECT_API_KEY=${HOUSE_TRANSCRIBER_PROTECT_API_KEY:-}
+      - SEAFILE_REPO_TOKEN=${HOUSE_TRANSCRIBER_SEAFILE_TOKEN:-}
+      - SEAFILE_URL=http://seafile
+      - SEAFILE_HOST_HEADER=files.markcheli.com
+      - HT_HA_URL=${HOUSE_TRANSCRIBER_HA_URL:-http://192.168.1.121:8123}
+      # Pick from the on-server benchmark (docs/house-transcriber.md)
+      - HT_MODEL=${HOUSE_TRANSCRIBER_MODEL:-large-v3-turbo}
+      - HT_CPU_THREADS=6
+    deploy:
+      resources:
+        limits:
+          cpus: "6"
+          memory: 4g
+    volumes:
+      # Whisper weights (downloaded on first start); no audio is ever written
+      - house_transcriber_models:/models
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - infrastructure
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Watchtower (Automatic Container Updates)
   # Monitors ghcr.io images and auto-deploys when new versions are pushed
   # ═════════════════════════════════════════════════════════════════════════════
@@ -1336,6 +1386,7 @@ volumes:
   ntfy_data:
   seafile_db:
   homelab_mcp_data:
+  house_transcriber_models:
   # ASA — Docker-managed (lives on / since steamcmd is fussy about bind mounts)
   asa_server_files:
   asa_steam:
