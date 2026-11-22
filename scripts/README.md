@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 21, 2026
+**Last Updated:** November 22, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -503,7 +503,7 @@ scripts/logq.sh errors 0.25 tasks || echo "new errors after deploy"
 **Language:** Bash (runs on the server)
 
 **Description:**
-Dumps `cookbook-db` to `~/cookbook-backups/` (skipped on the first deploy), pulls `ghcr.io/mcheli/cookbook:latest`, starts `cookbook-db`/`cookbook` and `cookbook-demo-db`/`cookbook-demo` (migrations run in the entrypoint; the demo reseeds Claudius Banks), waits for both health checks, then checks the public URLs: health, auth config, the public recipe count, and that a write to the demo is refused with 403. Same shape as `tasks-deploy.sh`. Watchtower deploys new images on its own; this is the path with checks.
+Dumps `cookbook-db` to `~/cookbook-backups/` (skipped on the first deploy), pulls `ghcr.io/mcheli/cookbook:latest`, creates `cookbook-db`/`cookbook-demo-db` only if missing (`--no-recreate`: it never restarts or upgrades a database), recreates `cookbook` and `cookbook-demo` with `--no-deps` (migrations run in the entrypoint; the demo reseeds Claudius Banks), waits for both health checks, then checks the public URLs: health, auth config, the public recipe count, and that a write to the demo is refused with 403. Uses `docker-compose.yml` + `docker-compose.prod.yml` explicitly, never the dev override file. Same shape as `tasks-deploy.sh`. Watchtower deploys new images on its own; this is the path with checks.
 
 **Usage:**
 ```bash
