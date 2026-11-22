@@ -3,6 +3,9 @@
 # Watchtower also picks up new images on its own; this is the by-hand path with checks.
 set -euo pipefail
 cd ~/83rr-poweredge
+# Production files only: a plain `docker compose` would also load docker-compose.override.yml
+# (local development), which the runbooks say never to use on the server.
+dc() { docker compose -f docker-compose.yml -f docker-compose.prod.yml "$@"; }
 STAMP=$(date +%F-%H%M)
 mkdir -p ~/cookbook-backups
 
@@ -15,11 +18,13 @@ else
 fi
 
 echo "== pull"
-docker compose pull cookbook cookbook-demo 2>&1 | tail -3
+dc pull cookbook cookbook-demo 2>&1 | tail -3
 
-echo "== restart (migrations run in the entrypoint; the demo also reseeds Claudius)"
-docker compose up -d cookbook-db cookbook 2>&1 | tail -3
-docker compose up -d cookbook-demo-db cookbook-demo 2>&1 | tail -3
+echo "== databases (created if missing, never recreated: Postgres upgrades have their own runbook)"
+dc up -d --no-recreate cookbook-db cookbook-demo-db 2>&1 | tail -3
+
+echo "== restart the apps (migrations run in the entrypoint; the demo also reseeds Claudius)"
+dc up -d --no-deps cookbook cookbook-demo 2>&1 | tail -3
 
 for svc in cookbook cookbook-demo; do
   for i in $(seq 1 40); do
