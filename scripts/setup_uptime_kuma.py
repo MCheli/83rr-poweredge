@@ -85,6 +85,31 @@ LAN_MONITORS = [
 ]
 
 
+def save_status_page(api, slug: str, **kwargs):
+    """Save a status page, working around uptime_kuma_api 1.2.1 on Uptime Kuma 2.x.
+
+    The library's save_status_page reads r2["incident"] from /api/status-page/<slug>,
+    but Kuma 2.x returns "incidents", so it raises KeyError. On that error, build the
+    same payload the library would (config merged with our changes) and save it.
+    """
+    try:
+        return api.save_status_page(slug=slug, **kwargs)
+    except KeyError as e:
+        if e.args != ("incident",):
+            raise
+    import inspect
+    import requests
+
+    r1 = api._call("getStatusPage", slug)
+    r2 = requests.get(f"{api.url}/api/status-page/{slug}", timeout=api.timeout).json()
+    page = {**r1["config"], **r2["config"], "publicGroupList": r2["publicGroupList"]}
+    page.update(kwargs)
+    page["slug"] = slug
+    allowed = set(inspect.signature(api._build_status_page_data).parameters)
+    data = api._build_status_page_data(**{k: v for k, v in page.items() if k in allowed})
+    return api._call("saveStatusPage", data)
+
+
 def main() -> int:
     env = load_env()
     user = env.get("UPTIME_KUMA_ADMIN_USER", "admin")
@@ -302,11 +327,11 @@ def main() -> int:
         ],
     }
     if sp_slug in pages:
-        api.save_status_page(slug=sp_slug, **sp_payload)
+        save_status_page(api, sp_slug, **sp_payload)
         print(f"status page updated: /{sp_slug}")
     else:
         api.add_status_page(sp_slug, sp_payload["title"])
-        api.save_status_page(slug=sp_slug, **sp_payload)
+        save_status_page(api, sp_slug, **sp_payload)
         print(f"status page created: /{sp_slug}")
 
     api.disconnect()
