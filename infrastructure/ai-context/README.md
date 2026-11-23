@@ -163,6 +163,23 @@ dot-paths, gitignored files (the secret-flagged raw dumps) and the configured
 one). Its first run (2026-11-23) uploaded exactly the 2336 notes the
 front-matter normalisation had changed and nothing from `raw/`.
 
+Divergence guard: Seafile is not supposed to be written any more, but an old
+writer (the claude.ai diary skill into `~/Seafile/AI Context`, say) might still
+do it. Before uploading, the script lists every Seafile file under
+`guard_prefixes` (default `/03-diary`) that is missing on this server, or that
+Seafile holds in a version the script did not upload (file id differs from the
+`remote_id` recorded at upload) and with a newer mtime than the local copy, and
+logs `DIVERGED <path>` for it. Such a file is never overwritten and never
+imported: look at the log (`grep DIVERGED /data/ai-context/logs/seafile-backup-push.log`),
+merge by hand through basic-memory, then the next push carries the server copy.
+`--adopt-remote` was run once at deployment to record the ids of the files
+uploaded before the guard existed.
+
+The diary writer's state lives in the vault as notes since the cut-over:
+`03-diary/_state.md` (the old `_state.json` as one fenced JSON block) and
+`03-diary/_runs.md` (the old `_runs.log` lines), both written and read through
+basic-memory; `_state.json` and `_runs.log` stay in place for a roll-back.
+
 The index-copy rsync line that existed during the trial is gone with the copy
 (`state/basic-memory-copy` deleted at the cut-over).
 
