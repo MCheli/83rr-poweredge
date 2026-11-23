@@ -4,8 +4,10 @@ It always offers read-only tools for the Seafile "AI Context" library. When
 BUS_SSH_TARGET is set it also offers session-bus tools that start and manage
 Claude Code sessions on the Mac mini, reached over the LAN by ssh (see bus.py);
 the mini itself is never exposed to the internet. When NOTES_MCP_URL is set it
-also offers read-only notes_* tools forwarded to basic-memory on the internal
-Docker network (see notes.py); basic-memory itself gets no new public URL.
+also offers notes_* tools (search/read, plus notes_write and notes_edit since the
+2026-11-23 AI Context cut-over) forwarded to basic-memory on the internal Docker
+network (see notes.py); basic-memory itself gets no new public URL, so these
+writes sit behind this server's OAuth.
 
 Auth: claude.ai talks OAuth 2.1 (dynamic client registration + PKCE) to this
 server. FastMCP's GoogleProvider proxies the actual sign-in to Google, and
@@ -139,7 +141,7 @@ async def lifespan(_server):
         try:
             upstream = await notes_bridge.probe()
             missing = sorted(set(UPSTREAM_TOOLS) - set(upstream))
-            log.info("Notes tools enabled: basic-memory offers %d tools, %d forwarded read-only%s",
+            log.info("Notes tools enabled: basic-memory offers %d tools, %d forwarded (6 read, write, edit)%s",
                      len(upstream), len(UPSTREAM_TOOLS),
                      f"; MISSING upstream: {', '.join(missing)}" if missing else "")
         except NotesError as e:
@@ -193,7 +195,9 @@ an extended-memory folder about him (01-about-me), his systems and tools \
 (02-systems), his daily diary (03-diary, one Markdown file per day), and raw \
 nightly dumps (05-raw). Start with read_file("/README.md") to learn the layout. \
 Use find_files to locate files by name or date, search_text to grep contents, \
-and read_file to read one. Nothing here can change, move or share files.\
+and read_file to read one. These Seafile tools can't change, move or share \
+files, and since 2026-11-23 Seafile is a backup copy of the notes (up to an \
+hour behind): the notes_* tools below see the main copy.\
 """
 
 BUS_INSTRUCTIONS = """\
@@ -474,8 +478,9 @@ if mini_bus is not None:
     for fn, hints in BUS_TOOLS.items():
         mcp.tool(fn, annotations=hints)
 
-# ── read-only notes via basic-memory (only when NOTES_MCP_URL is set) ─────
-NOTES_TOOLS = register_notes_tools(mcp, notes_bridge)
+# ── notes via basic-memory (only when NOTES_MCP_URL is set): six read tools,
+#    plus notes_write / notes_edit labelled like the acting bus tools ──────────
+NOTES_TOOLS = register_notes_tools(mcp, notes_bridge, acts=ACTS)
 
 
 def main() -> None:
