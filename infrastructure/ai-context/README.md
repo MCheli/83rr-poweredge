@@ -52,7 +52,7 @@ docker compose -f infrastructure/ai-context/docker-compose.yml logs --tail 50 ba
 - Image pinned by digest (1.0.0). It indexes a **disposable copy** of the
   notes vault (`AI_CONTEXT_INDEX_COPY_DIR`, default
   `state/basic-memory-copy`, outside both vaults and outside git) that cron
-  refreshes every 15 minutes with `rsync -a --delete`; the real vault is
+  refreshes every 15 minutes with `rsync -a --update --delete`; the real vault is
   never mounted into the container. Index/config on the host under
   `state/basic-memory`; one project (`main`), MCP server started with
   `--project main`.
@@ -116,11 +116,20 @@ Limits (Sync Plus): 200 MB per file; the vaults here are far below that.
 ```
 */30 * * * * python3 /data/ai-context/bin/seafile-pull.py --config /data/ai-context/pull-config.json >> /data/ai-context/logs/seafile-pull.log 2>&1
 */15 * * * * /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
-*/15 * * * * rsync -a --delete --exclude .git --exclude .obsidian /data/ai-context/notes/ /data/ai-context/state/basic-memory-copy/ >> /data/ai-context/logs/index-copy-sync.log 2>&1
+*/15 * * * * rsync -a --update --delete --exclude .git --exclude .obsidian /data/ai-context/notes/ /data/ai-context/state/basic-memory-copy/ >> /data/ai-context/logs/index-copy-sync.log 2>&1
 ```
 
 The third line keeps basic-memory's disposable index copy current (vault →
-copy only, never back).
+copy only, never back). `--update` matters: basic-memory rewrites the front
+matter of every note it indexes, so the copy's files are *newer* than the
+vault's and a plain `rsync -a` would re-copy all of them every run and
+trigger a full re-index (~15 min of CPU) four times an hour. With `--update`
+those rewritten files are skipped; a real edit in the vault carries a newer
+mtime than the rewrite and still comes across, and deletions still propagate.
+(Edge case: a note whose Seafile mtime is older than the copy's rewrite time,
+e.g. uploaded during the initial index, is skipped until it changes again.
+A `rm -rf` of the copy followed by the rsync and `basic-memory reindex`
+resets everything.)
 
 `seafile-pull.py` fetches only files whose Seafile file id changed, never
 deletes locally, and skips the configured work folders/files. `git-autocommit.sh`
@@ -158,7 +167,7 @@ until `bm_delete` removes it. Writes never reach the vault.
 
 Decision (2026-11-23): basic-memory indexes a **writable, disposable copy**
 of the vault (`AI_CONTEXT_INDEX_COPY_DIR`) that cron refreshes from the vault
-with `rsync -a --delete` every 15 minutes. The index covers every note, the
+with `rsync -a --update --delete` every 15 minutes. The index covers every note, the
 permalink/front-matter rewrites stay in the copy, and the vault, Seafile and
 Obsidian never see them. The copy can be deleted at any time; the next rsync
 and a `basic-memory reindex` rebuild it. The alternatives (adding `permalink:`

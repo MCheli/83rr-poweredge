@@ -21,7 +21,8 @@ services:
   # read-only mount that write fails and the note is skipped). So it never
   # sees the real vault: it indexes a DISPOSABLE COPY of the notes folder
   # (AI_CONTEXT_INDEX_COPY_DIR, under the state dir, outside git) that a
-  # cron rsync refreshes from the vault every 15 minutes with --delete. Its
+  # cron rsync refreshes from the vault every 15 minutes with --update
+  # --delete (--update skips the rewritten, newer files in the copy). Its
   # rewrites, and anything its write tools produce, stay in the copy and are
   # overwritten by the next rsync; the real vault is untouched. One project.
   # No published port and no auth of its own: reached only through nginx at
