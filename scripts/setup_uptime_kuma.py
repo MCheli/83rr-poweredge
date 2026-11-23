@@ -18,7 +18,8 @@ import sys
 import time
 from pathlib import Path
 
-from uptime_kuma_api import UptimeKumaApi, MonitorType, NotificationType
+from uptime_kuma_api import Event, MonitorType, NotificationType, UptimeKumaApi
+from uptime_kuma_api.api import _check_arguments_monitor, _convert_monitor_input
 
 
 def load_env() -> dict:
@@ -100,6 +101,23 @@ def save_status_page(api: UptimeKumaApi, slug: str, publicGroupList: list, **con
     config.update(config_changes)
     icon = config.get("icon") or "/icon.svg"
     return api._call("saveStatusPage", [slug, config, icon, publicGroupList])
+
+
+def add_monitor(api: UptimeKumaApi, **common) -> dict:
+    """Create a monitor on Uptime Kuma 2.x.
+
+    uptime-kuma-api 1.2.1 predates Kuma 2.0's NOT NULL `conditions` column, so
+    api.add_monitor() fails with "SQLITE_CONSTRAINT: NOT NULL constraint failed:
+    monitor.conditions" (2026-11-22, Kuma 2.5.12). This builds and validates the
+    payload exactly as the library does, then adds the empty condition list the
+    Kuma UI sends for a monitor without conditions.
+    """
+    data = api._build_monitor_data(**common)
+    _convert_monitor_input(data)
+    _check_arguments_monitor(data)
+    data["conditions"] = []
+    with api.wait_for_event(Event.MONITOR_LIST):
+        return api._call("add", data)
 
 def main() -> int:
     env = load_env()
@@ -192,7 +210,7 @@ def main() -> int:
             api.edit_monitor(mid, **common)
             print(f"  monitor updated: {name} (id={mid})")
         else:
-            mid = api.add_monitor(**common)["monitorID"]
+            mid = add_monitor(api, **common)["monitorID"]
             print(f"  monitor created: {name} (id={mid})")
         tag_once(name, mid, tag_id)
         return mid
@@ -216,7 +234,7 @@ def main() -> int:
             api.edit_monitor(mid, **common)
             print(f"  monitor updated: {name} (id={mid})")
         else:
-            mid = api.add_monitor(**common)["monitorID"]
+            mid = add_monitor(api, **common)["monitorID"]
             print(f"  monitor created: {name} (id={mid})")
         tag_once(name, mid, tag_id)
         return mid
@@ -242,7 +260,7 @@ def main() -> int:
             api.edit_monitor(mid, **common)
             print(f"  monitor updated: {name} (id={mid})")
         else:
-            mid = api.add_monitor(**common)["monitorID"]
+            mid = add_monitor(api, **common)["monitorID"]
             print(f"  monitor created: {name} (id={mid})")
         tag_once(name, mid, tag_id)
         return mid
