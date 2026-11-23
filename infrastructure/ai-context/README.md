@@ -59,6 +59,9 @@ docker compose -f infrastructure/ai-context/docker-compose.yml logs --tail 50 ba
 - It is the only path for AI writes to the notes (Mark's decision, 2026-11-23):
   `bm_write`/`bm_edit` from a Mac mini session, or `notes_write`/`notes_edit`
   through homelab-mcp from claude.ai. No session edits vault files directly.
+  For scripted calls without an MCP host there is `scripts/ai-context/bm.py`
+  (standard-library MCP client; usage and the `bm_write`/`bm_edit` parameters
+  in `scripts/ai-context/BM-CLIENT.md`).
 - Transport: streamable HTTP, path `/mcp`, no published port, **no auth of its
   own**. Two ways in:
   - homelab-mcp (`infrastructure/homelab-mcp`) over the Docker network
