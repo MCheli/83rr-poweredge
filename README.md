@@ -102,7 +102,8 @@ curl https://flask.markcheli.com/health
 - **OpenSearch Dashboards** - https://logs.ops.markcheli.com
   - Log visualization and search
 - **Daily Report** - https://report.ops.markcheli.com
-  - Thermal-printer report generator (HTML preview + bearer-protected `/trigger`); prints daily at 07:00 ET to LAN printer at 192.168.1.147:9100
+  - Thermal-printer report generator (HTML preview + bearer-protected `/trigger`); prints daily at 05:00 ET to LAN printer at 192.168.1.147:9100
+  - **Scheduled printing paused since 2026-11-23** (printer unplugged): `REPORT_TIMES=` is empty in `docker-compose.yml`, so nothing prints but the preview and `/trigger` keep working. To resume, set `REPORT_TIMES=05:00` again and run `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d daily-report`
 
 **Infrastructure Services:**
 - **NGINX** - Reverse proxy with SSL termination
