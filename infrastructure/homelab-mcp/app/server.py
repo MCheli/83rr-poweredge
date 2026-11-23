@@ -2,8 +2,10 @@
 
 It always offers read-only tools for the Seafile "AI Context" library. When
 BUS_SSH_TARGET is set it also offers session-bus tools that start and manage
-Claude Code sessions on the Mac mini, reached over the LAN by ssh (see bus.py);
-the mini itself is never exposed to the internet. When NOTES_MCP_URL is set it
+Claude Code sessions on the Mac mini, reached over the LAN by ssh (see bus.py),
+and four read-only imessage_* tools answered by the iMessage service on the
+mini over that same link (see imessage.py); the mini itself is never exposed
+to the internet. When NOTES_MCP_URL is set it
 also offers notes_* tools (search/read, plus notes_write and notes_edit since the
 2026-11-23 AI Context cut-over) forwarded to basic-memory on the internal Docker
 network (see notes.py); basic-memory itself gets no new public URL, so these
@@ -38,6 +40,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from bus import BusError, MiniBus
+from imessage import IMESSAGE_INSTRUCTIONS, register_imessage_tools
 from notes import NOTES_INSTRUCTIONS, UPSTREAM_TOOLS, NotesBridge, NotesError, register_notes_tools
 from seafile import SeafileError, SeafileLibrary, normalize_path
 
@@ -238,7 +241,7 @@ def build_notes() -> NotesBridge | None:
 mini_bus = build_bus()
 notes_bridge = build_notes()
 
-mcp = FastMCP("homelab", instructions=INSTRUCTIONS + (BUS_INSTRUCTIONS if mini_bus else "")
+mcp = FastMCP("homelab", instructions=INSTRUCTIONS + (BUS_INSTRUCTIONS + IMESSAGE_INSTRUCTIONS if mini_bus else "")
               + (NOTES_INSTRUCTIONS if notes_bridge else ""), auth=build_auth(), lifespan=lifespan)
 
 
@@ -477,6 +480,9 @@ BUS_TOOLS = {bus_doctor: READ_ONLY, bus_spawn: ACTS, bus_sessions: READ_ONLY, bu
 if mini_bus is not None:
     for fn, hints in BUS_TOOLS.items():
         mcp.tool(fn, annotations=hints)
+
+# ── read-only iMessage tools, answered on the Mac mini over the same ssh link ──
+IMESSAGE_TOOLS = register_imessage_tools(mcp, bus_call if mini_bus is not None else None)
 
 # ── notes via basic-memory (only when NOTES_MCP_URL is set): six read tools,
 #    plus notes_write / notes_edit labelled like the acting bus tools ──────────

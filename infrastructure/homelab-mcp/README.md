@@ -11,14 +11,17 @@ Anthropic's cloud and can't see the LAN. It lets Claude:
 - optionally, start and manage **Claude Code sessions on the Mac mini** through
   its session bus, reached over the LAN by ssh. Those sessions do the local
   work (repos, files, ssh back to this server, Home Assistant). The mini has no
-  public port and no tunnel.
+  public port and no tunnel, and
+- over that same link, read Mark's **iMessages, live and read-only**
+  (`imessage_*` tools, since 2026-11-23), so Claude can spot texts that need him.
 
 ```
 claude.ai ──HTTPS──▶ Cloudflare ──▶ nginx (mcp.markcheli.com) ──▶ homelab-mcp:8000
                                                                      │  Google OAuth (sign-in)
                                                                      ├─▶ seafile:80 (read-only library token)
                                                                      ├─▶ basic-memory:8000/mcp (MCP client, 6 read + write/edit, project pinned)
-                                                                     └─▶ ssh (LAN) ─▶ Mac mini bus-gateway ─▶ session-bus
+                                                                     └─▶ ssh (LAN) ─▶ Mac mini bus-gateway ─┬─▶ session-bus
+                                                                                                           └─▶ iMessage service (0600 socket) ─▶ chat.db, mode=ro
 ```
 
 ## Tools
@@ -78,6 +81,28 @@ With `BUS_SSH_TARGET` set, these are added (otherwise they don't exist):
 
 `bus_config` and `bus_setup` are never offered.
 
+With `BUS_SSH_TARGET` set these four **read-only iMessage tools** are added too
+(`app/imessage.py`). They travel over the same ssh link to bus-gateway, which
+hands them to the iMessage service on the mini; this container never sees
+chat.db, and nothing new listens anywhere. Answers are near-real-time (what
+Messages has right now, seconds old).
+
+| Tool | What it does |
+| --- | --- |
+| `imessage_recent(since, limit)` | Newest messages: time (ISO 8601 with offset, US Eastern), chat, sender (contact name, else number/email; `me` for Mark), `is_from_me`, `is_group`, text |
+| `imessage_search(query, contact, since, limit)` | Case-insensitive text search; `contact` (name, phone or email) limits it to chats that person is in |
+| `imessage_threads(since, limit)` | Chats with recent activity: participants, last message time + preview, `incoming_since_my_last_reply` |
+| `imessage_unanswered(hours, limit)` | Incoming messages (default last 48 h) Mark hasn't followed with a message or tapback in that chat; group chats included and marked |
+
+Guarantees, all enforced on the mini (`mac-mini-collector`, `collector/imessage_service.py`):
+chat.db is opened `file:…?mode=ro` with `PRAGMA query_only` and nothing can be
+sent, replied to, reacted to, marked read or deleted (no AppleScript, no
+Shortcuts); verification codes and one-time passwords are dropped with the
+nightly collector's filter, tapbacks and system rows are skipped; `limit` is
+1–100 (default 25), each text is cut at 1,000 characters and each answer kept
+under 50 KB; inputs are validated and SQL is parameterized; logs on both ends
+carry counts and timings only, never message text, names or handles.
+
 ## Session bus on the Mac mini
 
 The mini runs **bus-gateway** (private repo `MCheli/mac-mini-collector`,
@@ -89,8 +114,8 @@ JSON request to the gateway. The mini's host key is pinned here
 (`StrictHostKeyChecking=yes`), so a spoofed host on the LAN gets nothing.
 
 The gateway is installed root-owned outside `~/repos` and re-checks every
-request on the mini, so even a compromised server can only use the eight tools
-above, and only in ways that leave Mark in control:
+request on the mini, so even a compromised server can only use the eight bus
+tools and four iMessage tools above, and only in ways that leave Mark in control:
 
 - permission modes `default`, `plan` and `dontAsk` only (more is an opt-in on
   the mini), so no session edits or runs a command his rules don't allow
@@ -101,7 +126,11 @@ above, and only in ways that leave Mark in control:
 - at most ten sessions working at once; finished ones (done, blocked, stopped,
   failed, gone, or idle with their report written) don't count;
 - sessions don't get Mark's ssh agent;
-- nothing but `bus_stop` while `~/.session-bus/remote-off` exists.
+- the `imessage_*` tools are forwarded to the iMessage service's own 0600
+  socket (a LaunchAgent under the collector's Full-Disk-Access launcher, so no
+  new grant); the gateway never opens chat.db and the service can only read it;
+- nothing but `bus_stop` while `~/.session-bus/remote-off` exists (the
+  iMessage tools included).
 
 It logs each call (never task text) to `~/Library/Logs/bus-gateway/audit.jsonl`.
 Calls are kept under Cloudflare's 100 s limit (ssh gives up at 95 s); a spawn
@@ -118,6 +147,10 @@ needs a unique name, so a retry after a timeout can't start a second session.
 - **What it can read:** a Seafile *library API token* (scoped to AI Context
   only). The server checks at startup that the token's permission is `r` and
   refuses to start with an `rw` token. The client only sends GET requests.
+- **iMessages:** never on this server. The `imessage_*` tools are plain
+  requests over the pinned ssh link to the mini, where the read-only service
+  answers them (see Tools above). No message text is logged here; the ssh
+  reply is parsed and handed straight back to the caller.
 - **Network:** no published ports. nginx proxies only the MCP and OAuth paths;
   everything else on the host is a 404. Seafile (`http://seafile`) and
   basic-memory (`http://basic-memory:8000/mcp`, which has no auth of its own)

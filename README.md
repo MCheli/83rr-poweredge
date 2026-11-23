@@ -90,6 +90,9 @@ curl https://flask.markcheli.com/health
   - Cycle-based todo app with Google SSO
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
+- **homelab-mcp** - https://mcp.markcheli.com/mcp (claude.ai custom connector, Google OAuth, one allowed account)
+  - Read-only Seafile "AI Context" library, basic-memory notes (read + write/edit), Claude Code sessions on the Mac mini over the LAN (`bus_*`)
+  - **Read-only, live iMessage tools** (`imessage_recent`, `imessage_search`, `imessage_threads`, `imessage_unanswered`, since 2026-11-23): forwarded over the same pinned ssh link to the Mac mini, where a small service under the collector's Full-Disk-Access launcher opens `chat.db` read-only (`mode=ro`) and listens only on a 0600 Unix socket. Nothing can be sent, marked read or deleted; verification codes are dropped; no message text is ever logged. Details: `infrastructure/homelab-mcp/README.md`
 
 **LAN-Only Services** (*.ops.markcheli.com):
 - **Grafana** - https://dashboard.ops.markcheli.com
