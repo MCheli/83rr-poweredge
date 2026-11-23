@@ -3,7 +3,9 @@
 It always offers read-only tools for the Seafile "AI Context" library. When
 BUS_SSH_TARGET is set it also offers session-bus tools that start and manage
 Claude Code sessions on the Mac mini, reached over the LAN by ssh (see bus.py);
-the mini itself is never exposed to the internet.
+the mini itself is never exposed to the internet. When NOTES_MCP_URL is set it
+also offers read-only notes_* tools forwarded to basic-memory on the internal
+Docker network (see notes.py); basic-memory itself gets no new public URL.
 
 Auth: claude.ai talks OAuth 2.1 (dynamic client registration + PKCE) to this
 server. FastMCP's GoogleProvider proxies the actual sign-in to Google, and
@@ -34,6 +36,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from bus import BusError, MiniBus
+from notes import NOTES_INSTRUCTIONS, UPSTREAM_TOOLS, NotesBridge, NotesError, register_notes_tools
 from seafile import SeafileError, SeafileLibrary, normalize_path
 
 log = logging.getLogger("homelab-mcp")
@@ -131,6 +134,16 @@ async def lifespan(_server):
     except SeafileError as e:
         await library.aclose()
         raise RuntimeError(f"homelab-mcp: {e}") from e
+    if notes_bridge is not None:
+        # Best effort: the server starts (and serves Seafile + bus) even when basic-memory is down.
+        try:
+            upstream = await notes_bridge.probe()
+            missing = sorted(set(UPSTREAM_TOOLS) - set(upstream))
+            log.info("Notes tools enabled: basic-memory offers %d tools, %d forwarded read-only%s",
+                     len(upstream), len(UPSTREAM_TOOLS),
+                     f"; MISSING upstream: {', '.join(missing)}" if missing else "")
+        except NotesError as e:
+            log.warning("Notes tools enabled but %s; they will report an error until it is up", e)
     try:
         yield
     finally:
@@ -208,10 +221,21 @@ def build_bus() -> MiniBus | None:
         sys.exit(f"homelab-mcp: {e}")
 
 
-mini_bus = build_bus()
+def build_notes() -> NotesBridge | None:
+    url = env("NOTES_MCP_URL")
+    if not url:
+        return None
+    try:
+        return NotesBridge(url, project=env("NOTES_PROJECT", "main"), timeout=float(env("NOTES_TIMEOUT", "30")))
+    except ValueError as e:
+        sys.exit(f"homelab-mcp: {e}")
 
-mcp = FastMCP("homelab", instructions=INSTRUCTIONS + (BUS_INSTRUCTIONS if mini_bus else ""),
-              auth=build_auth(), lifespan=lifespan)
+
+mini_bus = build_bus()
+notes_bridge = build_notes()
+
+mcp = FastMCP("homelab", instructions=INSTRUCTIONS + (BUS_INSTRUCTIONS if mini_bus else "")
+              + (NOTES_INSTRUCTIONS if notes_bridge else ""), auth=build_auth(), lifespan=lifespan)
 
 
 @mcp.custom_route("/health", methods=["GET"])
@@ -449,6 +473,9 @@ BUS_TOOLS = {bus_doctor: READ_ONLY, bus_spawn: ACTS, bus_sessions: READ_ONLY, bu
 if mini_bus is not None:
     for fn, hints in BUS_TOOLS.items():
         mcp.tool(fn, annotations=hints)
+
+# ── read-only notes via basic-memory (only when NOTES_MCP_URL is set) ─────
+NOTES_TOOLS = register_notes_tools(mcp, notes_bridge)
 
 
 def main() -> None:
