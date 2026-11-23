@@ -31,6 +31,7 @@ FAKE_KEY = b"-----BEGIN OPENSSH PRIVATE KEY-----\nZmFrZQ==\n-----END OPENSSH PRI
 os.environ.setdefault("BUS_SSH_TARGET", "mark@192.0.2.10")
 os.environ.setdefault("BUS_SSH_KEY_B64", base64.b64encode(FAKE_KEY).decode())
 os.environ.setdefault("BUS_SSH_HOST_KEY", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeHostKeyFakeHostKeyFakeHostKey mini")
+os.environ.setdefault("NOTES_MCP_URL", "http://basic-memory.test:8000/mcp")
 
 from seafile import SeafileError, SeafileLibrary, normalize_path  # noqa: E402
 
@@ -199,16 +200,21 @@ async def test_missing_file_is_a_tool_error(tools):
 
 SEAFILE_TOOLS = {"library_info", "list_directory", "find_files", "read_file", "search_text"}
 BUS_TOOLS = {"bus_doctor", "bus_spawn", "bus_sessions", "bus_status", "bus_logs", "bus_send", "bus_wait", "bus_stop"}
+NOTES_TOOLS = {"notes_search", "notes_read", "notes_list", "notes_find", "notes_context", "notes_recent"}
 
 
 async def test_registered_tools(tools):
     listed = {t.name: t for t in await tools.mcp.list_tools()}
-    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS  # never bus_config or bus_setup
-    for name in SEAFILE_TOOLS | {"bus_sessions", "bus_status", "bus_logs", "bus_wait", "bus_doctor"}:
+    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS | NOTES_TOOLS  # never bus_config or bus_setup
+    for name in SEAFILE_TOOLS | NOTES_TOOLS | {"bus_sessions", "bus_status", "bus_logs", "bus_wait", "bus_doctor"}:
         assert listed[name].annotations.read_only_hint is True
     for name in ("bus_spawn", "bus_send", "bus_stop"):
         assert listed[name].annotations.destructive_hint is True
     assert "bypassPermissions" not in json.dumps(listed["bus_spawn"].parameters)
+    for name in listed:
+        assert not any(w in name for w in ("write", "edit", "delete", "move", "create", "bm_"))
+    for name in NOTES_TOOLS:  # callers never pick the project
+        assert not {"project", "projects", "all_projects"} & set(listed[name].parameters["properties"])
 
 
 # ── auth ───────────────────────────────────────────────────────────────────
@@ -404,6 +410,195 @@ def test_bus_config_validation(tmp_path, kwargs, match):
                 host_key=os.environ["BUS_SSH_HOST_KEY"], workdir=str(tmp_path))
     with pytest.raises(ValueError, match=match):
         bus.MiniBus(**{**base, **kwargs})
+
+
+# ── notes via basic-memory (fake in-memory server) ────────────────────────
+
+BM_WRITE_TOOLS = ("bm_write", "bm_edit", "bm_delete", "bm_move")
+
+
+def make_fake_basic_memory(calls: list):
+    """A FastMCP that looks like basic-memory 1.0.0: read tools, write tools, bm_project."""
+    from fastmcp import FastMCP
+    from fastmcp.exceptions import ToolError
+
+    fake = FastMCP("fake-basic-memory")
+
+    def read_tool(tool_name):
+        # Every default is None so that only the arguments actually sent are recorded.
+        async def fn(project: str, query: str | None = None, mode: str | None = None, path: str | None = None,
+                     since: str | None = None, lines: int | None = None, max_matches: int | None = None,
+                     filters: dict | None = None, note_types: list[str] | None = None,
+                     identifier: str | None = None, compact: bool | None = None, page: int | None = None,
+                     page_size: int | None = None, output_format: str | None = None, section: str | None = None,
+                     start_line: int | None = None, end_line: int | None = None, max_tokens: int | None = None,
+                     include_frontmatter: bool | None = None, include_content: bool | None = None,
+                     glob: str | None = None, sort: str | None = None, name: str | None = None,
+                     fields: list[str] | None = None, depth: int | None = None, max_related: int | None = None,
+                     items: list[str] | None = None, command: str | None = None) -> str:
+            received = dict(locals())  # the parameters, plus the closure's own names
+            calls.append((tool_name, {k: v for k, v in received.items()
+                                      if v is not None and k not in ("tool_name", "calls", "ToolError")}))
+            if identifier == "missing.md":
+                raise ToolError("Note not found: missing.md")
+            return f"{tool_name} in {project}: " + (query or identifier or path or command or "")
+        fake.tool(fn, name=tool_name)
+
+    for tool_name in ("bm_search", "bm_read", "bm_list", "bm_find", "bm_context", "bm_project"):
+        read_tool(tool_name)
+
+    def write_tool(tool_name):
+        async def fn(project: str, identifier: str | None = None, content: str | None = None) -> str:
+            calls.append((tool_name, {"project": project}))
+            return "WROTE"
+        fake.tool(fn, name=tool_name)
+
+    for tool_name in BM_WRITE_TOOLS:
+        write_tool(tool_name)
+    return fake
+
+
+@pytest.fixture
+def notes(tools, monkeypatch):
+    calls: list = []
+    fake = make_fake_basic_memory(calls)
+    monkeypatch.setattr(tools.notes_bridge, "target", fake)
+    return type("N", (), {"calls": calls, "fake": fake, "bridge": tools.notes_bridge})
+
+
+def one_call(n):
+    assert len(n.calls) == 1, n.calls
+    return n.calls[0]
+
+
+async def call(server, name, args):
+    """Call a registered tool the way the MCP layer does (schema validation included), minus transport/auth."""
+    res = await server.mcp.call_tool(name, args)
+    return "\n".join(getattr(b, "text", "") for b in res.content)
+
+
+async def test_notes_search_forwards_with_project_pinned(notes, tools):
+    out = await call(tools, "notes_search", {"query": "Mac mini", "lines": 2, "path": "02-systems"})
+    assert out == "bm_search in main: Mac mini"
+    tool, sent = one_call(notes)
+    assert tool == "bm_search"
+    assert sent == {"project": "main", "query": "Mac mini", "lines": 2, "path": "02-systems",
+                    "max_matches": 10, "compact": False, "page": 1, "page_size": 10, "output_format": "text"}
+
+
+async def test_notes_read_and_recent_pin_project_and_command(notes, tools):
+    await call(tools, "notes_read", {"identifier": "02-systems/mac-mini.md", "section": "Agents"})
+    await call(tools, "notes_recent", {"since": "3d"})
+    assert [t for t, _ in notes.calls] == ["bm_read", "bm_project"]
+    assert notes.calls[0][1]["project"] == "main" and notes.calls[0][1]["section"] == "Agents"
+    assert notes.calls[1][1]["command"] == "recent" and notes.calls[1][1]["project"] == "main"
+
+
+@pytest.mark.parametrize("tool", BM_WRITE_TOOLS + ("bm_man", "bm_schema", "nope"))
+async def test_bridge_refuses_tools_off_the_allowlist(notes, tool):
+    from notes import NotesError
+
+    with pytest.raises(NotesError, match="read-only"):
+        await notes.bridge.call(tool, {"content": "x", "identifier": "y"})
+    assert notes.calls == []  # nothing reached basic-memory
+
+
+async def test_bridge_overrides_scope_and_command_arguments(notes):
+    sent = notes.bridge.prepare("bm_search", {"query": "x", "project": "other", "projects": ["a"],
+                                              "all_projects": True, "workspace": "w", "page": None})
+    assert sent == {"query": "x", "project": "main"}
+    sent = notes.bridge.prepare("bm_project", {"command": "create", "name": "evil", "path": "/tmp"})
+    assert sent["command"] == "recent" and sent["project"] == "main"
+    await notes.bridge.call("bm_project", {"command": "create", "name": "evil"})
+    assert one_call(notes)[1]["command"] == "recent"
+
+
+async def test_write_tools_absent_even_though_upstream_has_them(notes, tools):
+    from fastmcp import Client
+    from fastmcp.exceptions import NotFoundError
+
+    async with Client(notes.fake) as c:  # the fake really does offer them
+        assert set(t.name for t in await c.list_tools()) >= set(BM_WRITE_TOOLS)
+    names = {t.name for t in await tools.mcp.list_tools()}
+    assert not names & set(BM_WRITE_TOOLS) and not {n for n in names if n.startswith("bm_")}
+    for name in BM_WRITE_TOOLS:
+        with pytest.raises(NotFoundError, match="Unknown tool"):  # unknown at the MCP layer
+            await tools.mcp.call_tool(name, {"project": "main", "content": "x"})
+    assert notes.calls == []
+
+
+async def test_upstream_tool_error_is_passed_on(notes, tools):
+    from fastmcp.exceptions import ToolError
+
+    with pytest.raises(ToolError, match="Note not found"):
+        await call(tools, "notes_read", {"identifier": "missing.md"})
+
+
+async def test_basic_memory_down_is_a_tool_error_and_seafile_still_works(tools, monkeypatch):
+    from fastmcp.exceptions import ToolError
+
+    monkeypatch.setattr(tools.notes_bridge, "target", "http://127.0.0.1:9/mcp")
+    monkeypatch.setattr(tools.notes_bridge, "timeout", 3.0)
+    with pytest.raises(ToolError, match="isn't reachable"):
+        await call(tools, "notes_search", {"query": "anything"})
+    out = await tools.list_directory("/")
+    assert {e["name"] for e in out["entries"]} == {"03-diary", "05-raw", "README.md"}
+
+
+async def test_startup_probe_never_raises(tools, monkeypatch):
+    from notes import NotesError
+
+    monkeypatch.setattr(tools.notes_bridge, "target", "http://127.0.0.1:9/mcp")
+    with pytest.raises(NotesError, match="isn't reachable"):
+        await tools.notes_bridge.probe()
+    calls: list = []
+    monkeypatch.setattr(tools.notes_bridge, "target", make_fake_basic_memory(calls))
+    assert set(await tools.notes_bridge.probe()) >= set(tools.UPSTREAM_TOOLS)
+
+
+async def test_no_notes_tools_without_url(tools, monkeypatch):
+    from fastmcp import FastMCP
+    from notes import register_notes_tools
+
+    monkeypatch.delenv("NOTES_MCP_URL", raising=False)
+    assert tools.build_notes() is None
+    bare = FastMCP("bare")
+    assert register_notes_tools(bare, None) == []
+    assert await bare.list_tools() == []
+    assert set(register_notes_tools(FastMCP("x"), tools.notes_bridge)) == NOTES_TOOLS
+
+
+@pytest.mark.parametrize("kwargs,match", [
+    ({"target": "basic-memory:8000"}, "http"),
+    ({"timeout": 100}, "Cloudflare"),
+    ({"project": " "}, "PROJECT"),
+])
+def test_notes_config_validation(kwargs, match):
+    from notes import NotesBridge
+
+    with pytest.raises(ValueError, match=match):
+        NotesBridge(**{"target": "http://basic-memory:8000/mcp", **kwargs})
+
+
+def test_notes_default_timeout_fits_cloudflare():
+    import inspect
+
+    from notes import NotesBridge
+
+    assert inspect.signature(NotesBridge).parameters["timeout"].default <= 30
+
+
+def test_render_skips_binary_blocks():
+    from notes import render
+
+    class Img:
+        type = "image"
+
+    class Txt:
+        type = "text"
+        text = "hello"
+
+    assert render([Txt(), Img()]) == "hello\n[image content omitted]"
 
 
 # ── deploy helpers ─────────────────────────────────────────────────────────

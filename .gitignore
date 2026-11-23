@@ -22,6 +22,7 @@ infrastructure/nginx/certs/letsencrypt-*.crt
 
 # Python
 venv/
+.venv/
 *.pyc
 __pycache__/
 .pytest_cache/

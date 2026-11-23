@@ -3,7 +3,10 @@
 A **claude.ai custom connector** (remote MCP server) for chats that run in
 Anthropic's cloud and can't see the LAN. It lets Claude:
 
-- list and read the Seafile **AI Context** library (read-only), and
+- list and read the Seafile **AI Context** library (read-only),
+- search and read the same notes through **basic-memory** (read-only `notes_*`
+  tools forwarded over the internal Docker network; see
+  `infrastructure/ai-context/README.md`), and
 - optionally, start and manage **Claude Code sessions on the Mac mini** through
   its session bus, reached over the LAN by ssh. Those sessions do the local
   work (repos, files, ssh back to this server, Home Assistant). The mini has no
@@ -13,6 +16,7 @@ Anthropic's cloud and can't see the LAN. It lets Claude:
 claude.ai ──HTTPS──▶ Cloudflare ──▶ nginx (mcp.markcheli.com) ──▶ homelab-mcp:8000
                                                                      │  Google OAuth (sign-in)
                                                                      ├─▶ seafile:80 (read-only library token)
+                                                                     ├─▶ basic-memory:8000/mcp (MCP client, 6 read tools, project pinned)
                                                                      └─▶ ssh (LAN) ─▶ Mac mini bus-gateway ─▶ session-bus
 ```
 
@@ -30,6 +34,28 @@ library the token belongs to.
 | `search_text(query, path)` | Grep text files (`.md`, `.txt`, `.json`, …) under a folder |
 
 No write, move, delete or share-link tools exist for Seafile.
+
+With `NOTES_MCP_URL` set (the compose default points at `basic-memory`), these
+read-only tools are added; each one is a fixed-allowlist forward to one
+basic-memory tool (`app/notes.py`), with `project` pinned to `main`:
+
+| Tool | basic-memory tool | What it does |
+| --- | --- | --- |
+| `notes_search(query, mode, path, since, lines, filters, …)` | `bm_search` | Ranked search; `lines` gives grep-like matching lines |
+| `notes_read(identifier, section, start_line, end_line, max_tokens, …)` | `bm_read` | One note, whole or sliced |
+| `notes_list(path, glob, sort, …)` | `bm_list` | One folder |
+| `notes_find(path, name, filters, fields, depth, …)` | `bm_find` | Recursive search by file-name glob or front matter |
+| `notes_context(identifier, depth, since, …)` | `bm_context` | Follow `[[links]]` between notes |
+| `notes_recent(since, items, …)` | `bm_project(command="recent")` | What changed lately |
+
+basic-memory 1.0.0 also offers `bm_write`, `bm_edit`, `bm_delete`, `bm_move`,
+`bm_project` `list`/`create`, `bm_schema` and `bm_man`. None of those is
+reachable through here: the bridge refuses any tool name outside its allowlist
+before sending anything, drops the `project`/`projects`/`all_projects`/`command`
+arguments a caller might pass and sets them itself. Writes get turned on at the
+AI Context cut-over, a later step. If basic-memory is down the `notes_*` tools
+return a clear error and everything else keeps working; calls time out at 30 s.
+Queries, identifiers and note text are never logged.
 
 With `BUS_SSH_TARGET` set, these are added (otherwise they don't exist):
 
@@ -83,8 +109,11 @@ needs a unique name, so a retry after a timeout can't start a second session.
   only). The server checks at startup that the token's permission is `r` and
   refuses to start with an `rw` token. The client only sends GET requests.
 - **Network:** no published ports. nginx proxies only the MCP and OAuth paths;
-  everything else on the host is a 404. Seafile is reached on the internal
-  Docker network (`http://seafile`), never over the internet.
+  everything else on the host is a 404. Seafile (`http://seafile`) and
+  basic-memory (`http://basic-memory:8000/mcp`, which has no auth of its own)
+  are reached on the internal Docker network, never over the internet;
+  basic-memory gets no public URL or port of its own, only the LAN vhost it
+  already had.
 - **Container:** non-root, read-only root filesystem, all capabilities dropped,
   `no-new-privileges`. State (OAuth client registrations, Fernet-encrypted
   upstream tokens) lives in the `homelab_mcp_data` volume.
@@ -110,7 +139,14 @@ Optional, for the session bus (leave the target empty to turn it off):
 | `HOMELAB_MCP_BUS_SSH_KEY_B64` | `base64 -w0` of the dedicated private key; written to the container's tmpfs, mode 0600 |
 | `HOMELAB_MCP_BUS_SSH_HOST_KEY` | the mini's `/etc/ssh/ssh_host_ed25519_key.pub` (`ssh-ed25519 AAAA…`) |
 
-Optional (container env): `BUS_SSH_PORT` (22), `MAX_READ_BYTES` (2 MiB), `SEARCH_MAX_FILES` (400),
+Notes via basic-memory (on by default):
+
+| Variable | What |
+| --- | --- |
+| `HOMELAB_MCP_NOTES_MCP_URL` | basic-memory's MCP endpoint; compose defaults to `http://basic-memory:8000/mcp`. Set it empty in `.env` to leave the `notes_*` tools out |
+
+Optional (container env): `NOTES_PROJECT` (`main`), `NOTES_TIMEOUT` (30 s, must stay under 100),
+`BUS_SSH_PORT` (22), `MAX_READ_BYTES` (2 MiB), `SEARCH_MAX_FILES` (400),
 `SEARCH_MAX_FILE_BYTES` (512 KiB), `TZ_NAME` (`America/New_York`, used for
 dates without an offset in `find_files`), `LOG_LEVEL`.
 
@@ -133,7 +169,7 @@ dates without an offset in `find_files`), `LOG_LEVEL`.
    ```bash
    cd ~/83rr-poweredge
    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build homelab-mcp
-   docker compose logs --tail 30 homelab-mcp     # expect: Connected to Seafile library 'AI Context'
+   docker compose logs --tail 30 homelab-mcp     # expect: Connected to Seafile library 'AI Context' + Notes tools enabled
    docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
    curl -s https://mcp.markcheli.com/.well-known/oauth-protected-resource/mcp   # 200, JSON
    curl -s -o /dev/null -w '%{http_code}\n' -X POST https://mcp.markcheli.com/mcp   # 401
@@ -168,10 +204,11 @@ pass a browser challenge) and add a skip rule for that host.
 
 ```bash
 cd infrastructure/homelab-mcp
-python3 -m venv venv && source venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 pytest -q
 ```
 
-Tests run against a fake Seafile, a stubbed Google verifier and a fake `ssh`;
-no network.
+Tests run against a fake Seafile, a stubbed Google verifier, a fake `ssh` and
+an in-memory fake basic-memory (which does offer write tools, to prove they
+never surface); no network.
