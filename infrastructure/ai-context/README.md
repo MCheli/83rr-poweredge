@@ -70,8 +70,10 @@ docker compose -f infrastructure/ai-context/docker-compose.yml logs --tail 50 ba
   192.168.1.0/24; deny all;`). basic-memory has **no authentication of its
   own**; the OAuth sign-in that protects `mcp.markcheli.com` lives inside
   homelab-mcp's code (FastMCP `GoogleProvider` + email allowlist), so sharing
-  it means new code there. That is cut-over step 3 below; until then this
-  stays LAN-only, reachable from Mac mini sessions but not from claude.ai.
+  it means new code there. That is cut-over step 3 below, already in
+  progress as separate work (basic-memory served through homelab-mcp:
+  read-only search first, writes at the cut-over). This endpoint stays
+  LAN-only, reachable from Mac mini sessions but not from claude.ai.
 - Read-only method: the write tools (`bm_write`, `bm_edit`, `bm_delete`,
   `bm_move`, project create) still exist (1.0.0 has no switch to hide them)
   and they do work on the copy, but the copy is thrown away by the next
@@ -209,9 +211,11 @@ Plan, only after the other open tasks are done:
    rewrite described under "Permalinks" (a `permalink:` line added, YAML
    re-serialised) as a **single git commit**. Then drop the index-copy rsync
    cron line.
-3. Put basic-memory behind homelab-mcp's Google OAuth so its tools appear
-   inside the existing `mcp.markcheli.com` connector for claude.ai, with no
-   new connector to add.
+3. basic-memory served through homelab-mcp (**in progress**, separate work in
+   `infrastructure/homelab-mcp`): read-only search first, writes at the
+   cut-over. Its tools then appear inside the existing `mcp.markcheli.com`
+   connector for claude.ai, behind that connector's Google OAuth, with no new
+   connector to add.
 4. Retire the Seafile "AI Context" library as the store; keep it as an
    archive until a later decision.
 
