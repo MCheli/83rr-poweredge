@@ -581,6 +581,31 @@ python3 scripts/ai-context/seafile-backup-push.py --config /data/ai-context/push
 
 ---
 
+### 18. `ai-context/bm.py` 🔄 BASIC-MEMORY CLIENT
+**Purpose:** Command-line MCP client for basic-memory (the notes vault server), so sessions and scripts can read and write notes without an MCP host
+**Size:** 22KB
+**Language:** Python 3 (standard library only)
+
+**Description:**
+Speaks streamable-HTTP MCP (JSON-RPC over POST, SSE or JSON replies, one session per invocation) to the basic-memory server at `https://memory.ops.markcheli.com/mcp` (`BM_URL` to override, e.g. the container's `http://<ip>:8000/mcp` on the server). Subcommands `tools`, `read`, `search`, `context`, `write`, `edit` map onto the server's `bm_*` tools with their real parameter names (`title`+`directory` or `identifier`, `note_type`, `tags`, `metadata`, `overwrite`, `expected_checksum`; `command` with `append`/`prepend`/`find_replace`/`replace_section`/`insert_before_section`/`insert_after_section`/`set_metadata`), and `call <tool> <json>` reaches any tool. Results are JSON (`--raw` for text). `--transport auto` falls back to the `curl` binary when Python cannot open sockets (the Claude Code sandbox on the Mac mini). Full parameter tables and observed server behaviour (permalink line added, YAML lists re-serialised, final newline dropped, body kept byte for byte): `scripts/ai-context/BM-CLIENT.md`.
+
+**Usage:**
+```bash
+python3 scripts/ai-context/bm.py tools --names
+python3 scripts/ai-context/bm.py read README.md --output-format json
+python3 scripts/ai-context/bm.py write --title "Note Title" --folder some/folder --content-file note.md --output-format json
+python3 scripts/ai-context/bm.py edit some/note.md --operation set_metadata --metadata '{"updated": "2026-11-23"}' --checksum <from read>
+python3 scripts/ai-context/bm.py call bm_man '{"page": "bm_edit"}' --raw
+```
+
+**When to Use:**
+- Any scripted or shell-driven note write (every AI write goes through basic-memory, never the vault files)
+- Checking how the server indexed a note (`context`, `search`) or what a tool accepts (`tools --describe`)
+
+**Referenced in:** infrastructure/ai-context/README.md, scripts/ai-context/BM-CLIENT.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -599,6 +624,7 @@ scripts/
 ├── deptrack-setup.sh                # 🏗️ Dependency-Track first boot / config
 ├── cookbook-deploy.sh               # 🏗️ Cookbook app + demo deploy with checks
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
+├── ai-context/                      # 🔄 Notes vault: bm.py (basic-memory client) + BM-CLIENT.md, git-autocommit.sh, seafile-backup-push.py, seafile-pull.py (retired)
 ├── one-time/                        # One-time setup scripts
 │   ├── README.md
 │   ├── setup_data_disk.sh
