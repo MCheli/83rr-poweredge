@@ -1,0 +1,135 @@
+# AI Context on this server: a plain-Markdown mirror of the Seafile "AI Context"
+# library (kept current by scripts/ai-context/seafile-pull.py, see README.md),
+# basic-memory giving AI assistants read-only MCP access to the notes folder,
+# and Obsidian Sync's official headless client keeping both folders in sync
+# with Obsidian on other devices.
+#
+# Standalone compose file. Paths and ids come from ./.env (gitignored, copy
+# .env.example). Typical commands, from the repo root:
+#   docker compose -f infrastructure/ai-context/docker-compose.yml up -d basic-memory
+#   docker compose -f infrastructure/ai-context/docker-compose.yml --profile obsidian up -d
+#   docker compose -f infrastructure/ai-context/docker-compose.yml run --rm obsidian-sync-notes login
+#
+# The notes folders live OUTSIDE the repo checkout (AI_CONTEXT_*_DIR).
+
+services:
+  # ───────────────────────────────────────────────────────────────────────────
+  # basic-memory: MCP server (streamable HTTP, /mcp) over the notes folder.
+  # Pinned by digest 2026-11-23 (1.0.0, AGPL-3.0). Not watchtower-managed.
+  # The notes are mounted READ-ONLY and the server is limited to one project,
+  # so its write/edit/delete/move tools fail with a filesystem error instead
+  # of touching the vault. basic-memory 1.0.0 has no read-only switch: it
+  # always tries to add a `permalink:` front-matter line to notes that lack
+  # one (ensure_frontmatter_on_sync only controls title/type). On the :ro
+  # mount that write fails and the note is skipped by the indexer, so notes
+  # need a permalink to be searchable here (see README.md, "Permalinks").
+  # No published port and no auth of its own: reached only through nginx at
+  # memory.ops.markcheli.com (LAN-only vhost) on the infrastructure network.
+  # ───────────────────────────────────────────────────────────────────────────
+  basic-memory:
+    image: ghcr.io/basicmachines-co/basic-memory:1.0.0@sha256:cad49f5433bcd8592fea547907a2b967435b3fa60d0f81ebc4d558e2b5cb55a8
+    container_name: basic-memory
+    restart: unless-stopped
+    user: "${AI_CONTEXT_UID:-1000}:${AI_CONTEXT_GID:-1000}"
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - HOME=/state
+      - BASIC_MEMORY_CONFIG_DIR=/state/config
+      - BASIC_MEMORY_HOME=/notes
+      - BASIC_MEMORY_PROJECT_ROOT=/notes
+      - BASIC_MEMORY_DEFAULT_PROJECT=main
+      # Never rewrite notes: no derived title/type front matter, no permalink
+      # rewrites on move, no filename normalisation.
+      - BASIC_MEMORY_ENSURE_FRONTMATTER_ON_SYNC=false
+      - BASIC_MEMORY_UPDATE_PERMALINKS_ON_MOVE=false
+      - BASIC_MEMORY_KEBAB_FILENAMES=false
+      - BASIC_MEMORY_ENABLE_PROJECT_DELETE=false
+      # No self-updates (the image is pinned), no cloud promos/telemetry.
+      - BASIC_MEMORY_AUTO_UPDATE=false
+      - BASIC_MEMORY_NO_PROMOS=1
+      - BASIC_MEMORY_CLOUD_PROMO_OPT_OUT=true
+      - BASIC_MEMORY_LOG_LEVEL=${BASIC_MEMORY_LOG_LEVEL:-INFO}
+    volumes:
+      - ${AI_CONTEXT_NOTES_DIR:?set AI_CONTEXT_NOTES_DIR in infrastructure/ai-context/.env}:/notes:ro
+      # config.json + SQLite index, on the host so it is easy to inspect/back up
+      - ${AI_CONTEXT_STATE_DIR:?set AI_CONTEXT_STATE_DIR in infrastructure/ai-context/.env}/basic-memory:/state
+    tmpfs:
+      - /tmp
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command: ["basic-memory", "mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000", "--path", "/mcp", "--project", "main"]
+    healthcheck:
+      test: ["CMD", "basic-memory", "--version"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+    networks:
+      - infrastructure
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Obsidian Sync headless clients (official, open beta), one per vault.
+  # Profile "obsidian": they only start when asked, after the one-off
+  #   run --rm obsidian-sync-notes login   /   sync-setup ...   (README.md)
+  # Login/session state lives under AI_CONTEXT_STATE_DIR/obsidian-*, the
+  # vault's own sync settings under <vault>/.obsidian (git-ignored there).
+  # ───────────────────────────────────────────────────────────────────────────
+  obsidian-sync-notes:
+    build:
+      context: .
+      dockerfile: Dockerfile.obsidian-headless
+    image: obsidian-headless:local
+    container_name: obsidian-sync-notes
+    restart: unless-stopped
+    profiles: ["obsidian"]
+    environment:
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - ${AI_CONTEXT_NOTES_DIR:?set AI_CONTEXT_NOTES_DIR in infrastructure/ai-context/.env}:/vault
+      - ${AI_CONTEXT_STATE_DIR:?set AI_CONTEXT_STATE_DIR in infrastructure/ai-context/.env}/obsidian-notes:/home/node/.config/obsidian-headless
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  obsidian-sync-raw:
+    build:
+      context: .
+      dockerfile: Dockerfile.obsidian-headless
+    image: obsidian-headless:local
+    container_name: obsidian-sync-raw
+    restart: unless-stopped
+    profiles: ["obsidian"]
+    environment:
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - ${AI_CONTEXT_RAW_DIR:?set AI_CONTEXT_RAW_DIR in infrastructure/ai-context/.env}:/vault
+      - ${AI_CONTEXT_STATE_DIR:?set AI_CONTEXT_STATE_DIR in infrastructure/ai-context/.env}/obsidian-raw:/home/node/.config/obsidian-headless
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  # The main stack's network, where nginx can reach basic-memory by name.
+  infrastructure:
+    external: true
+    name: 83rr-poweredge_infrastructure
