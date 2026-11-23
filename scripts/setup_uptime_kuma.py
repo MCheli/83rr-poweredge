@@ -100,7 +100,9 @@ def save_status_page(api: UptimeKumaApi, slug: str, publicGroupList: list, **con
     config = api._call("getStatusPage", slug)["config"]
     config.update(config_changes)
     icon = config.get("icon") or "/icon.svg"
-    return api._call("saveStatusPage", [slug, config, icon, publicGroupList])
+    # A tuple goes out as four socket.io arguments; a list arrives as a single
+    # array, Kuma logs "No slug?" and never acks (timeout seen 2026-11-22).
+    return api._call("saveStatusPage", (slug, config, icon, publicGroupList))
 
 
 def add_monitor(api: UptimeKumaApi, **common) -> dict:
