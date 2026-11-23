@@ -191,7 +191,8 @@ complete, standalone instructions (the session sees only your task text), then \
 poll bus_wait (30 s per call) or bus_status for its report, and use bus_send for \
 follow-ups. If a call times out, check bus_sessions before retrying. Sessions ask \
 Mark (in the Claude app, Code tab) before edits or commands his rules don't \
-allow, never bypass permission checks, at most three run at once, and they must \
+allow, never bypass permission checks, at most six run at once (finished ones \
+don't count), and they must \
 not merge, deploy or delete unless Mark agreed to it in this chat.\
 """
 
@@ -397,8 +398,9 @@ async def bus_spawn(
     mode: "background" (default; shows in the Claude app) or "remote" (tmux).
     permission_mode defaults to "default", which asks Mark before anything his
     rules don't allow. The Mac mini only accepts default, plan and dontAsk unless
-    Mark enabled more; bypassing permissions isn't possible. At most three
-    sessions run at once.
+    Mark enabled more; bypassing permissions isn't possible. At most six
+    sessions run at once; finished ones (done, stopped, or idle with their
+    report written) don't count.
     """
     return await bus_call("bus_spawn", {
         "task": task, "repo": repo, "cwd": cwd, "name": name, "mode": mode, "permission_mode": permission_mode,
