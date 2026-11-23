@@ -401,7 +401,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "ctx.results[0].aggregations.down.buckets.size() > 0"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && (ctx.results[0].aggregations.down.buckets.size() > 0)"
         }
       },
       "actions": [
@@ -422,7 +422,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "ctx.results[0].aggregations.oom.buckets.size() > 0"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && (ctx.results[0].aggregations.oom.buckets.size() > 0)"
         }
       },
       "actions": [
@@ -447,7 +447,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "ctx.results[0].aggregations.loop.buckets.size() > 0"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && (ctx.results[0].aggregations.loop.buckets.size() > 0)"
         }
       },
       "actions": [

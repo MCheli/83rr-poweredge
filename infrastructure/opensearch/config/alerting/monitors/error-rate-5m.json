@@ -139,6 +139,107 @@
                         }
                       },
                       {
+                        "term": {
+                          "container_name": "plex"
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "node-exporter"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "error encoding and sending metric family"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "wildcard": {
+                                "container_name": "*-db"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "terminating connection due to administrator command"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "opensearch"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "opensearch-performance-analyzer"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "opensearch"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "Failed to get ISM policies"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "grafana"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "Plugin validation failed"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
+                              "term": {
+                                "container_name": "grafana"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "Refusing to initialize plugin because it's using Angular"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
                         "exists": {
                           "field": "event_scope"
                         }
@@ -344,6 +445,107 @@
                           {
                             "match_phrase": {
                               "msg": "Failed to retrieve sample documents"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "term": {
+                        "container_name": "plex"
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "node-exporter"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "error encoding and sending metric family"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "wildcard": {
+                              "container_name": "*-db"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "terminating connection due to administrator command"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "opensearch"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "opensearch-performance-analyzer"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "opensearch"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "Failed to get ISM policies"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "grafana"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "Plugin validation failed"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "container_name": "grafana"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "Refusing to initialize plugin because it's using Angular"
                             }
                           }
                         ]
@@ -607,7 +809,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count > 10) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0)"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ((ctx.results[0].aggregations.p.doc_count > 10) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0))"
         }
       },
       "actions": [
@@ -632,7 +834,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count > 10) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ((ctx.results[0].aggregations.p.doc_count > 10) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0)"
         }
       },
       "actions": [
@@ -653,6 +855,6 @@
     }
   ],
   "ui_metadata": {
-    "description": "More than 10 ERROR/CRITICAL/FATAL log lines in 5 min. Priority 2 instead of 4 when a real container restarted in the last 10 min."
+    "description": "More than 10 ERROR/CRITICAL/FATAL log lines in 5 min. Priority 2 instead of 4 when a real container restarted in the last 10 min. Excludes known chatter: all of plex (covered by Kuma and container-died), node-exporter scrape broken pipes, DB shutdown messages, OpenSearch performance-analyzer/ISM startup errors and Grafana plugin-validation warnings."
   }
 }

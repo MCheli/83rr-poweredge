@@ -86,7 +86,7 @@
       "severity": "2",
       "condition": {
         "script": {
-          "source": "ctx.results[0].aggregations.by_ip.buckets.size() > 0",
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && (ctx.results[0].aggregations.by_ip.buckets.size() > 0)",
           "lang": "painless"
         }
       },
