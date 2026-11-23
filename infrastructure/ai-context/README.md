@@ -129,16 +129,33 @@ docker run --rm -v /data/ai-context/notes:/scan:ro zricethezav/gitleaks:latest d
 Hits are reported as path + rule only; the files stay on disk and are added
 to that vault's `.gitignore`.
 
-## Permalinks
+## Permalinks (measured 2026-11-23, basic-memory 1.0.0)
 
 basic-memory indexes a note only after it has a `permalink:` line in its YAML
-front matter (it adds one itself when the vault is writable). With the vault
-read-only, notes without a permalink are skipped by the index. Options when
-this matters: let basic-memory write permalinks once (mount `rw` for a single
-`basic-memory reindex`, which changes the files and Seafile/Obsidian will see
-that), add them in the templates going forward, or run basic-memory against a
-writable copy. This is a decision for the vault owner, not something the
-container does on its own.
+front matter and it adds one itself when the vault is writable. With the vault
+read-only, notes without a permalink fail normalisation and are skipped:
+**4 of 2343 notes indexed** on the real vault.
+
+On a throwaway *writable* copy of the same notes it indexed all 2343 in about
+15 minutes (text search then answers in well under a second; the semantic
+embeddings, fastembed on CPU, kept running for a good while longer). But it
+did not just add a permalink: it **re-serialised the whole YAML front matter
+of 2339 notes** (flow lists such as `sources: [a, b]` became block lists, and
+so on: 18k insertions / 6.6k deletions in git terms). So never mount the real
+vault `rw` for basic-memory, or every note would change and sync everywhere.
+
+Also observed on the `:ro` mount: `bm_write` reports "Created …" although the
+file write fails (`EROFS`, logged); the note exists only in the SQLite index
+until `bm_delete` removes it. Writes never reach the vault.
+
+Options, for the vault owner to pick:
+1. Run basic-memory against a **writable copy** that a cron job refreshes
+   from the vault (rsync `--delete`), so the index covers everything and the
+   permalink/front-matter rewrites stay in the copy. Cheapest, no note changes.
+2. Add `permalink:` lines to the notes deliberately (templates + one pass),
+   accepting that basic-memory would still rewrite the rest of the front
+   matter if it ever got a writable mount.
+3. Keep `:ro` as is (index covers only notes that already carry a permalink).
 
 ## Cut-over (later, not done)
 
