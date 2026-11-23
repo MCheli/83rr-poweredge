@@ -1,0 +1,18 @@
+# Obsidian Sync headless client (official, open beta): https://obsidian.md/help/sync/headless
+# Runs `ob sync --continuous` for one vault. Login and vault setup are one-off
+# `docker compose run` steps (see README.md); state lives in a named volume.
+FROM node:22-alpine
+
+ARG OBSIDIAN_HEADLESS_VERSION=0.0.14
+RUN npm install -g "obsidian-headless@${OBSIDIAN_HEADLESS_VERSION}" \
+    && npm cache clean --force
+
+# node = uid/gid 1000 in the official image; matches the deploy user on the host
+# so files the client writes into the bind-mounted vault stay owned by it.
+USER node
+ENV HOME=/home/node \
+    XDG_CONFIG_HOME=/home/node/.config
+WORKDIR /vault
+
+ENTRYPOINT ["ob"]
+CMD ["sync", "--continuous", "--path", "/vault"]

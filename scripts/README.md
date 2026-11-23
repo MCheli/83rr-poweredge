@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 22, 2026
+**Last Updated:** November 23, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -515,6 +515,49 @@ ssh 83rr-poweredge 'bash ~/83rr-poweredge/scripts/cookbook-deploy.sh'
 - Not needed for routine image updates (Watchtower)
 
 **Referenced in:** github.com/MCheli/cookbook docs/DEPLOYING.md
+
+### 15. `ai-context/seafile-pull.py` 🔄 SEAFILE MIRROR
+**Purpose:** Keep local Markdown folders current from a Seafile library, read-only, for the AI Context trial
+**Size:** 11KB
+**Language:** Python 3 (stdlib only; runs on the server from cron)
+
+**Description:**
+Lists a Seafile library through the `via-repo-token` API with a **read-only library token** (it refuses any other permission), downloads only files whose Seafile file id changed since the last run, keeps the Seafile mtime, and never deletes anything locally. Targets, includes and excludes come from a JSON config kept outside the repo (`/data/ai-context/pull-config.json`; format in the script's docstring). Seafile wins on conflict during the trial; the vault's git history keeps a local edit recoverable. A lock file stops overlapping runs. Companion of `infrastructure/ai-context/` (basic-memory + Obsidian Sync headless).
+
+**Usage:**
+```bash
+python3 scripts/ai-context/seafile-pull.py --config /data/ai-context/pull-config.json [--dry-run] [--target notes] [--max-files N]
+# cron (deploy user): */30 * * * *  -> /data/ai-context/logs/seafile-pull.log
+```
+
+**When to Use:**
+- Runs itself every 30 minutes; run by hand with `--dry-run` to see what would change
+- Stop the cron entry when the server folders become the live store (cut-over)
+
+**Referenced in:** infrastructure/ai-context/README.md, CLAUDE.md
+
+---
+
+### 16. `ai-context/git-autocommit.sh` 🔄 LOCAL HISTORY
+**Purpose:** Commit whatever changed in the AI Context vault folders (local git, no remote)
+**Size:** 1KB
+**Language:** Bash (runs on the server from cron)
+
+**Description:**
+For each folder given, `git add -A` and commit as `auto: <timestamp>` when the index differs. Never pushes, resets or deletes. The repos are created once by hand (`git init`, author `ai-context-autocommit <noreply@localhost>`, `.gitignore` from `infrastructure/ai-context/vault.gitignore`).
+
+**Usage:**
+```bash
+scripts/ai-context/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw
+# cron (deploy user): */15 * * * *  -> /data/ai-context/logs/git-autocommit.log
+```
+
+**When to Use:**
+- Runs itself every 15 minutes; `git -C /data/ai-context/notes log --oneline | head` shows the history
+
+**Referenced in:** infrastructure/ai-context/README.md
+
+---
 
 ---
 
