@@ -137,6 +137,7 @@ docker compose down -v
 26. **deptrack-apiserver / deptrack-frontend / deptrack-db** - OWASP Dependency-Track v5 (LAN-only, deptrack.ops.markcheli.com): CVE tracking of every running container's SBOM. `scripts/sbom-scan.sh` (Syft, cron 03:30) uploads nightly; new HIGH/CRITICAL findings go to ntfy. Images pinned by digest, not watchtower-managed. Docs + runbook: `docs/dependency-track.md`
 27. **homelab-mcp** - claude.ai connector (remote MCP server): read-only tools for the Seafile "AI Context" library, plus optional `bus_*` tools that start Claude Code sessions on the Mac mini by ssh over the LAN (forced command into bus-gateway in the private mac-mini-collector repo; the mini has no public port), built locally from `infrastructure/homelab-mcp` (not GHCR, not watchtower-managed), compose profile `mcp` (`COMPOSE_PROFILES=mcp` in .env once configured). Google OAuth sign-in limited to `HOMELAB_MCP_ALLOWED_EMAILS`; Seafile access via a read-only library token (startup refuses an rw token). Edge-routed at https://mcp.markcheli.com (MCP endpoint `/mcp`). Docs: `infrastructure/homelab-mcp/README.md`
 28. **house-transcriber** - Transcribes speech from the 5 indoor UniFi cameras (allowlist by Protect id + MAC; never Driveway or the Front Door doorbell) into the Seafile "AI Context" library (`05-raw/house-transcripts/`) via a read-write library token. Image `ghcr.io/mcheli/house-transcriber` (private repo, watchtower-managed); CPU Whisper (faster-whisper), capped at 6 CPUs / 4 GB. No ports, no nginx route. Gated by HA `input_boolean.house_transcription` (fails closed). Logs counts only, never transcript text. Compose profile `transcriber`. Docs + deploy runbook: `docs/house-transcriber.md`
+29. **basic-memory / obsidian-sync-notes / obsidian-sync-raw** - AI Context trial (2026-11-23), side by side with Seafile: plain-Markdown mirrors of the Seafile "AI Context" library under `/data/ai-context/{notes,raw}` (outside the repo; refreshed every 30 min by `scripts/ai-context/seafile-pull.py` with the read-only library token, auto-committed to local git every 15 min), **basic-memory** 1.0.0 (digest-pinned, not watchtower-managed) serving read-only MCP over the notes folder (`:ro` mount) at https://memory.ops.markcheli.com/mcp (LAN-only; no auth of its own), and the official Obsidian Sync headless client, one container per vault (compose profile `obsidian`, started only after the one-off login/setup). Standalone compose: `infrastructure/ai-context/docker-compose.yml`. Seafile stays the live store until cut-over; the diary writer, house-transcriber and homelab-mcp keep using Seafile. Docs: `infrastructure/ai-context/README.md`
 
 ### Service Dependencies
 - **nginx** must start first (other services proxy through it)
@@ -705,6 +706,6 @@ CLOUDFLARE_EMAIL=your_email@example.com
 
 ---
 
-**Last Updated**: April 26, 2026
+**Last Updated**: November 23, 2026
 **Architecture Version**: Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Status**: Production-ready, all services operational

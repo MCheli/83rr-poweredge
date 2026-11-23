@@ -1,0 +1,22 @@
+# Obsidian per-device state (the rest of .obsidian/ is kept)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/workspace*.json
+.obsidian/cache/
+.obsidian/plugins/*/data.json
+.trash/
+
+# Tool state that must never be committed if it lands inside the vault
+.basic-memory/
+.bmignore
+memory.db
+memory.db-*
+.obsidian-headless/
+.sync-conflict-*
+
+# seafile-pull temp files, OS noise
+.pull-*
+.DS_Store
+Thumbs.db
+
+# Files flagged by the secret scan (kept on disk, never committed)
