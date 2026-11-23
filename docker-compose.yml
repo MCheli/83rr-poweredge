@@ -1268,12 +1268,15 @@ services:
   # house-transcriber: speech heard by the 5 indoor UniFi cameras → AI Context
   # Image published from: github.com/MCheli/house-transcriber (private GHCR package)
   # ffmpeg pulls each allowlisted camera's RTSPS audio from Protect (UDM SE), Silero
-  # VAD + CPU Whisper transcribe it, lines go to the Seafile "AI Context" library
-  # through a read-write library token. Gated by HA input_boolean.house_transcription
-  # (fails closed). No ports, no nginx route: outbound only. Audio stays in memory;
-  # logs carry counts only, never transcript text. CPU-capped so Plex/Seafile/
-  # OpenSearch keep their headroom. Profile "transcriber": starts only once
-  # COMPOSE_PROFILES includes it. Docs: docs/house-transcriber.md
+  # VAD + CPU Whisper transcribe it, lines are appended to YYYY/YYYY-MM-DD.md in the
+  # AI Context RAW vault's house-transcripts folder (bind mount; since the
+  # 2026-11-23 cut-over the vault on this server is the main copy and git history,
+  # Obsidian Sync and the Seafile backup push follow it). Gated by HA
+  # input_boolean.house_transcription (fails closed). No ports, no nginx route:
+  # outbound only. Audio stays in memory; logs carry counts only, never transcript
+  # text. CPU-capped so Plex/Seafile/OpenSearch keep their headroom. Profile
+  # "transcriber": starts only once COMPOSE_PROFILES includes it.
+  # Docs: docs/house-transcriber.md
   # ═════════════════════════════════════════════════════════════════════════════
   house-transcriber:
     profiles: ["transcriber"]
@@ -1283,15 +1286,18 @@ services:
     logging: *default-logging
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
-    depends_on:
-      - seafile
+    # The deploy user (owner of /data/ai-context), so the transcript files belong to
+    # the vault like everything else there. The models volume was chowned to
+    # 1000:1000 once at the cut-over (docs/house-transcriber.md, Deploy).
+    user: "1000:1000"
     environment:
       - TZ=America/New_York
       - HA_TOKEN=${HOUSE_TRANSCRIBER_HA_TOKEN:-}
       - PROTECT_API_KEY=${HOUSE_TRANSCRIBER_PROTECT_API_KEY:-}
-      - SEAFILE_REPO_TOKEN=${HOUSE_TRANSCRIBER_SEAFILE_TOKEN:-}
-      - SEAFILE_URL=http://seafile
-      - SEAFILE_HOST_HEADER=files.markcheli.com
+      # Transcripts are files in the RAW vault (below). Roll-back to the Seafile web
+      # API: drop HT_OUTPUT_DIR and set SEAFILE_REPO_TOKEN=${HOUSE_TRANSCRIBER_SEAFILE_TOKEN:-},
+      # SEAFILE_URL=http://seafile, SEAFILE_HOST_HEADER=files.markcheli.com again.
+      - HT_OUTPUT_DIR=/output
       - HT_HA_URL=${HOUSE_TRANSCRIBER_HA_URL:-http://192.168.1.121:8123}
       # Pick from the on-server benchmark (docs/house-transcriber.md)
       - HT_MODEL=${HOUSE_TRANSCRIBER_MODEL:-large-v3-turbo}
@@ -1304,6 +1310,8 @@ services:
     volumes:
       # Whisper weights (downloaded on first start); no audio is ever written
       - house_transcriber_models:/models
+      # The RAW vault's house-transcripts folder (infrastructure/ai-context/README.md)
+      - ${HOUSE_TRANSCRIBER_OUTPUT_DIR:-/data/ai-context/raw/house-transcripts}:/output
     read_only: true
     tmpfs:
       - /tmp
