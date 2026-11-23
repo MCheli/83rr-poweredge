@@ -16,13 +16,14 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   # basic-memory: MCP server (streamable HTTP, /mcp) over the notes folder.
   # Pinned by digest 2026-11-23 (1.0.0, AGPL-3.0). Not watchtower-managed.
-  # The notes are mounted READ-ONLY and the server is limited to one project,
-  # so its write/edit/delete/move tools fail with a filesystem error instead
-  # of touching the vault. basic-memory 1.0.0 has no read-only switch: it
-  # always tries to add a `permalink:` front-matter line to notes that lack
-  # one (ensure_frontmatter_on_sync only controls title/type). On the :ro
-  # mount that write fails and the note is skipped by the indexer, so notes
-  # need a permalink to be searchable here (see README.md, "Permalinks").
+  # basic-memory 1.0.0 has no read-only mode and rewrites the YAML front
+  # matter of every note it indexes (it always adds a `permalink:` line; on a
+  # read-only mount that write fails and the note is skipped). So it never
+  # sees the real vault: it indexes a DISPOSABLE COPY of the notes folder
+  # (AI_CONTEXT_INDEX_COPY_DIR, under the state dir, outside git) that a
+  # cron rsync refreshes from the vault every 15 minutes with --delete. Its
+  # rewrites, and anything its write tools produce, stay in the copy and are
+  # overwritten by the next rsync; the real vault is untouched. One project.
   # No published port and no auth of its own: reached only through nginx at
   # memory.ops.markcheli.com (LAN-only vhost) on the infrastructure network.
   # ───────────────────────────────────────────────────────────────────────────
@@ -50,7 +51,8 @@ services:
       - BASIC_MEMORY_CLOUD_PROMO_OPT_OUT=true
       - BASIC_MEMORY_LOG_LEVEL=${BASIC_MEMORY_LOG_LEVEL:-INFO}
     volumes:
-      - ${AI_CONTEXT_NOTES_DIR:?set AI_CONTEXT_NOTES_DIR in infrastructure/ai-context/.env}:/notes:ro
+      # Disposable rsync copy of the notes vault (never the vault itself)
+      - ${AI_CONTEXT_INDEX_COPY_DIR:?set AI_CONTEXT_INDEX_COPY_DIR in infrastructure/ai-context/.env}:/notes
       # config.json + SQLite index, on the host so it is easy to inspect/back up
       - ${AI_CONTEXT_STATE_DIR:?set AI_CONTEXT_STATE_DIR in infrastructure/ai-context/.env}/basic-memory:/state
     tmpfs:
