@@ -123,8 +123,10 @@ tools and four iMessage tools above, and only in ways that leave Mark in control
 - folders inside `~/repos` only, never `~/repos` itself or the gateway's own
   repo; `MCheli` repos already cloned there; no cloning from here;
 - status, logs, messages and stops reach only bus sessions in those folders;
-- at most ten sessions working at once; finished ones (done, blocked, stopped,
-  failed, gone, or idle with their report written) don't count;
+- at most 100 sessions working at once (10 until 2026-11-23); finished ones
+  (done, blocked, stopped, failed, gone, or with their report written and
+  their Claude Code job idle, even if the bus still shows "working") don't
+  count;
 - sessions don't get Mark's ssh agent;
 - the `imessage_*` tools are forwarded to the iMessage service's own 0600
   socket (a LaunchAgent under the collector's Full-Disk-Access launcher, so no

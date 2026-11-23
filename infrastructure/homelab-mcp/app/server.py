@@ -211,7 +211,7 @@ complete, standalone instructions (the session sees only your task text), then \
 poll bus_wait (30 s per call) or bus_status for its report, and use bus_send for \
 follow-ups. If a call times out, check bus_sessions before retrying. Sessions ask \
 Mark (in the Claude app, Code tab) before edits or commands his rules don't \
-allow, never bypass permission checks, at most ten run at once (finished ones \
+allow, never bypass permission checks, at most 100 run at once (finished ones \
 don't count), and they must \
 not merge, deploy or delete unless Mark agreed to it in this chat.\
 """
@@ -429,9 +429,9 @@ async def bus_spawn(
     mode: "background" (default; shows in the Claude app) or "remote" (tmux).
     permission_mode defaults to "default", which asks Mark before anything his
     rules don't allow. The Mac mini only accepts default, plan and dontAsk unless
-    Mark enabled more; bypassing permissions isn't possible. At most ten
-    sessions run at once; finished ones (done, stopped, or idle with their
-    report written) don't count.
+    Mark enabled more; bypassing permissions isn't possible. At most 100
+    sessions run at once; finished ones (done, blocked, stopped, or with their
+    report written and their job idle) don't count.
     """
     return await bus_call("bus_spawn", {
         "task": task, "repo": repo, "cwd": cwd, "name": name, "mode": mode, "permission_mode": permission_mode,
@@ -456,8 +456,8 @@ async def bus_logs(target: str, lines: int = 40) -> dict:
 
 async def bus_send(target: str, message: str, wait_seconds: int = 20) -> dict:
     """Send a follow-up message to a session. A background session continues the same
-    conversation once it's idle (waits up to 20 s); a stopped one is resumed, which
-    counts toward the three-session limit. Then call bus_wait with newer_than
+    conversation once it's idle (waits up to 20 s); a stopped or finished one is resumed,
+    which counts toward the 100-session limit. Then call bus_wait with newer_than
     set to the time you sent it, to collect the updated report."""
     return await bus_call("bus_send", {"target": target, "message": message, "wait_seconds": wait_seconds})
 
