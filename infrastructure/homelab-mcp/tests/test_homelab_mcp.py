@@ -200,21 +200,29 @@ async def test_missing_file_is_a_tool_error(tools):
 
 SEAFILE_TOOLS = {"library_info", "list_directory", "find_files", "read_file", "search_text"}
 BUS_TOOLS = {"bus_doctor", "bus_spawn", "bus_sessions", "bus_status", "bus_logs", "bus_send", "bus_wait", "bus_stop"}
-NOTES_TOOLS = {"notes_search", "notes_read", "notes_list", "notes_find", "notes_context", "notes_recent"}
+NOTES_READ_TOOLS = {"notes_search", "notes_read", "notes_list", "notes_find", "notes_context", "notes_recent"}
+NOTES_WRITE_TOOLS = {"notes_write", "notes_edit"}  # since the AI Context cut-over (2026-11-23)
+NOTES_TOOLS = NOTES_READ_TOOLS | NOTES_WRITE_TOOLS
 
 
 async def test_registered_tools(tools):
     listed = {t.name: t for t in await tools.mcp.list_tools()}
     assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS | NOTES_TOOLS  # never bus_config or bus_setup
-    for name in SEAFILE_TOOLS | NOTES_TOOLS | {"bus_sessions", "bus_status", "bus_logs", "bus_wait", "bus_doctor"}:
+    for name in SEAFILE_TOOLS | NOTES_READ_TOOLS | {"bus_sessions", "bus_status", "bus_logs", "bus_wait", "bus_doctor"}:
         assert listed[name].annotations.read_only_hint is True
-    for name in ("bus_spawn", "bus_send", "bus_stop"):
+    for name in ("bus_spawn", "bus_send", "bus_stop", "notes_write", "notes_edit"):  # the acting tools
+        assert listed[name].annotations.read_only_hint is False
         assert listed[name].annotations.destructive_hint is True
     assert "bypassPermissions" not in json.dumps(listed["bus_spawn"].parameters)
-    for name in listed:
-        assert not any(w in name for w in ("write", "edit", "delete", "move", "create", "bm_"))
+    for name in listed:  # only the notes can be written, and nothing is ever deleted or moved
+        assert not any(w in name for w in ("delete", "move", "create", "bm_"))
+        assert ("write" in name or "edit" in name) == (name in NOTES_WRITE_TOOLS)
     for name in NOTES_TOOLS:  # callers never pick the project
         assert not {"project", "projects", "all_projects"} & set(listed[name].parameters["properties"])
+    for name in ("bus_spawn", "notes_write", "notes_edit"):
+        assert "Seafile" not in (listed[name].description or "") or "backup" in listed[name].description
+    assert "can't be written" not in (tools.mcp.instructions or "")
+    assert "notes_write" in tools.mcp.instructions and "backup" in tools.mcp.instructions
 
 
 # ── auth ───────────────────────────────────────────────────────────────────
@@ -414,7 +422,8 @@ def test_bus_config_validation(tmp_path, kwargs, match):
 
 # ── notes via basic-memory (fake in-memory server) ────────────────────────
 
-BM_WRITE_TOOLS = ("bm_write", "bm_edit", "bm_delete", "bm_move")
+BM_WRITE_TOOLS = ("bm_write", "bm_edit")  # forwarded as notes_write / notes_edit
+BM_BLOCKED_TOOLS = ("bm_delete", "bm_move")  # upstream has them; never reachable
 
 
 def make_fake_basic_memory(calls: list):
@@ -448,12 +457,19 @@ def make_fake_basic_memory(calls: list):
         read_tool(tool_name)
 
     def write_tool(tool_name):
-        async def fn(project: str, identifier: str | None = None, content: str | None = None) -> str:
-            calls.append((tool_name, {"project": project}))
-            return "WROTE"
+        async def fn(project: str, identifier: str | None = None, content: str | None = None,
+                     command: str | None = None, title: str | None = None, directory: str | None = None,
+                     note_type: str | None = None, tags: list[str] | str | None = None, metadata: dict | None = None,
+                     overwrite: bool | None = None, expected_checksum: str | None = None, section: str | None = None,
+                     find_text: str | None = None, expected_replacements: int | None = None,
+                     replace_subsections: bool | None = None, output_format: str | None = None) -> str:
+            received = dict(locals())
+            calls.append((tool_name, {k: v for k, v in received.items()
+                                      if v is not None and k not in ("tool_name", "calls", "ToolError")}))
+            return f"{tool_name} in {project}: {identifier or title}"
         fake.tool(fn, name=tool_name)
 
-    for tool_name in BM_WRITE_TOOLS:
+    for tool_name in BM_WRITE_TOOLS + BM_BLOCKED_TOOLS:
         write_tool(tool_name)
     return fake
 
@@ -494,13 +510,64 @@ async def test_notes_read_and_recent_pin_project_and_command(notes, tools):
     assert notes.calls[1][1]["command"] == "recent" and notes.calls[1][1]["project"] == "main"
 
 
-@pytest.mark.parametrize("tool", BM_WRITE_TOOLS + ("bm_man", "bm_schema", "nope"))
+@pytest.mark.parametrize("tool", BM_BLOCKED_TOOLS + ("bm_man", "bm_schema", "nope"))
 async def test_bridge_refuses_tools_off_the_allowlist(notes, tool):
     from notes import NotesError
 
-    with pytest.raises(NotesError, match="read-only"):
+    with pytest.raises(NotesError, match="isn't available"):
         await notes.bridge.call(tool, {"content": "x", "identifier": "y"})
     assert notes.calls == []  # nothing reached basic-memory
+
+
+async def test_notes_write_forwards_with_project_pinned(notes, tools):
+    out = await call(tools, "notes_write", {"content": "---\ntitle: T\n---\n# T\n", "identifier": "00-x/t.md",
+                                            "tags": ["a"]})
+    assert out == "bm_write in main: 00-x/t.md"
+    tool, sent = one_call(notes)
+    assert tool == "bm_write"
+    assert sent == {"project": "main", "content": "---\ntitle: T\n---\n# T\n", "identifier": "00-x/t.md",
+                    "note_type": "note", "tags": ["a"], "output_format": "text"}  # overwrite unset -> upstream default
+    # a project passed to the bridge itself is replaced, never forwarded
+    assert notes.bridge.prepare("bm_write", {"content": "x", "identifier": "y.md", "project": "other",
+                                             "workspace": "w"}) == {"content": "x", "identifier": "y.md",
+                                                                    "project": "main"}
+
+
+async def test_notes_edit_keeps_its_command_and_pins_project(notes, tools):
+    out = await call(tools, "notes_edit", {"identifier": "02-systems/mac-mini.md", "command": "append",
+                                           "content": "- more\n", "expected_checksum": "abc"})
+    assert out == "bm_edit in main: 02-systems/mac-mini.md"
+    tool, sent = one_call(notes)
+    assert tool == "bm_edit"
+    assert sent == {"project": "main", "identifier": "02-systems/mac-mini.md", "command": "append",
+                    "content": "- more\n", "expected_checksum": "abc", "expected_replacements": 1,
+                    "replace_subsections": True, "output_format": "text"}
+    with pytest.raises(Exception):  # the edit kind is validated by the schema, not forwarded blindly
+        await call(tools, "notes_edit", {"identifier": "x.md", "command": "delete_everything"})
+    assert len(notes.calls) == 1
+
+
+@pytest.mark.parametrize("args", [
+    {"identifier": "../etc/passwd"},
+    {"identifier": "/notes/x.md"},
+    {"identifier": "02-systems/../../x.md"},
+    {"identifier": "templates/daily.md"},
+    {"title": "daily", "directory": "templates"},
+    {"title": "x", "directory": "/templates/"},
+    {"identifier": "file:///etc/hosts"},
+])
+async def test_writes_stay_inside_the_vault_and_out_of_templates(notes, tools, args):
+    from fastmcp.exceptions import ToolError
+
+    with pytest.raises(ToolError, match="vault|templates"):
+        await call(tools, "notes_write", {"content": "x", **args})
+    if "identifier" in args:
+        with pytest.raises(ToolError, match="vault|templates"):
+            await call(tools, "notes_edit", {"identifier": args["identifier"], "command": "append", "content": "x"})
+    assert notes.calls == []  # refused before anything reached basic-memory
+    # reads are not restricted the same way (permalinks, titles, memory:// URLs all work)
+    await call(tools, "notes_read", {"identifier": "memory://main/02-systems/mac-mini"})
+    assert len(notes.calls) == 1
 
 
 async def test_bridge_overrides_scope_and_command_arguments(notes):
@@ -513,17 +580,18 @@ async def test_bridge_overrides_scope_and_command_arguments(notes):
     assert one_call(notes)[1]["command"] == "recent"
 
 
-async def test_write_tools_absent_even_though_upstream_has_them(notes, tools):
+async def test_delete_and_move_absent_even_though_upstream_has_them(notes, tools):
     from fastmcp import Client
     from fastmcp.exceptions import NotFoundError
 
     async with Client(notes.fake) as c:  # the fake really does offer them
-        assert set(t.name for t in await c.list_tools()) >= set(BM_WRITE_TOOLS)
+        assert set(t.name for t in await c.list_tools()) >= set(BM_BLOCKED_TOOLS + BM_WRITE_TOOLS)
     names = {t.name for t in await tools.mcp.list_tools()}
-    assert not names & set(BM_WRITE_TOOLS) and not {n for n in names if n.startswith("bm_")}
-    for name in BM_WRITE_TOOLS:
+    assert not {n for n in names if n.startswith("bm_")}  # bm_* names never surface, write/edit included
+    assert not {n for n in names if "delete" in n or "move" in n}
+    for name in BM_BLOCKED_TOOLS + BM_WRITE_TOOLS:
         with pytest.raises(NotFoundError, match="Unknown tool"):  # unknown at the MCP layer
-            await tools.mcp.call_tool(name, {"project": "main", "content": "x"})
+            await tools.mcp.call_tool(name, {"project": "main", "content": "x", "identifier": "x.md"})
     assert notes.calls == []
 
 
