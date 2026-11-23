@@ -516,23 +516,22 @@ ssh 83rr-poweredge 'bash ~/83rr-poweredge/scripts/cookbook-deploy.sh'
 
 **Referenced in:** github.com/MCheli/cookbook docs/DEPLOYING.md
 
-### 15. `ai-context/seafile-pull.py` 🔄 SEAFILE MIRROR
-**Purpose:** Keep local Markdown folders current from a Seafile library, read-only, for the AI Context trial
+### 15. `ai-context/seafile-pull.py` 🔄 SEAFILE MIRROR (retired 2026-11-23, kept for roll-back)
+**Purpose:** Keep local Markdown folders current from a Seafile library, read-only (the AI Context trial, before the cut-over)
 **Size:** 11KB
 **Language:** Python 3 (stdlib only; runs on the server from cron)
 
 **Description:**
-Lists a Seafile library through the `via-repo-token` API with a **read-only library token** (it refuses any other permission), downloads only files whose Seafile file id changed since the last run, keeps the Seafile mtime, and never deletes anything locally. Targets, includes and excludes come from a JSON config kept outside the repo (`/data/ai-context/pull-config.json`; format in the script's docstring). Seafile wins on conflict during the trial; the vault's git history keeps a local edit recoverable. A lock file stops overlapping runs. Companion of `infrastructure/ai-context/` (basic-memory + Obsidian Sync headless).
+Lists a Seafile library through the `via-repo-token` API with a **read-only library token** (it refuses any other permission), downloads only files whose Seafile file id changed since the last run, keeps the Seafile mtime, and never deletes anything locally. Targets, includes and excludes come from a JSON config kept outside the repo (`/data/ai-context/pull-config.json`; format in the script's docstring). A lock file stops overlapping runs. **Its cron line was commented out at the 2026-11-23 cut-over** (the server folders are the main copy now and Seafile receives pushes, see #17); the script, its config, state and read-only token stay in place for a roll-back. Never run it while the backup push is active: it would overwrite local notes with Seafile's older copies.
 
 **Usage:**
 ```bash
 python3 scripts/ai-context/seafile-pull.py --config /data/ai-context/pull-config.json [--dry-run] [--target notes] [--max-files N]
-# cron (deploy user): */30 * * * *  -> /data/ai-context/logs/seafile-pull.log
+# cron (deploy user): */30 * * * *  -> /data/ai-context/logs/seafile-pull.log   (DISABLED since 2026-11-23)
 ```
 
 **When to Use:**
-- Runs itself every 30 minutes; run by hand with `--dry-run` to see what would change
-- Stop the cron entry when the server folders become the live store (cut-over)
+- Only for a roll-back to Seafile as the main copy (infrastructure/ai-context/README.md, "Roll-back"); `--dry-run` first
 
 **Referenced in:** infrastructure/ai-context/README.md, CLAUDE.md
 
@@ -558,6 +557,27 @@ AUTOCOMMIT_PUSH_REPOS=/data/ai-context/notes scripts/ai-context/git-autocommit.s
 **Referenced in:** infrastructure/ai-context/README.md
 
 ---
+
+### 17. `ai-context/seafile-backup-push.py` 🔄 SEAFILE BACKUP
+**Purpose:** Push the AI Context vaults on the server into the Seafile "AI Context" library (backup), the reverse of `seafile-pull.py`
+**Size:** 14KB
+**Language:** Python 3 (stdlib only; runs on the server from cron)
+
+**Description:**
+Since the 2026-11-23 cut-over the folders under `/data/ai-context` are the main copy and Seafile only receives. The script lists the library once (`via-repo-token` API, **read-write library token**, refuses a read-only one; token file must be mode 600), then uploads with `replace=1` every local file that changed: per-target state (`size`, `mtime`, `sha256` as last uploaded) decides, files not in the state yet are compared with Seafile's listing (same size and a Seafile mtime at least as new as the local one = in sync, so the first run uploaded only the 2336 notes the front-matter normalisation had changed). It **never deletes or moves anything in Seafile**, hard-refuses any path that would land under `/04-work` or `/05-raw/work-laptop`, skips dot-paths (`.git`, `.obsidian`, `.trash`), everything the vault's `.gitignore` ignores (the secret-flagged raw dumps) and the configured `exclude_names`, and skips files over `max_file_mb` (90, Cloudflare's upload limit) with a log line. Lock file against overlapping runs. Config outside the repo: `/data/ai-context/push-config.json` (format in the docstring).
+
+**Usage:**
+```bash
+python3 scripts/ai-context/seafile-backup-push.py --config /data/ai-context/push-config.json [--dry-run] [--target notes|raw] [--max-files N]
+# cron (deploy user): */30 * * * *  -> /data/ai-context/logs/seafile-backup-push.log
+# check: grep -c " uploaded " /data/ai-context/logs/seafile-backup-push.log ; grep -E "FAIL|REFUSED|ERROR" ...
+```
+
+**When to Use:**
+- Runs itself every 30 minutes; `--dry-run` lists what would be uploaded (one line per file)
+- After a bulk change in a vault, to see the backup catch up; never together with `seafile-pull.py`
+
+**Referenced in:** infrastructure/ai-context/README.md, CLAUDE.md
 
 ---
 

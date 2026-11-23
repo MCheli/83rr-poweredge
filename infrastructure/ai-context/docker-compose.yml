@@ -1,8 +1,9 @@
-# AI Context on this server: a plain-Markdown mirror of the Seafile "AI Context"
-# library (kept current by scripts/ai-context/seafile-pull.py, see README.md),
-# basic-memory giving AI assistants read-only MCP access to the notes folder,
-# and Obsidian Sync's official headless client keeping both folders in sync
-# with Obsidian on other devices.
+# AI Context on this server: the main copy of the notes since the 2026-11-23
+# cut-over (plain Markdown folders with git history; the Seafile "AI Context"
+# library is a backup fed by scripts/ai-context/seafile-backup-push.py, see
+# README.md), basic-memory giving AI assistants read-write MCP access to the
+# notes vault, and Obsidian Sync's official headless client keeping both
+# folders in sync with Obsidian on Mark's devices.
 #
 # Standalone compose file. Paths and ids come from ./.env (gitignored, copy
 # .env.example). Typical commands, from the repo root:
@@ -14,19 +15,17 @@
 
 services:
   # ───────────────────────────────────────────────────────────────────────────
-  # basic-memory: MCP server (streamable HTTP, /mcp) over the notes folder.
+  # basic-memory: MCP server (streamable HTTP, /mcp) over the notes vault.
   # Pinned by digest 2026-11-23 (1.0.0, AGPL-3.0). Not watchtower-managed.
-  # basic-memory 1.0.0 has no read-only mode and rewrites the YAML front
-  # matter of every note it indexes (it always adds a `permalink:` line; on a
-  # read-only mount that write fails and the note is skipped). So it never
-  # sees the real vault: it indexes a DISPOSABLE COPY of the notes folder
-  # (AI_CONTEXT_INDEX_COPY_DIR, under the state dir, outside git) that a
-  # cron rsync refreshes from the vault every 15 minutes with --update
-  # --delete (--update skips the rewritten, newer files in the copy). Its
-  # rewrites, and anything its write tools produce, stay in the copy and are
-  # overwritten by the next rsync; the real vault is untouched. One project.
-  # No published port and no auth of its own: reached only through nginx at
-  # memory.ops.markcheli.com (LAN-only vhost) on the infrastructure network.
+  # Since the cut-over it mounts the REAL vault read-write and is the only
+  # path for AI writes to the notes (bm_write/bm_edit; through homelab-mcp's
+  # notes_write/notes_edit for claude.ai). basic-memory rewrites the YAML
+  # front matter of every note it indexes (adds a `permalink:` line): that
+  # happened once for all notes at the cut-over, as one git commit; now only
+  # notes that change are touched. templates/ is in .bmignore (never indexed,
+  # never rewritten). One project. No published port and no auth of its own:
+  # reached by homelab-mcp over the infrastructure network and by the Mac mini
+  # through nginx at memory.ops.markcheli.com (allow 192.168.1.161 only).
   # ───────────────────────────────────────────────────────────────────────────
   basic-memory:
     image: ghcr.io/basicmachines-co/basic-memory:1.0.0@sha256:cad49f5433bcd8592fea547907a2b967435b3fa60d0f81ebc4d558e2b5cb55a8
@@ -52,8 +51,8 @@ services:
       - BASIC_MEMORY_CLOUD_PROMO_OPT_OUT=true
       - BASIC_MEMORY_LOG_LEVEL=${BASIC_MEMORY_LOG_LEVEL:-INFO}
     volumes:
-      # Disposable rsync copy of the notes vault (never the vault itself)
-      - ${AI_CONTEXT_INDEX_COPY_DIR:?set AI_CONTEXT_INDEX_COPY_DIR in infrastructure/ai-context/.env}:/notes
+      # The MAIN vault itself, read-write (since the 2026-11-23 cut-over)
+      - ${AI_CONTEXT_NOTES_DIR:?set AI_CONTEXT_NOTES_DIR in infrastructure/ai-context/.env}:/notes
       # config.json + SQLite index, on the host so it is easy to inspect/back up
       - ${AI_CONTEXT_STATE_DIR:?set AI_CONTEXT_STATE_DIR in infrastructure/ai-context/.env}/basic-memory:/state
     tmpfs:
