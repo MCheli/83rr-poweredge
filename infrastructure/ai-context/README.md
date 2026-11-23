@@ -49,23 +49,27 @@ docker compose -f infrastructure/ai-context/docker-compose.yml logs --tail 50 ba
 
 ### basic-memory (read-only MCP)
 
-- Image pinned by digest (1.0.0). Notes mounted **read-only**; index/config on
-  the host under `state/basic-memory`; one project (`main`), MCP server
-  started with `--project main`.
+- Image pinned by digest (1.0.0). It indexes a **disposable copy** of the
+  notes vault (`AI_CONTEXT_INDEX_COPY_DIR`, default
+  `state/basic-memory-copy`, outside both vaults and outside git) that cron
+  refreshes every 15 minutes with `rsync -a --update --delete`; the real vault is
+  never mounted into the container. Index/config on the host under
+  `state/basic-memory`; one project (`main`), MCP server started with
+  `--project main`.
 - Transport: streamable HTTP, path `/mcp`, no published port. nginx serves it
   at **https://memory.ops.markcheli.com/mcp** (LAN-only vhost, `allow
   192.168.1.0/24; deny all;`). basic-memory has **no authentication of its
   own**; the OAuth sign-in that protects `mcp.markcheli.com` lives inside
   homelab-mcp's code (FastMCP `GoogleProvider` + email allowlist), so sharing
   it would mean new code there. Until then this stays LAN-only.
-- Read-only method: the write tools (`write_note`, `edit_note`, `delete_note`,
-  `move_note`, project create/delete) still exist (1.0.0 has no switch to hide
-  them) but fail with a read-only filesystem error.
+- Read-only method: the write tools (`bm_write`, `bm_edit`, `bm_delete`,
+  `bm_move`, project create) still exist (1.0.0 has no switch to hide them)
+  and they do work on the copy, but the copy is thrown away by the next
+  rsync, so nothing they do ever reaches the vault, Seafile or Obsidian.
 - File rewriting: `ensure_frontmatter_on_sync=false`,
-  `update_permalinks_on_move=false`, `kebab_filenames=false`. **Permalinks:**
-  basic-memory always tries to add a `permalink:` front-matter line to a note
-  that has none; on the `:ro` mount that write fails and the indexer skips the
-  note. See "Permalinks" below for what that means for this vault.
+  `update_permalinks_on_move=false`, `kebab_filenames=false`, and still
+  basic-memory rewrites the front matter of every note it indexes (it always
+  adds a `permalink:` line). That is why it gets a copy. See "Permalinks".
 - `.obsidian`, `.git` and the usual noise are ignored by basic-memory's default
   `.bmignore` (created in `state/basic-memory/config/`).
 
@@ -112,7 +116,20 @@ Limits (Sync Plus): 200 MB per file; the vaults here are far below that.
 ```
 */30 * * * * python3 /data/ai-context/bin/seafile-pull.py --config /data/ai-context/pull-config.json >> /data/ai-context/logs/seafile-pull.log 2>&1
 */15 * * * * /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
+*/15 * * * * rsync -a --update --delete --exclude .git --exclude .obsidian /data/ai-context/notes/ /data/ai-context/state/basic-memory-copy/ >> /data/ai-context/logs/index-copy-sync.log 2>&1
 ```
+
+The third line keeps basic-memory's disposable index copy current (vault →
+copy only, never back). `--update` matters: basic-memory rewrites the front
+matter of every note it indexes, so the copy's files are *newer* than the
+vault's and a plain `rsync -a` would re-copy all of them every run and
+trigger a full re-index (~15 min of CPU) four times an hour. With `--update`
+those rewritten files are skipped; a real edit in the vault carries a newer
+mtime than the rewrite and still comes across, and deletions still propagate.
+(Edge case: a note whose Seafile mtime is older than the copy's rewrite time,
+e.g. uploaded during the initial index, is skipped until it changes again.
+A `rm -rf` of the copy followed by the rsync and `basic-memory reindex`
+resets everything.)
 
 `seafile-pull.py` fetches only files whose Seafile file id changed, never
 deletes locally, and skips the configured work folders/files. `git-autocommit.sh`
@@ -148,14 +165,14 @@ Also observed on the `:ro` mount: `bm_write` reports "Created …" although the
 file write fails (`EROFS`, logged); the note exists only in the SQLite index
 until `bm_delete` removes it. Writes never reach the vault.
 
-Options, for the vault owner to pick:
-1. Run basic-memory against a **writable copy** that a cron job refreshes
-   from the vault (rsync `--delete`), so the index covers everything and the
-   permalink/front-matter rewrites stay in the copy. Cheapest, no note changes.
-2. Add `permalink:` lines to the notes deliberately (templates + one pass),
-   accepting that basic-memory would still rewrite the rest of the front
-   matter if it ever got a writable mount.
-3. Keep `:ro` as is (index covers only notes that already carry a permalink).
+Decision (2026-11-23): basic-memory indexes a **writable, disposable copy**
+of the vault (`AI_CONTEXT_INDEX_COPY_DIR`) that cron refreshes from the vault
+with `rsync -a --update --delete` every 15 minutes. The index covers every note, the
+permalink/front-matter rewrites stay in the copy, and the vault, Seafile and
+Obsidian never see them. The copy can be deleted at any time; the next rsync
+and a `basic-memory reindex` rebuild it. The alternatives (adding `permalink:`
+lines to the real notes, or a `:ro` mount of the vault with 4/2343 coverage)
+were not taken.
 
 ## Cut-over (later, not done)
 
