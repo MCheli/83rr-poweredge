@@ -85,30 +85,21 @@ LAN_MONITORS = [
 ]
 
 
-def save_status_page(api, slug: str, **kwargs):
-    """Save a status page, working around uptime_kuma_api 1.2.1 on Uptime Kuma 2.x.
+def save_status_page(api: UptimeKumaApi, slug: str, publicGroupList: list, **config_changes) -> dict:
+    """Save a status page through Kuma's own socket event.
 
-    The library's save_status_page reads r2["incident"] from /api/status-page/<slug>,
-    but Kuma 2.x returns "incidents", so it raises KeyError. On that error, build the
-    same payload the library would (config merged with our changes) and save it.
+    uptime-kuma-api 1.2.1's save_status_page() first re-reads the page from
+    Kuma's public JSON (/api/status-page/<slug>) and expects an "incident" key;
+    Uptime Kuma 2.x returns "incidents", so it raises KeyError before saving
+    anything (seen 2026-11-22 on Kuma 2.5.12). This sends the same
+    [slug, config, imgDataUrl, publicGroupList] payload the library builds, but
+    starts from the config Kuma itself reports so 2.x-only fields
+    (autoRefreshInterval, rssTitle, ...) are kept.
     """
-    try:
-        return api.save_status_page(slug=slug, **kwargs)
-    except KeyError as e:
-        if e.args != ("incident",):
-            raise
-    import inspect
-    import requests
-
-    r1 = api._call("getStatusPage", slug)
-    r2 = requests.get(f"{api.url}/api/status-page/{slug}", timeout=api.timeout).json()
-    page = {**r1["config"], **r2["config"], "publicGroupList": r2["publicGroupList"]}
-    page.update(kwargs)
-    page["slug"] = slug
-    allowed = set(inspect.signature(api._build_status_page_data).parameters)
-    data = api._build_status_page_data(**{k: v for k, v in page.items() if k in allowed})
-    return api._call("saveStatusPage", data)
-
+    config = api._call("getStatusPage", slug)["config"]
+    config.update(config_changes)
+    icon = config.get("icon") or "/icon.svg"
+    return api._call("saveStatusPage", [slug, config, icon, publicGroupList])
 
 def main() -> int:
     env = load_env()
@@ -182,6 +173,18 @@ def main() -> int:
     # Monitors. Idempotent on monitor name.
     existing_monitors = {m["name"]: m for m in api.get_monitors()}
 
+    def tag_once(name, mid, tag_id):
+        """Tag a monitor unless it already carries that tag. add_monitor_tag
+        adds another copy every time, so each re-run used to stack a duplicate
+        (Grafana had six 'lan' tags by 2026-11-22). Best-effort."""
+        have = {t.get("tag_id") for t in existing_monitors.get(name, {}).get("tags", [])}
+        if tag_id in have:
+            return
+        try:
+            api.add_monitor_tag(tag_id=tag_id, monitor_id=mid, value="")
+        except Exception:
+            pass
+
     def upsert_raw(name, common, tag_id):
         """Create or update one monitor by name, then tag it."""
         if name in existing_monitors:
@@ -191,10 +194,7 @@ def main() -> int:
         else:
             mid = api.add_monitor(**common)["monitorID"]
             print(f"  monitor created: {name} (id={mid})")
-        try:
-            api.add_monitor_tag(tag_id=tag_id, monitor_id=mid, value="")
-        except Exception:
-            pass
+        tag_once(name, mid, tag_id)
         return mid
 
     def upsert_monitor(name, url, tag_id, maxretries=PUBLIC_MAXRETRIES):
@@ -218,11 +218,7 @@ def main() -> int:
         else:
             mid = api.add_monitor(**common)["monitorID"]
             print(f"  monitor created: {name} (id={mid})")
-        # Tag (best-effort; idempotency is OK to crash on)
-        try:
-            api.add_monitor_tag(tag_id=tag_id, monitor_id=mid, value="")
-        except Exception:
-            pass
+        tag_once(name, mid, tag_id)
         return mid
 
     def upsert_monitor_authed(name, url, tag_id, headers):
@@ -248,10 +244,7 @@ def main() -> int:
         else:
             mid = api.add_monitor(**common)["monitorID"]
             print(f"  monitor created: {name} (id={mid})")
-        try:
-            api.add_monitor_tag(tag_id=tag_id, monitor_id=mid, value="")
-        except Exception:
-            pass
+        tag_once(name, mid, tag_id)
         return mid
 
     print("public monitors:")
@@ -267,6 +260,12 @@ def main() -> int:
         "retryInterval": 60,
         "maxretries": PUBLIC_MAXRETRIES,
         "notificationIDList": {sg_id: True},
+        # ARK and Minecraft were first created in the Kuma UI, which stores
+        # dns_resolve_type as null. edit_monitor() merges the live record with
+        # these fields and then validates dns_resolve_type for every monitor
+        # type, so without this it raises "Unknown dns_resolve_type value: None"
+        # (2026-11-22). "A" is the library's own default for new monitors.
+        "dns_resolve_type": "A",
     }
     docker_hosts = {h["name"]: h["id"] for h in api.get_docker_hosts()}
     if ARK_DOCKER_HOST in docker_hosts:
