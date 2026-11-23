@@ -857,7 +857,10 @@ services:
     env_file: .env
     environment:
       - TZ=America/New_York
-      - REPORT_TIMES=05:00
+      # Scheduled printing paused 2026-11-23: the thermal printer is unplugged. An empty
+      # REPORT_TIMES disables the daily print while the preview page and /trigger keep working.
+      # Set it back to 05:00 and `up -d daily-report` to resume printing.
+      - REPORT_TIMES=
       - PROM_URL=http://prometheus:9090
       - DAILY_REPORT_PORT=8080
       - ANTHROPIC_API_KEY=${DAILY_REPORT_ANTHROPIC_API_KEY}
