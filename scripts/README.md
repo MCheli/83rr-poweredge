@@ -539,16 +539,16 @@ python3 scripts/ai-context/seafile-pull.py --config /data/ai-context/pull-config
 ---
 
 ### 16. `ai-context/git-autocommit.sh` 🔄 LOCAL HISTORY
-**Purpose:** Commit whatever changed in the AI Context vault folders (local git, no remote)
-**Size:** 1KB
+**Purpose:** Commit whatever changed in the AI Context vault folders (local git), optionally push listed repos
+**Size:** 2KB
 **Language:** Bash (runs on the server from cron)
 
 **Description:**
-For each folder given, `git add -A` and commit as `auto: <timestamp>` when the index differs. Never pushes, resets or deletes. The repos are created once by hand (`git init`, author `ai-context-autocommit <noreply@localhost>`, `.gitignore` from `infrastructure/ai-context/vault.gitignore`).
+For each folder given, `git add -A` and commit as `auto: <timestamp>` when the index differs. Repos listed in `AUTOCOMMIT_PUSH_REPOS` (space-separated paths) are also pushed with `git push -q origin HEAD` whenever the remote is behind: one attempt per run, failures logged, no retries; an `origin` remote and upstream must exist (set up by hand once). Repos not listed are never pushed. Never resets or deletes. The repos are created once by hand (`git init`, author `ai-context-autocommit <noreply@localhost>`, `.gitignore` from `infrastructure/ai-context/vault.gitignore`).
 
 **Usage:**
 ```bash
-scripts/ai-context/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw
+AUTOCOMMIT_PUSH_REPOS=/data/ai-context/notes scripts/ai-context/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw
 # cron (deploy user): */15 * * * *  -> /data/ai-context/logs/git-autocommit.log
 ```
 
