@@ -115,7 +115,7 @@ Limits (Sync Plus): 200 MB per file; the vaults here are far below that.
 
 ```
 */30 * * * * python3 /data/ai-context/bin/seafile-pull.py --config /data/ai-context/pull-config.json >> /data/ai-context/logs/seafile-pull.log 2>&1
-*/15 * * * * /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
+*/15 * * * * AUTOCOMMIT_PUSH_REPOS=/data/ai-context/notes /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
 */15 * * * * rsync -a --update --delete --exclude .git --exclude .obsidian /data/ai-context/notes/ /data/ai-context/state/basic-memory-copy/ >> /data/ai-context/logs/index-copy-sync.log 2>&1
 ```
 
@@ -133,7 +133,12 @@ resets everything.)
 
 `seafile-pull.py` fetches only files whose Seafile file id changed, never
 deletes locally, and skips the configured work folders/files. `git-autocommit.sh`
-commits whatever changed (no remote, nothing is pushed anywhere). Each vault's
+commits whatever changed and, for the repos listed in `AUTOCOMMIT_PUSH_REPOS`
+only, pushes to `origin` when the remote is behind (one attempt per run, failures
+logged). The MAIN vault pushes to a **private** GitHub repo as an offsite copy
+of its history (remote added by hand once; gitleaks clean in file and git
+mode before the first push). The RAW vault has no remote and is never pushed.
+Each vault's
 `.gitignore` starts from `vault.gitignore` (Obsidian workspace files, trash,
 tool state, files flagged by the secret scan).
 
@@ -176,6 +181,6 @@ were not taken.
 
 ## Cut-over (later, not done)
 
-When the server folders become the live store: stop the Seafile pull cron,
-point the diary writer / transcriber / homelab-mcp at the folders, and
-consider a private git remote for the two vault repos.
+When the server folders become the live store: stop the Seafile pull cron and
+point the diary writer / transcriber / homelab-mcp at the folders. (The MAIN
+vault already has its private remote; decide then whether RAW needs one.)
