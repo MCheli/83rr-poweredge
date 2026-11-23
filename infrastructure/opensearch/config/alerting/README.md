@@ -76,6 +76,35 @@ OpenSearch log "Failed to retrieve sample documents for alert …" at ERROR
 (~40 lines in 5 min, 2026-11-05). `error-rate-5m` excludes that message from
 `opensearch` so experiments don't self-page.
 
+### After an OpenSearch restart (trigger guards, 2026-11-23)
+
+When OpenSearch has just restarted, the first scheduled run of each monitor
+can search before the shards are assigned and get no `aggregations` (or no
+`hits`). An exception in a trigger script counts as "fired" in the alerting
+plugin, so on 2026-11-22 19:41 four monitors sent seven blank pages at once.
+Every trigger condition now starts with
+`ctx.results.size() > 0 && ctx.results[0].aggregations != null` (or
+`.hits != null` for hit-count monitors), so an incomplete search means "not
+triggered". `backup-no-heartbeat` is an absence check, so it also requires
+`_shards.failed == 0`: a partial search must not look like a missing heartbeat.
+
+### Known log chatter excluded from error-rate-5m (2026-11-23)
+
+From the 14-day alert review (2026-11-09 to 11-22), all normal-priority
+error-rate pages were these:
+
+| Source | What it logs | Why it's excluded |
+|---|---|---|
+| plex | ~1,400 metadata-agent errors in 2 min during its 2 AM maintenance | not actionable; Plex availability is covered by Kuma "Plex" and container-died |
+| node-exporter | `error encoding and sending metric family ... broken pipe` | Prometheus closed one slow scrape (02:00 backup, deploys) |
+| `*-db` | `terminating connection due to administrator command` | a DB shutting down on a restart or deploy |
+| opensearch | `opensearch-performance-analyzer` config errors, `Failed to get ISM policies` | startup chatter after a boot |
+| grafana | `Plugin validation failed`, `Refusing to initialize plugin because it's using Angular` | startup chatter after a boot |
+
+Boot-time chatter paged at normal priority because Fluent Bit starts after
+the other containers and misses their start events, so the restart gate
+(`lc`) saw nothing.
+
 ## Destinations
 
 ### ntfy push (current, since 2026-10-31)

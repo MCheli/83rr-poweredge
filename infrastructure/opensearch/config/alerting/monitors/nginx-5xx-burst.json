@@ -488,7 +488,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count > 5) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0)"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ((ctx.results[0].aggregations.p.doc_count > 5) && (ctx.results[0].aggregations.lc.doc_count == 0 || ctx.results[0].aggregations.cl.loops.buckets.size() > 0))"
         }
       },
       "actions": [
@@ -513,7 +513,7 @@
       "condition": {
         "script": {
           "lang": "painless",
-          "source": "(ctx.results[0].aggregations.p.doc_count > 5) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0"
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ((ctx.results[0].aggregations.p.doc_count > 5) && ctx.results[0].aggregations.lc.doc_count > 0 && ctx.results[0].aggregations.cl.loops.buckets.size() == 0)"
         }
       },
       "actions": [

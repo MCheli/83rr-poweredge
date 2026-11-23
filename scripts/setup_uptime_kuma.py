@@ -2,6 +2,10 @@
 """Bootstrap Uptime Kuma: create admin if needed, add monitors, wire the ntfy
 notification (self-hosted ntfy, topic homelab), build a public status page. Idempotent — safe to re-run.
 
+This file is the source of truth for Kuma's monitors: a re-run overwrites
+settings edited in the UI, and monitors that exist only in the UI drop off
+the status page. Add new monitors here (including ARK and Minecraft below).
+
 Reads creds from ~/83rr-poweredge/.env. Talks to Kuma over Socket.IO via
 the uptime-kuma-api package.
 
@@ -49,6 +53,19 @@ SAAS_MONITORS = [
     # ntfy.sh relays the APNs wake-ups our self-hosted ntfy uses for iOS pushes
     ("ntfy.sh (iOS push relay)", "https://ntfy.sh/v1/health"),
 ]
+
+# Retries before a monitor reports DOWN (one retry per minute). LAN monitors
+# probe containers by Docker DNS name; right after Watchtower recreates a
+# container that name can briefly resolve to the old IP, which another
+# container may already hold (2026-11-13 and 11-20: Energy Monitor "404" for
+# ~7 min, answered by tallied). 8 retries rides that out; a real LAN outage
+# still pages after ~9 min.
+PUBLIC_MAXRETRIES = 2
+LAN_MAXRETRIES = 8
+
+# ARK is checked as a container state (UDP game port, no HTTP); the docker
+# host is the Kuma "Docker host" entry pointing at the local socket.
+ARK_DOCKER_HOST = "Local Docker"
 
 # LAN monitors probe the *backend* over the docker bridge so we bypass
 # nginx basic-auth and the LAN allowlist (Kuma is on the same network as
@@ -140,14 +157,29 @@ def main() -> int:
     # Monitors. Idempotent on monitor name.
     existing_monitors = {m["name"]: m for m in api.get_monitors()}
 
-    def upsert_monitor(name, url, tag_id):
+    def upsert_raw(name, common, tag_id):
+        """Create or update one monitor by name, then tag it."""
+        if name in existing_monitors:
+            mid = existing_monitors[name]["id"]
+            api.edit_monitor(mid, **common)
+            print(f"  monitor updated: {name} (id={mid})")
+        else:
+            mid = api.add_monitor(**common)["monitorID"]
+            print(f"  monitor created: {name} (id={mid})")
+        try:
+            api.add_monitor_tag(tag_id=tag_id, monitor_id=mid, value="")
+        except Exception:
+            pass
+        return mid
+
+    def upsert_monitor(name, url, tag_id, maxretries=PUBLIC_MAXRETRIES):
         common = {
             "type": MonitorType.HTTP,
             "name": name,
             "url": url,
             "interval": 60,
             "retryInterval": 60,
-            "maxretries": 2,
+            "maxretries": maxretries,
             "method": "GET",
             "timeout": 30,
             "accepted_statuscodes": ["200-299", "300-399"],
@@ -200,7 +232,36 @@ def main() -> int:
     print("public monitors:")
     public_ids = [upsert_monitor(n, u, tag_ids["public"]) for n, u in PUBLIC_MONITORS]
     print("lan monitors:")
-    lan_ids = [upsert_monitor(n, u, tag_ids["lan"]) for n, u in LAN_MONITORS]
+    lan_ids = [
+        upsert_monitor(n, u, tag_ids["lan"], maxretries=LAN_MAXRETRIES)
+        for n, u in LAN_MONITORS
+    ]
+    print("game servers:")
+    game_common = {
+        "interval": 60,
+        "retryInterval": 60,
+        "maxretries": PUBLIC_MAXRETRIES,
+        "notificationIDList": {sg_id: True},
+    }
+    docker_hosts = {h["name"]: h["id"] for h in api.get_docker_hosts()}
+    if ARK_DOCKER_HOST in docker_hosts:
+        public_ids.append(upsert_raw("ARK Server", {
+            **game_common,
+            "type": MonitorType.DOCKER,
+            "name": "ARK Server",
+            "docker_container": "asa",
+            "docker_host": docker_hosts[ARK_DOCKER_HOST],
+        }, tag_ids["public"]))
+    else:
+        print(f"  skipped ARK Server: no docker host named {ARK_DOCKER_HOST!r} in Kuma")
+    public_ids.append(upsert_raw("Minecraft Server", {
+        **game_common,
+        "type": MonitorType.GAMEDIG,
+        "name": "Minecraft Server",
+        "game": "minecraft",
+        "hostname": "minecraft.markcheli.com",
+        "port": 25565,
+    }, tag_ids["public"]))
     print("saas monitors:")
     saas_ids = []
     for n, u in SAAS_MONITORS:
