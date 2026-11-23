@@ -62,7 +62,8 @@ above, and only in ways that leave Mark in control:
 - folders inside `~/repos` only, never `~/repos` itself or the gateway's own
   repo; `MCheli` repos already cloned there; no cloning from here;
 - status, logs, messages and stops reach only bus sessions in those folders;
-- at most three sessions running, idle ones included;
+- at most six sessions working at once; finished ones (done, blocked, stopped,
+  failed, gone, or idle with their report written) don't count;
 - sessions don't get Mark's ssh agent;
 - nothing but `bus_stop` while `~/.session-bus/remote-off` exists.
 
