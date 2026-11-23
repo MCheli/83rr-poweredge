@@ -6,16 +6,21 @@ for AI assistants through [basic-memory](https://github.com/basicmachines-co/bas
 (AGPL-3.0), and Obsidian Sync's official headless client to reach the same
 files from Obsidian on other devices.
 
-**Seafile stays the live store until a cut-over is decided.** The folders here
-are a mirror that a cron job refreshes from Seafile every 30 minutes
-(Seafile wins on conflict). Nothing here writes to Seafile.
+**Seafile stays the live store until the cut-over is carried out** (plan
+below; decided 2026-11-23, not started). The folders here are a mirror that a
+cron job refreshes from Seafile every 30 minutes (Seafile wins on conflict,
+the clash is logged). Nothing here writes to Seafile, so edits made in
+Obsidian do not reach Seafile. After the cut-over, every AI write goes
+through basic-memory on this server; until then basic-memory is read-only in
+effect.
 
 ```
 Seafile "AI Context" ──(read-only API token, every 30 min)──▶ $AI_CONTEXT_NOTES_DIR  (git, auto-commit every 15 min)
                                                             └▶ $AI_CONTEXT_RAW_DIR    (git, auto-commit every 15 min)
                                                                    │                        │
-                                        basic-memory ◀─ :ro ───────┘                        │
-                                        (MCP, LAN-only via nginx)                           │
+                                        basic-memory ◀─ rsync copy ┘                        │
+                                        (MCP, LAN-only via nginx;                           │
+                                         read-only until the cut-over)                      │
                                         obsidian-sync-notes ◀──────┘   obsidian-sync-raw ◀──┘
                                         (Obsidian Sync, E2E)           (Obsidian Sync, E2E)
 ```
@@ -47,8 +52,12 @@ docker compose -f infrastructure/ai-context/docker-compose.yml up -d basic-memor
 docker compose -f infrastructure/ai-context/docker-compose.yml logs --tail 50 basic-memory
 ```
 
-### basic-memory (read-only MCP)
+### basic-memory (read-only MCP until the cut-over)
 
+- Decided 2026-11-23: at the cut-over basic-memory becomes the **single write
+  path** for AI, from Mac mini sessions and claude.ai alike; no session writes
+  vault files directly. Until then it stays read-only in effect, by the
+  disposable-copy method below.
 - Image pinned by digest (1.0.0). It indexes a **disposable copy** of the
   notes vault (`AI_CONTEXT_INDEX_COPY_DIR`, default
   `state/basic-memory-copy`, outside both vaults and outside git) that cron
@@ -61,7 +70,8 @@ docker compose -f infrastructure/ai-context/docker-compose.yml logs --tail 50 ba
   192.168.1.0/24; deny all;`). basic-memory has **no authentication of its
   own**; the OAuth sign-in that protects `mcp.markcheli.com` lives inside
   homelab-mcp's code (FastMCP `GoogleProvider` + email allowlist), so sharing
-  it would mean new code there. Until then this stays LAN-only.
+  it means new code there. That is cut-over step 3 below; until then this
+  stays LAN-only, reachable from Mac mini sessions but not from claude.ai.
 - Read-only method: the write tools (`bm_write`, `bm_edit`, `bm_delete`,
   `bm_move`, project create) still exist (1.0.0 has no switch to hide them)
   and they do work on the copy, but the copy is thrown away by the next
@@ -179,8 +189,31 @@ and a `basic-memory reindex` rebuild it. The alternatives (adding `permalink:`
 lines to the real notes, or a `:ro` mount of the vault with 4/2343 coverage)
 were not taken.
 
-## Cut-over (later, not done)
+## Cut-over (decided 2026-11-23, not started)
 
-When the server folders become the live store: stop the Seafile pull cron and
-point the diary writer / transcriber / homelab-mcp at the folders. (The MAIN
-vault already has its private remote; decide then whether RAW needs one.)
+Decisions:
+
+- At the cut-over **all AI writes go through basic-memory on this server**,
+  from Mac mini sessions and claude.ai alike. No session writes vault files
+  directly. Until then basic-memory stays read-only (disposable copy).
+- **Obsidian Sync stays.** It puts the notes on the Mac and the phone, carries
+  edits made there back to the server so AI sees them, and keeps an extra copy.
+
+Plan, only after the other open tasks are done:
+
+1. Stop the Seafile pull cron. Move the diary writer, the house transcriber,
+   the Mac mini collector and homelab-mcp from Seafile to the folders here;
+   the AI writers go through basic-memory.
+2. Turn on basic-memory writes against the real notes vault (mount it `rw`
+   instead of `AI_CONTEXT_INDEX_COPY_DIR`) and accept the one-time front-matter
+   rewrite described under "Permalinks" (a `permalink:` line added, YAML
+   re-serialised) as a **single git commit**. Then drop the index-copy rsync
+   cron line.
+3. Put basic-memory behind homelab-mcp's Google OAuth so its tools appear
+   inside the existing `mcp.markcheli.com` connector for claude.ai, with no
+   new connector to add.
+4. Retire the Seafile "AI Context" library as the store; keep it as an
+   archive until a later decision.
+
+The MAIN vault already has its private remote; decide at the cut-over whether
+RAW needs one.
