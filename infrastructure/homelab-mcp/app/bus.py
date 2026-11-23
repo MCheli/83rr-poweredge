@@ -116,17 +116,29 @@ class MiniBus:
 
 
 if __name__ == "__main__":
-    # Connectivity check from inside the container, without printing any secret:
-    #   docker compose exec -T homelab-mcp python bus.py
+    # Connectivity check from inside the container, without printing any secret or message:
+    #   docker compose exec -T homelab-mcp python bus.py                    # session bus
+    #   docker compose exec -T homelab-mcp python bus.py imessage_recent    # one iMessage tool (counts only)
     import sys
 
+    CHECKS = {"bus_sessions": {}, "imessage_recent": {"limit": 5}, "imessage_search": {"query": "the", "limit": 5},
+              "imessage_threads": {"limit": 5}, "imessage_unanswered": {"hours": 48, "limit": 5}}
+    tool = sys.argv[1] if len(sys.argv) > 1 else "bus_sessions"
+    if tool not in CHECKS:
+        sys.exit(f"usage: bus.py [{'|'.join(CHECKS)}]")
     try:
         mini = MiniBus(target=os.environ.get("BUS_SSH_TARGET", ""),
                        private_key_b64=os.environ.get("BUS_SSH_KEY_B64", ""),
                        host_key=os.environ.get("BUS_SSH_HOST_KEY", ""))
-        res = asyncio.run(mini.call("bus_sessions", {}, "connectivity check"))
+        res = asyncio.run(mini.call(tool, CHECKS[tool], "connectivity check"))
     except (ValueError, BusError) as e:
         print(f"FAIL: {e}")
         sys.exit(1)
-    rows = res.get("session_bus", []) if isinstance(res, dict) else []
-    print(f"OK: the Mac mini's gateway answered; {len(rows)} session(s) listed")
+    if tool == "bus_sessions":
+        rows = res.get("session_bus", []) if isinstance(res, dict) else []
+        print(f"OK: the Mac mini's gateway answered; {len(rows)} session(s) listed")
+    else:
+        items = res.get("threads" if tool == "imessage_threads" else "messages", []) if isinstance(res, dict) else []
+        newest = items[0].get("last_message_time" if tool == "imessage_threads" else "time") if items else None
+        print(f"OK: {tool} answered; count={res.get('count')} newest={newest} "
+              f"rows_examined={res.get('rows_examined')} truncated={res.get('truncated')}")

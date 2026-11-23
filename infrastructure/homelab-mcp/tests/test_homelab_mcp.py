@@ -203,12 +203,14 @@ BUS_TOOLS = {"bus_doctor", "bus_spawn", "bus_sessions", "bus_status", "bus_logs"
 NOTES_READ_TOOLS = {"notes_search", "notes_read", "notes_list", "notes_find", "notes_context", "notes_recent"}
 NOTES_WRITE_TOOLS = {"notes_write", "notes_edit"}  # since the AI Context cut-over (2026-11-23)
 NOTES_TOOLS = NOTES_READ_TOOLS | NOTES_WRITE_TOOLS
+IMESSAGE_TOOLS = {"imessage_recent", "imessage_search", "imessage_threads", "imessage_unanswered"}
 
 
 async def test_registered_tools(tools):
     listed = {t.name: t for t in await tools.mcp.list_tools()}
-    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS | NOTES_TOOLS  # never bus_config or bus_setup
-    for name in SEAFILE_TOOLS | NOTES_READ_TOOLS | {"bus_sessions", "bus_status", "bus_logs", "bus_wait", "bus_doctor"}:
+    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS | NOTES_TOOLS | IMESSAGE_TOOLS  # never bus_config or bus_setup
+    for name in SEAFILE_TOOLS | NOTES_READ_TOOLS | IMESSAGE_TOOLS | {"bus_sessions", "bus_status", "bus_logs",
+                                                                       "bus_wait", "bus_doctor"}:
         assert listed[name].annotations.read_only_hint is True
     for name in ("bus_spawn", "bus_send", "bus_stop", "notes_write", "notes_edit"):  # the acting tools
         assert listed[name].annotations.read_only_hint is False
@@ -342,6 +344,71 @@ async def test_unreachable_mini_is_explained(ssh, tools):
     (ssh.dir / "reply").write_text("")
     with pytest.raises(ToolError, match="Couldn't reach the Mac mini"):
         await tools.bus_status("x")
+
+
+# ── iMessage tools (read-only, forwarded over the same ssh link) ───────────
+
+IMESSAGE_REPLY = {"ok": True, "result": {"count": 1, "truncated": False, "rows_examined": 3, "filtered": {"otp": 1},
+                                         "messages": [{"time": "2026-11-23T15:00:00-05:00", "chat": "Alex Example",
+                                                       "sender": "Alex Example", "is_from_me": False,
+                                                       "is_group": False, "text": "Hey are you free Saturday?"}]}}
+
+
+async def test_imessage_recent_forwards_over_the_bus_link(ssh, tools):
+    ssh.reply(IMESSAGE_REPLY)
+    out = await call_json(tools, "imessage_recent", {"since": "24h"})
+    assert out["count"] == 1 and out["messages"][0]["text"] == "Hey are you free Saturday?"
+    assert ssh.sent() == {"tool": "imessage_recent", "args": {"since": "24h", "limit": 25}, "caller": ""}
+    argv = (ssh.dir / "argv").read_text().split("\n")
+    assert "StrictHostKeyChecking=yes" in argv and argv[-2] == "mark@192.0.2.10"  # the pinned link, nothing else
+
+
+async def test_imessage_args_clamped_and_unset_dropped(ssh, tools):
+    ssh.reply(IMESSAGE_REPLY)
+    await call_json(tools, "imessage_search", {"query": "dinner", "limit": 5000})
+    assert ssh.sent()["args"] == {"query": "dinner", "limit": 100}
+    await call_json(tools, "imessage_unanswered", {"hours": 0, "limit": -3})
+    assert ssh.sent()["args"] == {"hours": 1, "limit": 1}
+    await call_json(tools, "imessage_threads", {})
+    assert ssh.sent()["args"] == {"limit": 25}
+    await call_json(tools, "imessage_search", {"query": "x", "contact": "Sam", "since": "2026-11-20"})
+    assert ssh.sent()["args"] == {"query": "x", "contact": "Sam", "since": "2026-11-20", "limit": 25}
+
+
+async def test_imessage_search_requires_query(tools):
+    from fastmcp.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="query"):  # rejected by the schema before anything is sent
+        await call_json(tools, "imessage_search", {})
+
+
+async def test_imessage_service_errors_are_tool_errors(ssh, tools):
+    from fastmcp.exceptions import ToolError
+
+    ssh.reply({"ok": False, "error": "The iMessage service isn't running on the Mac mini (launchctl list | grep imessage-service)."})
+    with pytest.raises(ToolError, match="iMessage service isn't running"):
+        await call_json(tools, "imessage_recent", {})
+
+
+async def test_imessage_descriptions_promise_read_only_and_no_codes(tools):
+    listed = {t.name: t for t in await tools.mcp.list_tools()}
+    for name in IMESSAGE_TOOLS:
+        desc = (listed[name].description or "").lower()
+        assert "read-only" in desc and "verification code" in desc and "live" in desc, name
+        assert not {"project", "task", "message_text", "send"} & set(listed[name].parameters["properties"])
+    assert "imessage_unanswered" in tools.mcp.instructions and "read-only" in tools.mcp.instructions
+
+
+def test_no_imessage_tools_without_the_bus():
+    from fastmcp import FastMCP
+    from imessage import register_imessage_tools
+
+    assert register_imessage_tools(FastMCP("bare"), None) == []
+
+
+async def call_json(server, name, args) -> dict:
+    res = await server.mcp.call_tool(name, args)
+    return json.loads("".join(getattr(b, "text", "") for b in res.content))
 
 
 SLOW_SSH = """#!/bin/sh
