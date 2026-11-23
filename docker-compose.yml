@@ -1210,7 +1210,8 @@ services:
 
   # ═════════════════════════════════════════════════════════════════════════════
   # homelab-mcp: claude.ai connector (remote MCP server)
-  # Lets Claude list and read the Seafile "AI Context" library from any chat and,
+  # Lets Claude list and read the Seafile "AI Context" library from any chat,
+  # search/read the same notes through basic-memory (read-only notes_* tools) and,
   # when HOMELAB_MCP_BUS_SSH_TARGET is set, start Claude Code sessions on the Mac
   # mini over the LAN (ssh to its bus-gateway; the mini has no public port).
   # Sign-in is Google OAuth limited to HOMELAB_MCP_ALLOWED_EMAILS; Seafile access
@@ -1246,6 +1247,10 @@ services:
       - BUS_SSH_TARGET=${HOMELAB_MCP_BUS_SSH_TARGET:-}
       - BUS_SSH_KEY_B64=${HOMELAB_MCP_BUS_SSH_KEY_B64:-}
       - BUS_SSH_HOST_KEY=${HOMELAB_MCP_BUS_SSH_HOST_KEY:-}
+      # Read-only notes_* tools forwarded to basic-memory (infrastructure/ai-context,
+      # same Docker network, no public URL of its own). Set HOMELAB_MCP_NOTES_MCP_URL=
+      # (empty) in .env to turn them off; basic-memory being down only disables them.
+      - NOTES_MCP_URL=${HOMELAB_MCP_NOTES_MCP_URL-http://basic-memory:8000/mcp}
     volumes:
       # OAuth client registrations + encrypted upstream tokens (FASTMCP_HOME)
       - homelab_mcp_data:/data
