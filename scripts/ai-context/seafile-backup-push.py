@@ -14,7 +14,13 @@ library once, uploads only the local files that changed since the last run
   vault's .gitignore ignores (that is where the secret-flagged raw files are
   listed), plus the bare file names in exclude_names;
 - needs a *library API token* with Read-Write permission (the vault's own
-  token file, mode 600); it refuses a read-only one.
+  token file, mode 600); it refuses a read-only one;
+- guards against something still writing into Seafile (guard_prefixes, default
+  /03-diary, where the old diary skill wrote): before uploading, every Seafile
+  file under a guarded prefix that is missing on this server, or that Seafile
+  holds in a version this script did not upload and with a newer mtime than the
+  local copy, is logged as "DIVERGED <path>", is never overwritten, and is not
+  imported. Someone has to look at it and resolve it by hand.
 
 Config is a JSON file (kept outside the repo, e.g. /data/ai-context/push-config.json):
 
@@ -23,6 +29,7 @@ Config is a JSON file (kept outside the repo, e.g. /data/ai-context/push-config.
   "token_file": "/data/ai-context/.secrets/seafile-rw-token",
   "state_dir": "/data/ai-context/state/seafile-push",
   "max_file_mb": 90,
+  "guard_prefixes": ["/03-diary"],
   "exclude_names": ["some-file.md"],
   "targets": [
     {"name": "notes", "src": "/data/ai-context/notes", "remote_root": "/"},
@@ -37,10 +44,17 @@ uploaded when the hash differs. A file not in the state yet (first run, new
 file) is compared with Seafile's listing: same size and a Seafile mtime at
 least as new as the local one counts as in sync (seafile-pull.py set local
 mtimes from Seafile), anything else is uploaded. So the first run after the
-cut-over uploads only what changed locally since the last pull.
+cut-over uploads only what changed locally since the last pull. After each
+upload the Seafile file id comes back and is kept as remote_id, which is how
+the guard tells "our own upload" (newer mtime, same id) from a foreign write.
 
 Usage: seafile-backup-push.py --config /data/ai-context/push-config.json [--dry-run]
-       [--target notes] [--max-files N]
+       [--target notes] [--max-files N] [--adopt-remote]
+
+--adopt-remote (run once, by hand, when you know Seafile holds nothing but this
+script's own uploads): records the current Seafile file id as remote_id for
+every state entry that lacks one and whose local file is unchanged, so the
+guard does not flag the files uploaded before the guard existed.
 """
 
 from __future__ import annotations
@@ -136,8 +150,9 @@ class Seafile:
             self.api("dir/", {"path": path}, "POST", {"operation": "mkdir"})
         self.known_dirs.add(path)
 
-    def upload(self, parent: str, name: str, content: bytes) -> None:
-        """Create or replace parent/name with content (replace=1: no "(1)" copies)."""
+    def upload(self, parent: str, name: str, content: bytes) -> str | None:
+        """Create or replace parent/name with content (replace=1: no "(1)" copies).
+        Returns the new Seafile file id when the server reports it."""
         link = self._internal(self.api("upload-link/", {"path": parent}))
         boundary = uuid.uuid4().hex
         parts = []
@@ -146,8 +161,15 @@ class Seafile:
         parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
                      "Content-Type: application/octet-stream\r\n\r\n".encode() + content + b"\r\n")
         parts.append(f"--{boundary}--\r\n".encode())
-        self._request(link + "?ret-json=1", b"".join(parts), "POST",
-                      {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        raw = self._request(link + "?ret-json=1", b"".join(parts), "POST",
+                            {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        try:
+            for item in json.loads(raw or b"[]"):
+                if isinstance(item, dict) and item.get("name") == name and item.get("id"):
+                    return str(item["id"])
+        except ValueError:
+            pass
+        return None
 
 
 def norm(p: str) -> str:
@@ -213,14 +235,71 @@ def local_files(src: Path, exclude_names: set[str]) -> list[str]:
     return files
 
 
+def rel_of(full: str, root: str) -> str:
+    return full[len(root):].lstrip("/") if root != "/" else full.lstrip("/")
+
+
+def find_diverged(remote: dict[str, dict], root: str, src: Path, state: dict, guard_prefixes: list[str]) -> dict[str, str]:
+    """Seafile files under a guarded prefix that this server did not produce: rel path -> reason.
+
+    Missing locally, or Seafile's version is not the one we uploaded (remote id
+    unknown or different) and is newer than the local copy.
+    """
+    out: dict[str, str] = {}
+    for full, r in remote.items():
+        if not any(under(full, norm(g)) for g in guard_prefixes):
+            continue
+        if root != "/" and not under(full, root):
+            continue
+        rel = rel_of(full, root)
+        if not rel or ".." in rel.split("/"):
+            continue
+        local = src / rel
+        if not local.exists():
+            out[rel] = "missing on this server"
+            continue
+        prev = state.get(rel) or {}
+        if prev.get("remote_id") and prev["remote_id"] == r.get("id"):
+            continue  # exactly the version we uploaded
+        try:
+            local_mtime = local.stat().st_mtime
+        except OSError:
+            continue
+        if parse_mtime(r.get("mtime", "")) > local_mtime + 1:
+            out[rel] = "Seafile copy is newer and not ours"
+    return out
+
+
 def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Path, exclude_names: set[str],
-               *, dry_run: bool, max_files: int | None, max_bytes: int) -> dict:
+               *, dry_run: bool, max_files: int | None, max_bytes: int, guard_prefixes: list[str],
+               adopt_remote: bool = False) -> dict:
     name, src, root = target["name"], Path(target["src"]), norm(target["remote_root"])
     if any(under(root, bad) for bad in NEVER_PUSH):
         raise RuntimeError(f"remote_root {root} is inside a never-push folder")
     state_path = state_dir / f"{name}.json"
     state = load_state(state_path)
     files = local_files(src, exclude_names)
+
+    if adopt_remote and not dry_run:
+        adopted = 0
+        for rel, prev in state.items():
+            r = remote.get(posixpath.join(root, rel))
+            if not r or prev.get("remote_id") or not r.get("id"):
+                continue
+            p = src / rel
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            if prev.get("size") == st.st_size and abs(prev.get("mtime", 0) - st.st_mtime) < 1e-6:
+                prev["remote_id"] = r["id"]
+                adopted += 1
+        save_state(state_path, state)
+        log(f"[{name}] adopted the current Seafile version of {adopted} unchanged file(s) as our own")
+
+    diverged = find_diverged(remote, root, src, state, guard_prefixes)
+    for rel, why in sorted(diverged.items()):
+        log(f"[{name}] DIVERGED {posixpath.join(root, rel)} ({why}); not overwritten, not imported")
 
     todo, in_sync, skipped_big, refused = [], 0, 0, 0
     for rel in files:
@@ -235,6 +314,8 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
             skipped_big += 1
             log(f"[{name}] SKIP too large ({st.st_size} bytes): {rel}")
             continue
+        if rel in diverged:
+            continue  # never overwrite a DIVERGED file; it was logged above
         prev = state.get(rel)
         if prev and prev.get("size") == st.st_size and abs(prev.get("mtime", 0) - st.st_mtime) < 1e-6:
             in_sync += 1  # unchanged since last run, no hashing needed
@@ -242,7 +323,7 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
         digest = sha256(p)
         entry = dict(size=st.st_size, mtime=st.st_mtime, sha256=digest)
         if prev and prev.get("sha256") == digest:
-            state[rel] = entry  # touched, not changed
+            state[rel] = {**prev, **entry}  # touched, not changed (keep remote_id)
             in_sync += 1
             continue
         if prev is None:
@@ -250,7 +331,7 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
             # the local mtime from Seafile's, so a local edit is newer and/or a different size).
             r = remote.get(full)
             if r and r.get("size") == st.st_size and parse_mtime(r.get("mtime", "")) + 1 >= st.st_mtime:
-                state[rel] = entry
+                state[rel] = dict(entry, remote_id=r.get("id")) if r.get("id") else entry
                 in_sync += 1
                 continue
         todo.append((rel, full, entry))
@@ -259,7 +340,7 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
 
     suffix = " (dry run)" if dry_run else ""
     log(f"[{name}] local files: {len(files)}, in sync: {in_sync}, to upload: {len(todo)}, "
-        f"refused: {refused}, too large: {skipped_big}{suffix}")
+        f"diverged: {len(diverged)}, refused: {refused}, too large: {skipped_big}{suffix}")
     uploaded = failed = 0
     t0 = time.time()
     for i, (rel, full, entry) in enumerate(todo, 1):
@@ -268,8 +349,8 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
             continue
         try:
             sf.ensure_dir(posixpath.dirname(full))
-            sf.upload(posixpath.dirname(full), posixpath.basename(full), (src / rel).read_bytes())
-            state[rel] = entry
+            new_id = sf.upload(posixpath.dirname(full), posixpath.basename(full), (src / rel).read_bytes())
+            state[rel] = dict(entry, remote_id=new_id) if new_id else entry
             uploaded += 1
             log(f"[{name}] uploaded {rel}")
         except Exception as e:
@@ -282,7 +363,7 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
         if todo:
             log(f"[{name}] uploaded {uploaded}, failed {failed}, {round(time.time() - t0)}s")
     return dict(target=name, files=len(files), in_sync=in_sync, uploaded=uploaded, failed=failed,
-                refused=refused, too_large=skipped_big)
+                refused=refused, too_large=skipped_big, diverged=len(diverged))
 
 
 def main() -> int:
@@ -291,6 +372,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--target", help="only this target name")
     ap.add_argument("--max-files", type=int)
+    ap.add_argument("--adopt-remote", action="store_true",
+                    help="once, by hand: record Seafile's current file ids as our own for unchanged files")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text())
@@ -329,12 +412,14 @@ def main() -> int:
         remote = sf.listing()
         exclude_names = set(cfg.get("exclude_names", []))
         max_bytes = int(float(cfg.get("max_file_mb", 90)) * 1024 * 1024)
+        guard_prefixes = [norm(p) for p in cfg.get("guard_prefixes", ["/03-diary"])]
         for target in cfg["targets"]:
             if args.target and target["name"] != args.target:
                 continue
             try:
                 res = run_target(sf, remote, target, state_dir, exclude_names, dry_run=args.dry_run,
-                                 max_files=args.max_files, max_bytes=max_bytes)
+                                 max_files=args.max_files, max_bytes=max_bytes, guard_prefixes=guard_prefixes,
+                                 adopt_remote=args.adopt_remote)
                 if res["failed"]:
                     rc = 1
             except Exception as e:
