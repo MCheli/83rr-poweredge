@@ -3,10 +3,11 @@
 A **claude.ai custom connector** (remote MCP server) for chats that run in
 Anthropic's cloud and can't see the LAN. It lets Claude:
 
-- list and read the Seafile **AI Context** library (read-only),
-- search and read the same notes through **basic-memory** (read-only `notes_*`
-  tools forwarded over the internal Docker network; see
-  `infrastructure/ai-context/README.md`), and
+- list and read the Seafile **AI Context** library (read-only; since the
+  2026-11-23 cut-over Seafile is a backup copy of the notes, up to an hour behind),
+- search, read, **write and edit** the AI Context notes through **basic-memory**
+  (`notes_*` tools forwarded over the internal Docker network to the notes vault
+  on this server, the main copy; see `infrastructure/ai-context/README.md`), and
 - optionally, start and manage **Claude Code sessions on the Mac mini** through
   its session bus, reached over the LAN by ssh. Those sessions do the local
   work (repos, files, ssh back to this server, Home Assistant). The mini has no
@@ -16,7 +17,7 @@ Anthropic's cloud and can't see the LAN. It lets Claude:
 claude.ai ──HTTPS──▶ Cloudflare ──▶ nginx (mcp.markcheli.com) ──▶ homelab-mcp:8000
                                                                      │  Google OAuth (sign-in)
                                                                      ├─▶ seafile:80 (read-only library token)
-                                                                     ├─▶ basic-memory:8000/mcp (MCP client, 6 read tools, project pinned)
+                                                                     ├─▶ basic-memory:8000/mcp (MCP client, 6 read + write/edit, project pinned)
                                                                      └─▶ ssh (LAN) ─▶ Mac mini bus-gateway ─▶ session-bus
 ```
 
@@ -36,8 +37,8 @@ library the token belongs to.
 No write, move, delete or share-link tools exist for Seafile.
 
 With `NOTES_MCP_URL` set (the compose default points at `basic-memory`), these
-read-only tools are added; each one is a fixed-allowlist forward to one
-basic-memory tool (`app/notes.py`), with `project` pinned to `main`:
+tools are added; each one is a fixed-allowlist forward to one basic-memory tool
+(`app/notes.py`), with `project` pinned to `main`:
 
 | Tool | basic-memory tool | What it does |
 | --- | --- | --- |
@@ -47,13 +48,22 @@ basic-memory tool (`app/notes.py`), with `project` pinned to `main`:
 | `notes_find(path, name, filters, fields, depth, …)` | `bm_find` | Recursive search by file-name glob or front matter |
 | `notes_context(identifier, depth, since, …)` | `bm_context` | Follow `[[links]]` between notes |
 | `notes_recent(since, items, …)` | `bm_project(command="recent")` | What changed lately |
+| `notes_write(content, identifier \| title+directory, overwrite, expected_checksum, …)` | `bm_write` | Create or replace one note (acting tool, `destructiveHint`) |
+| `notes_edit(identifier, command, content, section, find_text, metadata, …)` | `bm_edit` | Append/prepend, find/replace, replace or insert a section, set front matter (acting tool) |
 
-basic-memory 1.0.0 also offers `bm_write`, `bm_edit`, `bm_delete`, `bm_move`,
-`bm_project` `list`/`create`, `bm_schema` and `bm_man`. None of those is
-reachable through here: the bridge refuses any tool name outside its allowlist
-before sending anything, drops the `project`/`projects`/`all_projects`/`command`
-arguments a caller might pass and sets them itself. Writes get turned on at the
-AI Context cut-over, a later step. If basic-memory is down the `notes_*` tools
+The two writing tools exist since the AI Context cut-over (2026-11-23): every
+AI note write goes through basic-memory on the server, behind this connector's
+Google OAuth, and lands in the real notes vault (Obsidian Sync and the
+Seafile backup push follow). They only accept vault-relative paths and refuse
+anything under `templates/` (basic-memory doesn't index it, and the templates'
+placeholder front matter must stay as it is).
+
+basic-memory 1.0.0 also offers `bm_delete`, `bm_move`, `bm_project`
+`list`/`create`, `bm_schema` and `bm_man`. None of those is reachable through
+here: the bridge refuses any tool name outside its allowlist before sending
+anything, drops the `project`/`projects`/`all_projects` arguments a caller might
+pass and sets `project` (and `bm_project`'s `command`) itself; nothing can be
+deleted or moved from claude.ai. If basic-memory is down the `notes_*` tools
 return a clear error and everything else keeps working; calls time out at 30 s.
 Queries, identifiers and note text are never logged.
 
@@ -112,8 +122,10 @@ needs a unique name, so a retry after a timeout can't start a second session.
   everything else on the host is a 404. Seafile (`http://seafile`) and
   basic-memory (`http://basic-memory:8000/mcp`, which has no auth of its own)
   are reached on the internal Docker network, never over the internet;
-  basic-memory gets no public URL or port of its own, only the LAN vhost it
-  already had.
+  basic-memory gets no public URL or port of its own. Its LAN vhost
+  (`memory.ops.markcheli.com`) is limited to the Mac mini (192.168.1.161)
+  since basic-memory writes to the real vault; everything else reaches it
+  only through this connector's OAuth.
 - **Container:** non-root, read-only root filesystem, all capabilities dropped,
   `no-new-privileges`. State (OAuth client registrations, Fernet-encrypted
   upstream tokens) lives in the `homelab_mcp_data` volume.
@@ -210,5 +222,5 @@ pytest -q
 ```
 
 Tests run against a fake Seafile, a stubbed Google verifier, a fake `ssh` and
-an in-memory fake basic-memory (which does offer write tools, to prove they
-never surface); no network.
+an in-memory fake basic-memory (which also offers `bm_delete`/`bm_move`, to
+prove those never surface while write/edit do); no network.

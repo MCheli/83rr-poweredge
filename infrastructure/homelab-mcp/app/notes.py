@@ -1,14 +1,17 @@
-"""Read-only bridge to basic-memory, the MCP server over Mark's AI Context notes.
+"""Bridge to basic-memory, the MCP server over Mark's AI Context notes.
 
-basic-memory (container `basic-memory`, infrastructure/ai-context) indexes a
-plain-Markdown mirror of the AI Context library and serves it over streamable
-HTTP on the internal Docker network, with no auth of its own. Its 1.0.0 image
-also has write tools (bm_write, bm_edit, bm_delete, bm_move, project create)
-and no switch to hide them, so this module is the ONLY path from homelab-mcp
-to it and it forwards exactly the tools in UPSTREAM_TOOLS: NotesBridge.call()
-refuses every other name before anything is sent, drops the project-selection
-arguments a caller might pass, and pins `project` (and, for bm_project, the
-`command`) itself. Writes are turned on at the AI Context cut-over, later.
+basic-memory (container `basic-memory`, infrastructure/ai-context) indexes the
+AI Context notes vault on this server (the main copy since the 2026-11-23
+cut-over; Obsidian Sync and the Seafile backup push follow it) and serves it
+over streamable HTTP on the internal Docker network, with no auth of its own.
+Its 1.0.0 image has no switch to hide tools, so this module is the ONLY path
+from homelab-mcp to it and it forwards exactly the tools in UPSTREAM_TOOLS:
+the six read tools plus bm_write and bm_edit (every AI note write goes through
+basic-memory, behind this connector's Google OAuth). NotesBridge.call() refuses
+every other name (bm_delete, bm_move, bm_schema, bm_man, project create) before
+anything is sent, drops the project-selection arguments a caller might pass,
+pins `project` (and, for bm_project, the `command`) itself, and for the two
+write tools only accepts vault-relative paths outside templates/.
 
 Each call opens its own short MCP session (initialize, one tools/call, close):
 a few milliseconds on the Docker network, and nothing to reconnect when
@@ -27,10 +30,12 @@ from fastmcp.exceptions import ToolError
 log = logging.getLogger("homelab-mcp.notes")
 
 READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+# Writing a note changes the vault (and everything synced from it); claude.ai asks before these by default.
+ACTS = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
 
 # basic-memory tool -> arguments this bridge always sets (after the caller's).
-# Everything not listed here (bm_write, bm_edit, bm_delete, bm_move, bm_schema,
-# bm_man, bm_project list/create) can't be called through homelab-mcp.
+# Everything not listed here (bm_delete, bm_move, bm_schema, bm_man,
+# bm_project list/create) can't be called through homelab-mcp.
 UPSTREAM_TOOLS: dict[str, dict] = {
     "bm_search": {},
     "bm_read": {},
@@ -38,9 +43,18 @@ UPSTREAM_TOOLS: dict[str, dict] = {
     "bm_find": {},
     "bm_context": {},
     "bm_project": {"command": "recent"},  # the read-only command; list/create never
+    "bm_write": {},  # create/replace one note (since the 2026-11-23 cut-over)
+    "bm_edit": {},  # change part of one note; its `command` is the edit kind, kept as given
 }
+WRITE_TOOLS = frozenset({"bm_write", "bm_edit"})
 # Caller-supplied arguments that choose a project or widen the scope are dropped.
-SCOPE_ARGS = frozenset({"project", "projects", "all_projects", "workspace", "command"})
+# (`command` is not in this set: bm_edit needs the caller's; bm_project's is forced above.)
+SCOPE_ARGS = frozenset({"project", "projects", "all_projects", "workspace"})
+# Writes only name files inside the vault, by relative path. The templates
+# folder is excluded: basic-memory doesn't index it (.bmignore) and the
+# templates carry placeholder front matter that must stay as it is.
+WRITE_PATH_ARGS = ("identifier", "directory")
+NO_WRITE_PREFIXES = ("templates",)
 
 
 class NotesError(Exception):
@@ -65,8 +79,13 @@ class NotesBridge:
     def prepare(self, tool: str, args: dict) -> dict:
         """The exact arguments sent upstream, or NotesError if `tool` isn't allowed."""
         if tool not in UPSTREAM_TOOLS:
-            raise NotesError(f"{tool} isn't available through this connector (read-only notes tools only).")
+            raise NotesError(f"{tool} isn't available through this connector "
+                             "(notes can be searched, read, written and edited here; not deleted or moved).")
         clean = {k: v for k, v in args.items() if v is not None and k not in SCOPE_ARGS}
+        if tool in WRITE_TOOLS:
+            for key in WRITE_PATH_ARGS:
+                if key in clean:
+                    check_write_path(clean[key])
         clean.update(UPSTREAM_TOOLS[tool])
         clean["project"] = self.project
         return clean
@@ -96,6 +115,22 @@ class NotesBridge:
             raise NotesError(f"basic-memory isn't reachable ({type(e).__name__})") from e
 
 
+def check_write_path(value: str) -> None:
+    """A note path for bm_write/bm_edit: relative, inside the vault, not under templates/.
+
+    Permalinks and titles (which bm_edit also accepts) pass as long as they don't
+    look like an escape; basic-memory resolves them inside the project anyway.
+    """
+    text = str(value).replace("\\", "/")
+    parts = [p for p in text.split("/") if p not in ("", ".")]
+    if text.startswith(("/", "~")) or ".." in parts or "://" in text and not text.startswith("memory://"):
+        raise NotesError(f"{value!r} isn't a path inside the notes vault; use a relative path like "
+                         "\"02-systems/mac-mini.md\".")
+    if parts and parts[0].lower() in NO_WRITE_PREFIXES:
+        raise NotesError("The templates folder is read-only (its placeholder front matter must stay as it is); "
+                         "copy a template into a new note instead.")
+
+
 def render(content) -> str:
     parts = []
     for block in content or []:
@@ -105,20 +140,30 @@ def render(content) -> str:
 
 
 NOTES_INSTRUCTIONS = """\
- The notes_* tools reach the same AI Context notes through basic-memory, a \
-ranked full-text index of the Markdown mirror: notes_search for ranked retrieval \
-or grep-like matching lines, notes_read for one note (whole, a section or a line \
-range), notes_list and notes_find for folders and file names, notes_context to \
-follow the [[links]] between notes, notes_recent for what changed lately. Paths \
-are relative to the notes root (e.g. "03-diary/2026-11-10.md"). They are \
-read-only; notes can't be written from here.\
+ The notes_* tools reach the AI Context notes vault on the server, the main copy \
+since 2026-11-23 (the Seafile library is now a backup that follows it, so prefer \
+these over the Seafile tools for notes), through basic-memory, a ranked full-text \
+index: notes_search for ranked retrieval or grep-like matching lines, notes_read \
+for one note (whole, a section or a line range), notes_list and notes_find for \
+folders and file names, notes_context to follow the [[links]] between notes, \
+notes_recent for what changed lately. Paths are relative to the notes root (e.g. \
+"03-diary/2026-11-10.md"). notes_write creates or replaces one note and \
+notes_edit changes part of one (append, find/replace, a section, front matter): \
+this is the only way AI assistants write notes; what they write is synced to \
+Mark's Obsidian devices and backed up to Seafile within the hour. Follow the \
+files under templates/ for the front matter of diary and system notes; the \
+templates themselves can't be changed from here, and nothing can be deleted or \
+moved.\
 """
 
 OutputFormat = Literal["text", "json"]
 
 
-def register_notes_tools(mcp: FastMCP, bridge: NotesBridge | None) -> list[str]:
-    """Add the notes_* tools to `mcp` when a bridge is configured. Returns their names."""
+def register_notes_tools(mcp: FastMCP, bridge: NotesBridge | None, *, acts: dict = ACTS) -> list[str]:
+    """Add the notes_* tools to `mcp` when a bridge is configured. Returns their names.
+
+    `acts` is the annotation set for the two writing tools (server.py passes its ACTS).
+    """
     if bridge is None:
         return []
 
@@ -244,7 +289,67 @@ def register_notes_tools(mcp: FastMCP, bridge: NotesBridge | None) -> list[str]:
         return await forward("bm_project", since=since, items=items, page=page, page_size=page_size,
                              output_format=output_format)
 
-    tools = [notes_search, notes_read, notes_list, notes_find, notes_context, notes_recent]
-    for fn in tools:
+    async def notes_write(
+        content: str,
+        identifier: str | None = None,
+        title: str | None = None,
+        directory: str | None = None,
+        note_type: str = "note",
+        tags: list[str] | str | None = None,
+        metadata: dict | None = None,
+        overwrite: bool | None = None,
+        expected_checksum: str | None = None,
+        output_format: OutputFormat = "text",
+    ) -> str:
+        """Create or replace one note in Mark's AI Context notes. This changes the main
+        copy on the server; Obsidian Sync and the Seafile backup follow it.
+
+        identifier is the file path relative to the notes root ("03-diary/2026-11-23.md";
+        ".md" is added when missing), or give title plus directory instead. content is
+        saved as given and may start with YAML front matter: follow the matching file
+        under templates/ (daily, monthly, yearly, system) and 03-diary/README.md's
+        writing style. An existing note is an error unless overwrite=true;
+        expected_checksum (from notes_read) replaces only the revision you read. For a
+        partial change use notes_edit. The templates folder itself can't be written.
+        """
+        return await forward("bm_write", content=content, identifier=identifier, title=title, directory=directory,
+                             note_type=note_type, tags=tags, metadata=metadata, overwrite=overwrite,
+                             expected_checksum=expected_checksum, output_format=output_format)
+
+    async def notes_edit(
+        identifier: str,
+        command: Literal["append", "prepend", "find_replace", "replace_section", "insert_before_section",
+                         "insert_after_section", "set_metadata"],
+        content: str | None = None,
+        section: str | None = None,
+        find_text: str | None = None,
+        expected_replacements: int = 1,
+        replace_subsections: bool = True,
+        metadata: dict | None = None,
+        expected_checksum: str | None = None,
+        output_format: OutputFormat = "text",
+    ) -> str:
+        """Change part of an existing note in Mark's AI Context notes (the main copy on
+        the server; Obsidian Sync and the Seafile backup follow it).
+
+        command: append or prepend content; find_replace find_text with content (exact,
+        case-sensitive, must occur expected_replacements times); replace_section,
+        insert_before_section or insert_after_section for a section heading ("Decisions",
+        "Auth/Decisions" for one under "Auth", "Decisions[1]" for the second of two);
+        set_metadata merges metadata into the front matter without touching the body
+        (metadata also merges with any other command). Pass expected_checksum (from
+        notes_read) to edit only the revision you read. A missing note is an error:
+        create it with notes_write. Nothing under templates/ can be edited.
+        """
+        return await forward("bm_edit", identifier=identifier, command=command, content=content, section=section,
+                             find_text=find_text, expected_replacements=expected_replacements,
+                             replace_subsections=replace_subsections, metadata=metadata,
+                             expected_checksum=expected_checksum, output_format=output_format)
+
+    read_tools = [notes_search, notes_read, notes_list, notes_find, notes_context, notes_recent]
+    write_tools = [notes_write, notes_edit]
+    for fn in read_tools:
         mcp.tool(fn, annotations=READ_ONLY)
-    return [fn.__name__ for fn in tools]
+    for fn in write_tools:
+        mcp.tool(fn, annotations=acts)
+    return [fn.__name__ for fn in read_tools + write_tools]
