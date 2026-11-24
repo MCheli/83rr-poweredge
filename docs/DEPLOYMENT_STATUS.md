@@ -114,7 +114,7 @@
     - Endpoint: knowledge.markcheli.com
     - Image: ghcr.io/mcheli/knowledge:latest
     - Auth: Google SSO (owner + allowlist)
-    - Dependencies: the notes vault at `/data/ai-context/notes` (read-only bind mount), `knowledge_data` volume (SQLite), basic-memory over the Docker network (`http://basic-memory:8000/mcp`, project `main`) for every write
+    - Dependencies: the notes vault at `/data/ai-context/notes` (read-only bind mount), the RAW vault at `/data/ai-context/raw` (read-only bind mount at `/raw`, `KNOWLEDGE_RAW_DIR`, for the owner-only Raw area; added 2026-11-24), `knowledge_data` volume (SQLite), basic-memory over the Docker network (`http://basic-memory:8000/mcp`, project `main`) for every write
 
 22. **Daily Report** - Thermal-printer report generator ✅
     - Status: Healthy
