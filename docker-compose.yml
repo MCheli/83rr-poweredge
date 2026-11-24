@@ -782,6 +782,10 @@ services:
       - TASKS_TEST_USER_EMAIL=${TASKS_TEST_USER_EMAIL}
       - TASKS_TEST_USER_PASSWORD=${TASKS_TEST_USER_PASSWORD}
       - TASKS_DEMO_URL=https://tasks-demo.markcheli.com
+      # MCP connector built into the app (https://tasks.markcheli.com/mcp): PUBLIC_URL is the
+      # OAuth issuer; the sign-in allowlist is the same one homelab-mcp uses. Never on the demo.
+      - TASKS_PUBLIC_URL=https://tasks.markcheli.com
+      - TASKS_MCP_ALLOWED_EMAILS=${HOMELAB_MCP_ALLOWED_EMAILS:-}
     networks:
       - infrastructure
     healthcheck:

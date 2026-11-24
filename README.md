@@ -86,7 +86,7 @@ curl https://flask.markcheli.com/health
   - Smart home automation platform
 - **Tallied** - https://money.markcheli.com
   - Personal finance dashboard with Google SSO
-- **Tasks** - https://tasks.markcheli.com
+- **Tasks** - https://tasks.markcheli.com (also a claude.ai custom connector at `/mcp`, served by the app itself: OAuth 2.1 with the app's own Google sign-in, same allowed account as homelab-mcp; see the MCheli/tasks repo)
   - Cycle-based todo app with Google SSO
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
