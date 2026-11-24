@@ -109,12 +109,12 @@
     - Status: Healthy
     - Purpose: Backend database for Tasks
 
-21b. **Knowledge** - Web reader for the AI Context notes vault ✅
-    - Status: Healthy (deployed 2026-11-24)
+21b. **Knowledge** - Web reader + editor for the AI Context notes vault ✅
+    - Status: Healthy (deployed 2026-11-24; editor enabled 2026-11-24)
     - Endpoint: knowledge.markcheli.com
     - Image: ghcr.io/mcheli/knowledge:latest
     - Auth: Google SSO (owner + allowlist)
-    - Dependencies: the notes vault at `/data/ai-context/notes` (read-only bind mount), `knowledge_data` volume (SQLite)
+    - Dependencies: the notes vault at `/data/ai-context/notes` (read-only bind mount), `knowledge_data` volume (SQLite), basic-memory over the Docker network (`http://basic-memory:8000/mcp`, project `main`) for every write
 
 22. **Daily Report** - Thermal-printer report generator ✅
     - Status: Healthy
