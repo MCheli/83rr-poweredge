@@ -63,6 +63,7 @@ function, so the list is what a real run would delete.
 | `83rr-poweredge_plex_config` | 312 M | Plex's metadata DB only — *not media* |
 | `83rr-poweredge_tallied_db_data` | 81 M | Postgres data dir (use `.sql.gz` for restore) |
 | `83rr-poweredge_tasks_db_data` | 47 M | Postgres data dir (use `.sql.gz` for restore) |
+| `83rr-poweredge_knowledge_data` | small | Knowledge's `app.sqlite` (users, grants, API keys, saved 3D layouts); `index.sqlite` is also there but is rebuilt from the notes vault on every start (copied live, WAL files included) |
 | `83rr-poweredge_energy_monitor_db_data` | 47 M | Postgres data dir (use `.sql.gz` for restore) |
 | `83rr-poweredge_energy_monitor_data` | small | Snapshots and logs from the panel-tool app |
 | `83rr-poweredge_uptime_kuma_data` | 666 M | Uptime Kuma monitors, notifications, status page, heartbeat history (SQLite; copied live, WAL files included) |

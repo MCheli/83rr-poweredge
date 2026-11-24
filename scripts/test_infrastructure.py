@@ -94,6 +94,13 @@ class InfrastructureHealthTest:
                 'expected_content': '"demo_mode":true',
                 'description': 'Cookbook public demo (read-only, made-up data)'
             },
+            'knowledge': {
+                # App UI is Google SSO; the unauthenticated health endpoint reports
+                # liveness and the index status.
+                'url': 'https://knowledge.markcheli.com/api/health',
+                'expected_content': '"status"',
+                'description': 'Knowledge (notes vault reader) API health'
+            },
             'uptime-kuma': {
                 # "/" is a deliberate nginx 302 to the public status page.
                 'url': 'https://status.markcheli.com/status/homelab',
@@ -176,6 +183,7 @@ class InfrastructureHealthTest:
             'tasks.markcheli.com',
             'tasks-demo.markcheli.com',
             'cookbook-demo.markcheli.com',
+            'knowledge.markcheli.com',
             'status.markcheli.com',
             'minecraft.markcheli.com',
             'dashboard.ops.markcheli.com',
