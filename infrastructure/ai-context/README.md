@@ -19,7 +19,8 @@ Seafile). Before it, the folders were a mirror pulled from Seafile.
    house-transcriber ──bind mount /output──────────────────────────────────────▶ $AI_CONTEXT_RAW_DIR  (RAW vault, git, auto-commit */15, local only)
                                                                                    ▲
                                                                      obsidian-sync-raw (Obsidian Sync, E2E)
-   both vaults ──seafile-backup-push.py (rw library token, */30, never deletes)──▶ Seafile "AI Context" (backup; 04-work and 05-raw/work-laptop stay Seafile-only)
+   both vaults ──seafile-backup-push.py (rw library token, */30, never deletes)──▶ Seafile "AI Context" (backup; 04-work and 05-raw/work-laptop are never pushed)
+   Seafile 05-raw/work-laptop ──seafile-pull.py (read-only token, daily 04:20)──▶ /data/ai-context/work-laptop  (no git, no Obsidian Sync; knowledge /raw-work:ro)
 ```
 
 Everything personal (the notes, the tokens, the compose `.env`) lives outside
@@ -32,13 +33,15 @@ the repo checkout. This directory only holds the generic service definitions;
 | --- | --- |
 | `/data/ai-context/notes` | MAIN vault: `README.md`, `01-about-me/`, `02-systems/`, `03-diary/`, `templates/` |
 | `/data/ai-context/raw` | RAW vault: what used to be `05-raw/` (`house-transcripts/`, `iphone-health/`, `mac-mini/`, `whole-foods/`; work-laptop excluded) |
+| `/data/ai-context/work-laptop` | server copy of Seafile `05-raw/work-laptop` (since 2026-11-24, Mark's decision): read only by the knowledge app's owner-only Raw area; outside both vaults, so no git, no Obsidian Sync, no backup push |
 | `/data/ai-context/state/seafile-push/` | backup push state (`notes.json`, `raw.json`: size/mtime/sha256 per file as last uploaded) |
 | `/data/ai-context/state/seafile-pull/` | the old pull's state (kept for a roll-back) |
+| `/data/ai-context/state/seafile-pull-work/` | the work-laptop pull's state and lock (mode 700) |
 | `/data/ai-context/state/basic-memory/` | basic-memory `config/config.json`, `.bmignore`, SQLite index, log |
 | `/data/ai-context/state/obsidian-notes/`, `obsidian-raw/` | headless client login/session state |
 | `/data/ai-context/.secrets/seafile-rw-token` | read-write library token for the backup push (mode 600; the same token house-transcriber used for its Seafile writes) |
-| `/data/ai-context/.secrets/seafile-token` | the old read-only pull token (kept for a roll-back) |
-| `/data/ai-context/push-config.json`, `pull-config.json` | which folders go where (see each script's docstring) |
+| `/data/ai-context/.secrets/seafile-token` | the read-only library token: the old pull (kept for a roll-back) and the daily work-laptop pull |
+| `/data/ai-context/push-config.json`, `pull-config.json`, `pull-work-config.json` | which folders go where (see each script's docstring) |
 | `/data/ai-context/bin/` | copies of the scripts that cron runs |
 | `/data/ai-context/logs/` | cron logs |
 
@@ -146,7 +149,44 @@ Limits (Sync Plus): 200 MB per file; the vaults here are far below that.
 */15 * * * * AUTOCOMMIT_PUSH_REPOS=/data/ai-context/notes /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
 */30 * * * * python3 /data/ai-context/bin/seafile-backup-push.py --config /data/ai-context/push-config.json >> /data/ai-context/logs/seafile-backup-push.log 2>&1
 7 * * * * python3 /data/ai-context/bin/recent-ai-changes.py >> /data/ai-context/logs/recent-ai-changes.log 2>&1
+20 4 * * * python3 /data/ai-context/bin/seafile-pull.py --config /data/ai-context/pull-work-config.json >> /data/ai-context/logs/seafile-pull-work.log 2>&1
 ```
+
+### Work-laptop copy (since 2026-11-24)
+
+Mark wants the work-laptop raw files in the knowledge app's owner-only Raw
+area, as a separate server copy kept off Obsidian Sync and out of git. The
+daily `seafile-pull.py` run with `pull-work-config.json` mirrors Seafile
+`/05-raw/work-laptop` into `/data/ai-context/work-laptop` (owner `mcheli`,
+directories 775), and the knowledge container mounts that folder read-only at
+`/raw-work` (`KNOWLEDGE_RAW_WORK_DIR`). Nothing else reads it: it sits outside
+`raw/` and `notes/`, so obsidian-sync, basic-memory, the git auto-commit and the
+backup push never see it, and no agent reads its files (Mark's standing rule:
+check it by file count and total size only).
+
+```json
+{
+  "seafile_url": "https://files.markcheli.com",
+  "token_file": "/data/ai-context/.secrets/seafile-token",
+  "state_dir": "/data/ai-context/state/seafile-pull-work",
+  "workers": 4,
+  "targets": [
+    {"name": "work-laptop", "dest": "/data/ai-context/work-laptop", "remote_root": "/05-raw/work-laptop",
+     "include": ["*"], "redact_names": true, "dir_mode": "775"}
+  ]
+}
+```
+
+- Same read-only token as the old pull (the script refuses any other); GET
+  requests only, so Seafile is never written.
+- `redact_names` keeps file names out of the log (counts only); the state file
+  in `state/seafile-pull-work/` (mode 700) does hold paths.
+- Like every pull, it never deletes: a file removed in Seafile stays here until
+  removed by hand.
+- Safe beside the backup push: this config touches only its own `dest` (the
+  warning about the old pull overwriting notes is about `pull-config.json`).
+- Check: `find /data/ai-context/work-laptop -type f | wc -l; du -sh /data/ai-context/work-laptop`
+  and `tail -3 /data/ai-context/logs/seafile-pull-work.log`.
 
 `recent-ai-changes.py` (with `bm.py` beside it in `bin/`) rewrites the vault
 note `maps/Recently changed by AI.md` every hour: the notes written or edited

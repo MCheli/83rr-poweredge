@@ -26,6 +26,10 @@ Config is a JSON file (see scripts/ai-context/README.md):
 - include: top-level entries under remote_root to mirror ("*" = everything)
 - exclude: paths relative to remote_root that are never listed or fetched
 - exclude_names: bare file names that are never fetched, anywhere
+- redact_names (per target, optional): true keeps file names out of every log
+  line of that target (FAIL/CONFLICT lines say "<redacted>"); counts only
+- dir_mode (per target, optional): octal string such as "775", applied to
+  dest and every folder under it after each run (cron's umask is often 022)
 - A local file is only replaced when Seafile's copy changed (by file id).
   If it was edited locally as well, Seafile still wins during the trial and a
   CONFLICT line is logged; git history keeps the local edit recoverable.
@@ -189,6 +193,7 @@ def run_target(sf: Seafile, target: dict, state_dir: Path, exclude_names: set[st
     state_path = state_dir / f"{name}.json"
     state = load_state(state_path)
     wanted = plan_target(sf, target, exclude_names)
+    shown = (lambda rel: "<redacted>") if target.get("redact_names") else (lambda rel: rel)
 
     todo, unchanged = [], 0
     for f in wanted:
@@ -200,7 +205,7 @@ def run_target(sf: Seafile, target: dict, state_dir: Path, exclude_names: set[st
         if prev and prev.get("id") != f["id"] and local.exists():
             try:
                 if local.stat().st_mtime > parse_mtime(prev.get("mtime", "")) + 1:
-                    log(f"[{name}] CONFLICT local edit overwritten by Seafile: {f['rel']}")
+                    log(f"[{name}] CONFLICT local edit overwritten by Seafile: {shown(f['rel'])}")
             except OSError:
                 pass
         todo.append(f)
@@ -229,10 +234,18 @@ def run_target(sf: Seafile, target: dict, state_dir: Path, exclude_names: set[st
                         log(f"[{name}] progress {fetched}/{n_todo}")
                 except Exception as e:
                     failed += 1
-                    log(f"[{name}] FAIL {f['rel']}: {type(e).__name__}: {e}")
+                    # The exception text can carry the remote path (download URLs, FileNotFoundError)
+                    detail = type(e).__name__ if target.get("redact_names") else f"{type(e).__name__}: {e}"
+                    log(f"[{name}] FAIL {shown(f['rel'])}: {detail}")
         save_state(state_path, state)
         elapsed = round(time.time() - t0)
         log(f"[{name}] fetched {fetched}, failed {failed}, {elapsed}s")
+    if not dry_run and target.get("dir_mode"):
+        mode = int(target["dir_mode"], 8)
+        os.chmod(dest, mode)
+        for parent, dirs, _ in os.walk(dest):
+            for d in dirs:
+                os.chmod(os.path.join(parent, d), mode)
     return dict(target=name, in_scope=n_wanted, unchanged=unchanged, fetched=fetched, failed=failed)
 
 

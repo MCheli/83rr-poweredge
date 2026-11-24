@@ -517,21 +517,24 @@ ssh 83rr-poweredge 'bash ~/83rr-poweredge/scripts/cookbook-deploy.sh'
 **Referenced in:** github.com/MCheli/cookbook docs/DEPLOYING.md
 
 ### 15. `ai-context/seafile-pull.py` 🔄 SEAFILE MIRROR (retired 2026-11-23, kept for roll-back)
-**Purpose:** Keep local Markdown folders current from a Seafile library, read-only (the AI Context trial, before the cut-over)
-**Size:** 11KB
+**Purpose:** Keep local Markdown folders current from a Seafile library, read-only (the AI Context trial, before the cut-over; since 2026-11-24 the daily work-laptop copy)
+**Size:** 12KB
 **Language:** Python 3 (stdlib only; runs on the server from cron)
 
 **Description:**
-Lists a Seafile library through the `via-repo-token` API with a **read-only library token** (it refuses any other permission), downloads only files whose Seafile file id changed since the last run, keeps the Seafile mtime, and never deletes anything locally. Targets, includes and excludes come from a JSON config kept outside the repo (`/data/ai-context/pull-config.json`; format in the script's docstring). A lock file stops overlapping runs. **Its cron line was commented out at the 2026-11-23 cut-over** (the server folders are the main copy now and Seafile receives pushes, see #17); the script, its config, state and read-only token stay in place for a roll-back. Never run it while the backup push is active: it would overwrite local notes with Seafile's older copies.
+Lists a Seafile library through the `via-repo-token` API with a **read-only library token** (it refuses any other permission), downloads only files whose Seafile file id changed since the last run, keeps the Seafile mtime, and never deletes anything locally. Targets, includes and excludes come from a JSON config kept outside the repo (`/data/ai-context/pull-config.json`; format in the script's docstring). A lock file stops overlapping runs. **Its cron line was commented out at the 2026-11-23 cut-over** (the server folders are the main copy now and Seafile receives pushes, see #17); the script, its config, state and read-only token stay in place for a roll-back. Never run it with `pull-config.json` while the backup push is active: it would overwrite local notes with Seafile's older copies. **Since 2026-11-24 a second config, `pull-work-config.json`, runs daily** and mirrors only Seafile `05-raw/work-laptop` into `/data/ai-context/work-laptop` (outside both vaults; the knowledge app mounts it read-only). Per-target options `redact_names` (no file names in any log line) and `dir_mode` (e.g. `"775"`, applied to every folder after a run) were added for it.
 
 **Usage:**
 ```bash
 python3 scripts/ai-context/seafile-pull.py --config /data/ai-context/pull-config.json [--dry-run] [--target notes] [--max-files N]
 # cron (deploy user): */30 * * * *  -> /data/ai-context/logs/seafile-pull.log   (DISABLED since 2026-11-23)
+python3 scripts/ai-context/seafile-pull.py --config /data/ai-context/pull-work-config.json
+# cron (deploy user): 20 4 * * *    -> /data/ai-context/logs/seafile-pull-work.log
 ```
 
 **When to Use:**
-- Only for a roll-back to Seafile as the main copy (infrastructure/ai-context/README.md, "Roll-back"); `--dry-run` first
+- `pull-config.json`: only for a roll-back to Seafile as the main copy (infrastructure/ai-context/README.md, "Roll-back"); `--dry-run` first
+- `pull-work-config.json`: runs itself daily; run by hand to refresh the work-laptop copy sooner (infrastructure/ai-context/README.md, "Work-laptop copy")
 
 **Referenced in:** infrastructure/ai-context/README.md, CLAUDE.md
 
