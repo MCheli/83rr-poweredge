@@ -893,8 +893,13 @@ services:
       - KNOWLEDGE_BASIC_MEMORY_URL=http://basic-memory:8000/mcp
       - KNOWLEDGE_BASIC_MEMORY_PROJECT=main
       # The RAW vault (owner-only "Raw" area), read-only. The app refuses any work-laptop
-      # folder by name (it stays Seafile-only and is never on this server).
+      # folder by name under /raw; the work-laptop files come only from /raw-work below.
       - KNOWLEDGE_RAW_DIR=/raw
+      # The work-laptop raw files (owner-only, shown only in the Raw area), read-only: a
+      # separate server copy outside the RAW vault, so neither obsidian-sync-raw nor the raw
+      # git auto-commit sees it. Refreshed daily from Seafile by seafile-pull.py
+      # (infrastructure/ai-context/README.md, "Work-laptop copy").
+      - KNOWLEDGE_RAW_WORK_DIR=/raw-work
     volumes:
       # The notes vault, read-only (the same folder basic-memory and obsidian-sync-notes mount)
       - ${KNOWLEDGE_VAULT_DIR:-/data/ai-context/notes}:/vault:ro
@@ -902,6 +907,8 @@ services:
       # mounts). No tmpfs shadow at /raw/work-laptop: Docker can't create a mountpoint inside
       # a read-only bind, and the folder doesn't exist here.
       - ${KNOWLEDGE_RAW_HOST_DIR:-/data/ai-context/raw}:/raw:ro
+      # The work-laptop copy, read-only (/data/ai-context/work-laptop, not inside raw/ or notes/)
+      - ${KNOWLEDGE_WORK_LAPTOP_HOST_DIR:-/data/ai-context/work-laptop}:/raw-work:ro
       # index.sqlite (regenerable) + app.sqlite (users, grants, API keys, saved layouts)
       - knowledge_data:/data
     networks:
