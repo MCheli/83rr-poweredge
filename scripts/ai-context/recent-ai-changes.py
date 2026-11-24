@@ -14,9 +14,12 @@ as one note through basic-memory itself (`bm_write` with `overwrite`, via
     python3 scripts/ai-context/recent-ai-changes.py               # write maps/Recently changed by AI.md
     # cron (deploy user): 7 * * * *  -> /data/ai-context/logs/recent-ai-changes.log
 
-Every line of the note is "- HH:MM [[Note title]] (operation)" under a "## YYYY-MM-DD"
+Every line of the note is "- HH:MM · [[Note title]] (operation)" under a "## YYYY-MM-DD"
 heading; the link is the note's title from the `entity` table when the title is
 the file name, otherwise `[[path/without/.md|title]]` so Obsidian resolves it.
+The " ·" after the time matters: basic-memory reads "- word [[Target]]" as an
+explicit relation of type "word", and a prefix with whitespace in it falls back
+to a plain links_to edge instead (300 relations of type "20:27" otherwise).
 At most --max-lines entry lines are written (default 300), newest first.
 
 Environment:
@@ -176,7 +179,10 @@ def build_note(rows: list[dict], tz: ZoneInfo, days: int, max_lines: int, now: d
                 continue
             ops = ", ".join(e["ops"])
             count = f", {e['count']}×" if e["count"] > 1 else ""
-            lines.append(f"- {e['latest'].strftime('%H:%M')} {link_for(e['file_path'], e['title'])} ({ops}{count})")
+            # "HH:MM ·" (with the space) keeps basic-memory from reading the line as an
+            # explicit relation of type "HH:MM": a prefix with whitespace falls back to
+            # a plain links_to edge, like any inline wikilink.
+            lines.append(f"- {e['latest'].strftime('%H:%M')} · {link_for(e['file_path'], e['title'])} ({ops}{count})")
             written += 1
     if truncated:
         lines.append("")
@@ -219,6 +225,9 @@ def write_note(bm, url: str, project: str | None, note_path: str, content: str, 
         shaped = bm.shape_result(result)
         if result.get("isError"):
             raise SystemExit(f"bm_write failed: {shaped}")
+        # The server wraps the JSON answer as {"result": {...}}; unwrap it when so.
+        if isinstance(shaped, dict) and isinstance(shaped.get("result"), dict):
+            shaped = shaped["result"]
         return shaped if isinstance(shaped, dict) else {"result": shaped}
     finally:
         client.close()
