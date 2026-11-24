@@ -872,6 +872,11 @@ services:
       - KNOWLEDGE_PUBLIC_URL=https://knowledge.markcheli.com
       - KNOWLEDGE_ALLOWED_ORIGINS=https://knowledge.markcheli.com
       - KNOWLEDGE_COOKIE_SECURE=true
+      # The ambient display (Chrome kiosk on the Mac mini, page origin 127.0.0.1:8765) embeds
+      # /ambient in an iframe: the app sends `frame-ancestors` with this origin on that one
+      # page and keeps `frame-ancestors 'none'` everywhere else. nginx drops its
+      # X-Frame-Options only for `location = /ambient` to match.
+      - KNOWLEDGE_AMBIENT_FRAME_ANCESTORS=http://127.0.0.1:8765
       - KNOWLEDGE_GOOGLE_CLIENT_ID=${KNOWLEDGE_GOOGLE_CLIENT_ID}
       - KNOWLEDGE_GOOGLE_CLIENT_SECRET=${KNOWLEDGE_GOOGLE_CLIENT_SECRET}
       - KNOWLEDGE_GOOGLE_REDIRECT_URI=https://knowledge.markcheli.com/api/auth/google/callback
