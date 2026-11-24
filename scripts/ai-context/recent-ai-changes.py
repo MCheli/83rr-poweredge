@@ -17,6 +17,9 @@ as one note through basic-memory itself (`bm_write` with `overwrite`, via
 Every line of the note is "- HH:MM · [[Note title]] (operation)" under a "## YYYY-MM-DD"
 heading; the link is the note's title from the `entity` table when the title is
 the file name, otherwise `[[path/without/.md|title]]` so Obsidian resolves it.
+A move (bm_move, operation "moved" with `previous_file_path` set) reads
+"- HH:MM · [[New title]] (moved from <old file name>)"; the link is the note's
+current title, found through its entity, so a renamed note is listed once.
 The " ·" after the time matters: basic-memory reads "- word [[Target]]" as an
 explicit relation of type "word", and a prefix with whitespace in it falls back
 to a plain links_to edge instead (300 relations of type "20:27" otherwise).
@@ -106,7 +109,8 @@ def fetch_changes(db_path: str, project: str | None, days: int, skip_path: str) 
                 project_id = None
         since = (dt.datetime.now(UTC) - dt.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         sql = (
-            "select c.accepted_at, c.operation, c.file_path, c.title as change_title, e.title as entity_title "
+            "select c.accepted_at, c.operation, c.file_path, c.previous_file_path, c.title as change_title, "
+            "e.title as entity_title "
             "from accepted_project_note_change c left join entity e on e.id = c.entity_id "
             "where c.accepted_at >= ?"
         )
@@ -119,10 +123,13 @@ def fetch_changes(db_path: str, project: str | None, days: int, skip_path: str) 
         for r in con.execute(sql, params):
             if r["file_path"] == skip_path:
                 continue
+            operation = r["operation"] or "changed"
+            if operation == "moved" and r["previous_file_path"]:
+                operation = f"moved from {Path(r['previous_file_path']).name}"
             rows.append(
                 {
                     "at": parse_utc(r["accepted_at"]),
-                    "operation": r["operation"] or "changed",
+                    "operation": operation,
                     "file_path": r["file_path"],
                     "title": r["entity_title"] or r["change_title"] or Path(r["file_path"]).stem,
                 }
