@@ -892,9 +892,16 @@ services:
       # app defaults (30 s, 5 s).
       - KNOWLEDGE_BASIC_MEMORY_URL=http://basic-memory:8000/mcp
       - KNOWLEDGE_BASIC_MEMORY_PROJECT=main
+      # The RAW vault (owner-only "Raw" area), read-only. The app refuses any work-laptop
+      # folder by name (it stays Seafile-only and is never on this server).
+      - KNOWLEDGE_RAW_DIR=/raw
     volumes:
       # The notes vault, read-only (the same folder basic-memory and obsidian-sync-notes mount)
       - ${KNOWLEDGE_VAULT_DIR:-/data/ai-context/notes}:/vault:ro
+      # The RAW vault, read-only (the folder house-transcriber writes and obsidian-sync-raw
+      # mounts). No tmpfs shadow at /raw/work-laptop: Docker can't create a mountpoint inside
+      # a read-only bind, and the folder doesn't exist here.
+      - ${KNOWLEDGE_RAW_HOST_DIR:-/data/ai-context/raw}:/raw:ro
       # index.sqlite (regenerable) + app.sqlite (users, grants, API keys, saved layouts)
       - knowledge_data:/data
     networks:
