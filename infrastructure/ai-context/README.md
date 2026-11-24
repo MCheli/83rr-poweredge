@@ -145,7 +145,15 @@ Limits (Sync Plus): 200 MB per file; the vaults here are far below that.
 #*/30 * * * * python3 /data/ai-context/bin/seafile-pull.py ...                      # disabled 2026-11-23 (cut-over), line kept commented for a roll-back
 */15 * * * * AUTOCOMMIT_PUSH_REPOS=/data/ai-context/notes /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
 */30 * * * * python3 /data/ai-context/bin/seafile-backup-push.py --config /data/ai-context/push-config.json >> /data/ai-context/logs/seafile-backup-push.log 2>&1
+7 * * * * python3 /data/ai-context/bin/recent-ai-changes.py >> /data/ai-context/logs/recent-ai-changes.log 2>&1
 ```
+
+`recent-ai-changes.py` (with `bm.py` beside it in `bin/`) rewrites the vault
+note `maps/Recently changed by AI.md` every hour: the notes written or edited
+through basic-memory in the last 7 days, read from its index
+(`accepted_project_note_change`, opened read-only), grouped by day
+(America/New_York), and written back through basic-memory itself. It finds the
+container's IP with `docker inspect` when `BM_URL` is unset.
 
 `git-autocommit.sh` commits whatever changed and, for the repos listed in
 `AUTOCOMMIT_PUSH_REPOS` only, pushes to `origin` when the remote is behind (one
