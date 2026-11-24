@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 23, 2026
+**Last Updated:** November 24, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -606,6 +606,30 @@ python3 scripts/ai-context/bm.py call bm_man '{"page": "bm_edit"}' --raw
 
 ---
 
+### 19. `ai-context/recent-ai-changes.py` 🔄 AI CHANGE LOG NOTE
+**Purpose:** Keep the vault note `maps/Recently changed by AI.md` current: every note written or edited through basic-memory in the last 7 days, grouped by day
+**Size:** 10KB
+**Language:** Python 3 (standard library only; runs on the server from cron, imports `bm.py` from the same directory)
+
+**Description:**
+Opens basic-memory's SQLite index **read-only** (`file:…memory.db?mode=ro`), reads `accepted_project_note_change` (the table where basic-memory logs each write made through its tools: `accepted_at` in UTC, `operation`, `file_path`, `title`), keeps the last `--days` (7), joins the `entity` table for the current title, and groups by day in America/New_York, newest first. Repeated writes of one note on one day collapse into one line with a count (`- 21:49 [[2021-01-12]] (updated, 5×)`); when a note's title is not its file name the link is `[[path|Title]]` so Obsidian resolves it. At most `--max-lines` (300) entry lines; the note's own writes are skipped. The note is then written **through basic-memory** (`bm_write` with `overwrite`, using `bm.py`'s client), like every other AI write. `BM_URL` unset means the script asks `docker inspect basic-memory` for the container IP (how cron reaches it on the server); `--dry-run` prints the note instead.
+
+**Usage:**
+```bash
+python3 scripts/ai-context/recent-ai-changes.py --dry-run                      # on the server: print, write nothing
+python3 scripts/ai-context/recent-ai-changes.py [--days 7] [--max-lines 300]     # write maps/Recently changed by AI.md
+# cron (deploy user): 7 * * * *  -> /data/ai-context/logs/recent-ai-changes.log
+# deploy: cp scripts/ai-context/{recent-ai-changes.py,bm.py} /data/ai-context/bin/
+```
+
+**When to Use:**
+- Runs itself hourly at :07; read the result with `python3 scripts/ai-context/bm.py --raw read "maps/Recently changed by AI.md"`
+- After a bulk writing session, to see what it touched (or `--dry-run --days 1`)
+
+**Referenced in:** infrastructure/ai-context/README.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -624,7 +648,7 @@ scripts/
 ├── deptrack-setup.sh                # 🏗️ Dependency-Track first boot / config
 ├── cookbook-deploy.sh               # 🏗️ Cookbook app + demo deploy with checks
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
-├── ai-context/                      # 🔄 Notes vault: bm.py (basic-memory client) + BM-CLIENT.md, git-autocommit.sh, seafile-backup-push.py, seafile-pull.py (retired)
+├── ai-context/                      # 🔄 Notes vault: bm.py (basic-memory client) + BM-CLIENT.md, recent-ai-changes.py, git-autocommit.sh, seafile-backup-push.py, seafile-pull.py (retired)
 ├── one-time/                        # One-time setup scripts
 │   ├── README.md
 │   ├── setup_data_disk.sh
