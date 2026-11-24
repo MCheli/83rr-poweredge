@@ -88,6 +88,8 @@ curl https://flask.markcheli.com/health
   - Personal finance dashboard with Google SSO
 - **Tasks** - https://tasks.markcheli.com (also a claude.ai custom connector at `/mcp`, served by the app itself: OAuth 2.1 with the app's own Google sign-in, same allowed account as homelab-mcp; see the MCheli/tasks repo)
   - Cycle-based todo app with Google SSO
+- **Knowledge** - https://knowledge.markcheli.com
+  - Read-only web reader for the AI Context notes vault (mounted read-only from `/data/ai-context/notes`; SQLite FTS index kept live by a file watcher); Google SSO, owner + allowlist (see the MCheli/knowledge repo)
 - **Minecraft Server** - minecraft.markcheli.com:25565
   - Java Edition server (port 25565)
 - **homelab-mcp** - https://mcp.markcheli.com/mcp (claude.ai custom connector, Google OAuth, one allowed account)

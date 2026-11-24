@@ -109,6 +109,13 @@
     - Status: Healthy
     - Purpose: Backend database for Tasks
 
+21b. **Knowledge** - Web reader for the AI Context notes vault ✅
+    - Status: Healthy (deployed 2026-11-24)
+    - Endpoint: knowledge.markcheli.com
+    - Image: ghcr.io/mcheli/knowledge:latest
+    - Auth: Google SSO (owner + allowlist)
+    - Dependencies: the notes vault at `/data/ai-context/notes` (read-only bind mount), `knowledge_data` volume (SQLite)
+
 22. **Daily Report** - Thermal-printer report generator ✅
     - Status: Healthy
     - Endpoint: report.ops.markcheli.com (LAN-only HTML preview + trigger API)
@@ -200,6 +207,7 @@ docker ps
 | Home Assistant | https://home.markcheli.com |
 | Tallied | https://money.markcheli.com |
 | Tasks | https://tasks.markcheli.com |
+| Knowledge | https://knowledge.markcheli.com |
 | Minecraft | minecraft.markcheli.com:25565 |
 
 ### LAN Services (*.ops.markcheli.com)
