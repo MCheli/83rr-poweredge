@@ -848,6 +848,55 @@ services:
       start_period: 30s
 
   # ═════════════════════════════════════════════════════════════════════════════
+  # Knowledge (knowledge.markcheli.com): web reader for the AI Context notes vault
+  # Image published from: github.com/MCheli/knowledge (private repo)
+  # ═════════════════════════════════════════════════════════════════════════════
+  # FastAPI + Vue, one container on :8000 (uvicorn, one worker). Mounts the real notes
+  # vault (/data/ai-context/notes, the main copy since the 2026-11-23 cut-over) READ-ONLY
+  # at /vault, indexes it into SQLite (FTS5) under /data on start and keeps the index live
+  # with a file watcher; it never writes to the vault. Google sign-in, owner + allowlist
+  # (same OAuth client as Tasks/Cookbook: the redirect URI below must be on that client).
+  # Explicit environment only (no env_file): the app sees its own secrets and nothing
+  # else. Production refuses to start with default secrets or the dev login set.
+  knowledge:
+    image: ghcr.io/mcheli/knowledge:latest
+    container_name: knowledge
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    environment:
+      - KNOWLEDGE_ENV=production
+      - KNOWLEDGE_VAULT_PATH=/vault
+      - KNOWLEDGE_DATA_DIR=/data
+      - KNOWLEDGE_PUBLIC_URL=https://knowledge.markcheli.com
+      - KNOWLEDGE_ALLOWED_ORIGINS=https://knowledge.markcheli.com
+      - KNOWLEDGE_COOKIE_SECURE=true
+      - KNOWLEDGE_GOOGLE_CLIENT_ID=${KNOWLEDGE_GOOGLE_CLIENT_ID}
+      - KNOWLEDGE_GOOGLE_CLIENT_SECRET=${KNOWLEDGE_GOOGLE_CLIENT_SECRET}
+      - KNOWLEDGE_GOOGLE_REDIRECT_URI=https://knowledge.markcheli.com/api/auth/google/callback
+      - KNOWLEDGE_JWT_SECRET=${KNOWLEDGE_JWT_SECRET}
+      - KNOWLEDGE_API_KEY_PEPPER=${KNOWLEDGE_API_KEY_PEPPER}
+      - KNOWLEDGE_OWNER_EMAIL=${KNOWLEDGE_OWNER_EMAIL}
+      - KNOWLEDGE_ALLOWED_EMAILS=${KNOWLEDGE_ALLOWED_EMAILS}
+      # basic-memory (infrastructure/ai-context) over the Docker network; reserved for the
+      # editor, unused by the reader.
+      - KNOWLEDGE_BASIC_MEMORY_URL=http://basic-memory:8000/mcp
+    volumes:
+      # The notes vault, read-only (the same folder basic-memory and obsidian-sync-notes mount)
+      - ${KNOWLEDGE_VAULT_DIR:-/data/ai-context/notes}:/vault:ro
+      # index.sqlite (regenerable) + app.sqlite (users, grants, API keys, saved layouts)
+      - knowledge_data:/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # ═════════════════════════════════════════════════════════════════════════════
   # Daily Report (thermal-printer report generator)
   # Image published from: github.com/MCheli/daily-report
   # ═════════════════════════════════════════════════════════════════════════════
@@ -1398,6 +1447,7 @@ volumes:
   tasks_demo_db_data:
   cookbook_db_data:
   cookbook_demo_db_data:
+  knowledge_data:
   energy_monitor_db_data:
   energy_monitor_data:
   deptrack_db_data:

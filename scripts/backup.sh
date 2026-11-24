@@ -283,6 +283,7 @@ backup_docker_volumes() {
         "83rr-poweredge_tallied_db_data"
         "83rr-poweredge_tasks_db_data"
         "83rr-poweredge_cookbook_db_data"
+        "83rr-poweredge_knowledge_data"         # Knowledge app.sqlite (users, grants, API keys, layouts); index.sqlite is regenerable from the vault
         "83rr-poweredge_energy_monitor_db_data"
         "83rr-poweredge_energy_monitor_data"
         "83rr-poweredge_asa_server_files"
