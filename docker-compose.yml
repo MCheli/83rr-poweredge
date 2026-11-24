@@ -884,9 +884,14 @@ services:
       - KNOWLEDGE_API_KEY_PEPPER=${KNOWLEDGE_API_KEY_PEPPER}
       - KNOWLEDGE_OWNER_EMAIL=${KNOWLEDGE_OWNER_EMAIL}
       - KNOWLEDGE_ALLOWED_EMAILS=${KNOWLEDGE_ALLOWED_EMAILS}
-      # basic-memory (infrastructure/ai-context) over the Docker network; reserved for the
-      # editor, unused by the reader.
+      # The editor saves notes only through basic-memory's MCP tools (bm_write/bm_edit) over
+      # the Docker network (infrastructure/ai-context; no host port, no nginx route from here).
+      # An empty URL turns the editor off. The project must be the one whose root is the
+      # folder mounted at /vault (basic-memory's `main` -> /notes = /data/ai-context/notes),
+      # so note paths mean the same thing on both sides. Timeout and settle seconds keep the
+      # app defaults (30 s, 5 s).
       - KNOWLEDGE_BASIC_MEMORY_URL=http://basic-memory:8000/mcp
+      - KNOWLEDGE_BASIC_MEMORY_PROJECT=main
     volumes:
       # The notes vault, read-only (the same folder basic-memory and obsidian-sync-notes mount)
       - ${KNOWLEDGE_VAULT_DIR:-/data/ai-context/notes}:/vault:ro
