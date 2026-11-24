@@ -307,8 +307,9 @@ def register_notes_tools(mcp: FastMCP, bridge: NotesBridge | None, *, acts: dict
         identifier is the file path relative to the notes root ("03-diary/2026-11-23.md";
         ".md" is added when missing), or give title plus directory instead. content is
         saved as given and may start with YAML front matter: follow the matching file
-        under templates/ (daily, monthly, yearly, system) and 03-diary/README.md's
-        writing style. An existing note is an error unless overwrite=true;
+        under templates/ (Daily note template, Monthly summary template, Yearly summary
+        template, System note template) and the writing style in
+        "03-diary/Diary – folder guide.md". An existing note is an error unless overwrite=true;
         expected_checksum (from notes_read) replaces only the revision you read. For a
         partial change use notes_edit. The templates folder itself can't be written.
         """
