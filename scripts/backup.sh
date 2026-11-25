@@ -7,6 +7,8 @@
 # Usage:
 #   ./backup.sh              # Run full backup
 #   ./backup.sh --dry-run    # Show what would be backed up
+#   ./backup.sh --only ai-context   # Only the AI Context part (by-hand run/test:
+#                                   # no snapshot, cleanup or heartbeat)
 #
 # Schedule via cron (daily at 2:00 AM):
 #   0 2 * * * /home/mcheli/83rr-poweredge/scripts/backup.sh >> /home/mcheli/83rr-poweredge/logs/backup.log 2>&1
@@ -28,6 +30,16 @@ LOG_DIR="${PROJECT_DIR}/logs"
 DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
 DRY_RUN=false
+ONLY=""
+
+# AI Context (main copy of the notes + RAW vault since the 2026-11-23 cut-over).
+# basic-memory keeps its SQLite index in its state dir; it is copied with the
+# SQLite backup API from inside the container, never as a live file.
+AI_CONTEXT_DIR="/data/ai-context"
+BM_CONTAINER="basic-memory"
+BM_STATE_HOST="${AI_CONTEXT_DIR}/state/basic-memory"   # mounted at /state in the container
+BM_DB_CONTAINER="/state/config/memory.db"
+BM_TMP_REL=".backup-tmp"                               # under BM_STATE_HOST, excluded from the rsync
 
 # Load database credentials from .env
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
@@ -56,10 +68,27 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Parse arguments
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
-    echo -e "${YELLOW}=== DRY RUN MODE ===${NC}"
-fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            echo -e "${YELLOW}=== DRY RUN MODE ===${NC}"
+            ;;
+        --only)
+            ONLY="${2:-}"
+            if [[ "$ONLY" != "ai-context" ]]; then
+                echo "Usage: $0 [--dry-run] [--only ai-context]" >&2
+                exit 2
+            fi
+            shift
+            ;;
+        *)
+            echo "Usage: $0 [--dry-run] [--only ai-context]" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
 
 # Logging
 mkdir -p "${LOG_DIR}"
@@ -274,7 +303,8 @@ backup_docker_volumes() {
     log "Backing up Docker volumes..."
     local volumes_dir="${BACKUP_ROOT}/latest/docker-volumes"
 
-    # List of important volumes to backup
+    # List of important volumes to backup (arguments, if given, replace it:
+    # used by --only ai-context for the homelab-mcp volume)
     local volumes=(
         "83rr-poweredge_grafana_data"
         "83rr-poweredge_prometheus_data"
@@ -290,7 +320,11 @@ backup_docker_volumes() {
         "83rr-poweredge_uptime_kuma_data"       # monitors, notifications, status page (SQLite)
         "83rr-poweredge_ntfy_data"              # ntfy users, access rules, tokens (user.db)
         "83rr-poweredge_deptrack_data"          # Dependency-Track KEK keyset (decrypts DB secrets) + file storage
+        "83rr-poweredge_homelab_mcp_data"       # homelab-mcp OAuth proxy store (clients, refresh tokens; JSON files, no SQLite)
     )
+    if [[ $# -gt 0 ]]; then
+        volumes=("$@")
+    fi
 
     if [[ "$DRY_RUN" == true ]]; then
         echo "  Would backup volumes to ${volumes_dir}:"
@@ -418,6 +452,101 @@ backup_seafile_data() {
     else
         log "  Seafile data directory not found, skipping"
     fi
+}
+
+# Backup AI Context: /data/ai-context mirrored to latest/ai-context/ (notes and
+# RAW vaults with their local git history, scripts, configs, logs, sync state),
+# plus a consistent copy of basic-memory's SQLite index to
+# latest/ai-context-db/memory.db.gz. The live memory.db* files and the
+# downloaded embedding model are excluded from the mirror (the DB has its own
+# copy; the model is re-downloaded on start). Owned by the deploy user, so no
+# sudo. Records its own failures so the mirror and the DB copy are independent.
+backup_ai_context() {
+    log "Backing up AI Context..."
+    local dest="${BACKUP_ROOT}/latest/ai-context"
+    local db_dir="${BACKUP_ROOT}/latest/ai-context-db"
+    local tmp_host="${BM_STATE_HOST}/${BM_TMP_REL}/memory.db"
+    local tmp_container="/state/${BM_TMP_REL}/memory.db"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  Would mirror ${AI_CONTEXT_DIR} to ${dest}"
+        echo "  Would copy ${BM_CONTAINER}:${BM_DB_CONTAINER} (SQLite backup API) to ${db_dir}/memory.db.gz"
+        return
+    fi
+
+    if [[ ! -d "${AI_CONTEXT_DIR}" ]]; then
+        log "  ${AI_CONTEXT_DIR} not found, skipping"
+        return 0
+    fi
+
+    mkdir -p "${dest}" "${db_dir}"
+
+    # Same 0/24 handling and single retry as backup_docker_volumes (the
+    # vaults are live: git auto-commit, Obsidian Sync, house-transcriber).
+    local rsync_opts=(-aL --delete --safe-links
+        --exclude '/state/basic-memory/config/memory.db'
+        --exclude '/state/basic-memory/config/memory.db-wal'
+        --exclude '/state/basic-memory/config/memory.db-shm'
+        --exclude '/state/basic-memory/config/fastembed_cache/'
+        --exclude "/state/basic-memory/${BM_TMP_REL}/")
+    local rc=0
+    safe_rsync rsync "${rsync_opts[@]}" "${AI_CONTEXT_DIR}/" "${dest}/" 2>&1 || rc=$?
+    if [[ $rc -ne 0 && $rc -ne 24 ]]; then
+        log "  Retrying AI Context mirror (rsync exit ${rc})..."
+        sleep 5
+        rc=0
+        safe_rsync rsync "${rsync_opts[@]}" "${AI_CONTEXT_DIR}/" "${dest}/" 2>&1 || rc=$?
+    fi
+    if [[ $rc -ne 0 && $rc -ne 24 ]]; then
+        record_failure "AI Context mirror (rsync exit ${rc})"
+    else
+        success "AI Context mirrored: ${dest}"
+    fi
+
+    # basic-memory index. Not deployed (or removed): nothing to copy, not a
+    # failure. A container that exists but is stopped fails below.
+    if ! docker inspect "${BM_CONTAINER}" >/dev/null 2>&1; then
+        log "  ${BM_CONTAINER} container not found, skipping its database"
+        return 0
+    fi
+
+    # sqlite3 isn't on the host; the container's Python has the SQLite
+    # backup API (same result as `sqlite3 db ".backup dest"`), then a
+    # quick_check on the copy.
+    if ! docker exec -i "${BM_CONTAINER}" python3 - "${BM_DB_CONTAINER}" "${tmp_container}" <<'PY'
+import os, sqlite3, sys
+src, dst = sys.argv[1], sys.argv[2]
+os.makedirs(os.path.dirname(dst), exist_ok=True)
+if os.path.exists(dst):
+    os.remove(dst)
+s = sqlite3.connect(src, timeout=60)
+d = sqlite3.connect(dst)
+s.backup(d)
+s.close()
+check = d.execute("PRAGMA quick_check").fetchone()[0]
+tables = d.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
+d.close()
+if check != "ok":
+    sys.exit("quick_check failed: " + check)
+print(f"  memory.db copy ok ({tables} tables, {os.path.getsize(dst)} bytes)")
+PY
+    then
+        rm -f -- "${tmp_host}"
+        record_failure "basic-memory database copy (SQLite backup)"
+        return 0
+    fi
+
+    # Write to .partial and rename: a failed gzip never replaces last
+    # night's good copy, and the hardlinked snapshots keep the old inode.
+    if gzip -c "${tmp_host}" > "${db_dir}/memory.db.gz.partial" \
+        && mv -f "${db_dir}/memory.db.gz.partial" "${db_dir}/memory.db.gz"; then
+        success "basic-memory database backed up: ${db_dir}/memory.db.gz"
+    else
+        rm -f -- "${db_dir}/memory.db.gz.partial"
+        record_failure "basic-memory database copy (gzip to NAS)"
+    fi
+    rm -f -- "${tmp_host}"
+    return 0
 }
 
 # Create dated snapshot
@@ -585,6 +714,19 @@ main() {
     check_nas_mount
     setup_backup_dirs
 
+    # By-hand run of the AI Context part only: no snapshot, cleanup or
+    # heartbeat (the nightly run does those).
+    if [[ "$ONLY" == "ai-context" ]]; then
+        backup_ai_context
+        backup_docker_volumes "83rr-poweredge_homelab_mcp_data"
+        if [[ ${BACKUP_FAILURES} -gt 0 ]]; then
+            error "AI Context backup FAILED (${BACKUP_FAILURES}):${FAILED_ITEMS}"
+            exit 1
+        fi
+        log "AI Context backup completed successfully"
+        return 0
+    fi
+
     # Database backups (do these first while services are running)
     backup_seafile_db        || record_failure "Seafile DB dump"
     backup_tallied_db        || record_failure "Tallied DB dump"
@@ -596,6 +738,7 @@ main() {
     # File backups
     backup_configs       || record_failure "Configuration files"
     backup_seafile_data  || record_failure "Seafile data"
+    backup_ai_context
     backup_docker_volumes
 
     # Create daily snapshot

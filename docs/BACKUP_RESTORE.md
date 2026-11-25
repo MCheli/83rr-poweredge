@@ -9,7 +9,7 @@ procedure*. If they disagree, read the script.
 
 ## What is backed up
 
-**Schedule**: cron at `0 2 * * *` (daily 02:00 ET).
+**Schedule**: cron at `0 2 * * *` (daily 02:00 server time, which is UTC; a full run takes about an hour).
 **Destination**: NAS at `//MarksNAS/Performance/83rr-backup/` (CIFS mount at `/mnt/nas`).
 **Retention** (set in `backup.sh`): 7 daily / 4 weekly / 3 monthly snapshots, hardlinked.
 Pruning uses `find -mtime +N`, which only matches entries at least N+1 full days old, so
@@ -52,6 +52,20 @@ function, so the list is what a real run would delete.
 | `/home/mcheli/letsencrypt/` | `latest/config/letsencrypt/` | LE certs for `*.ops.markcheli.com` |
 | `/root/.nas-credentials` | `latest/config/nas-credentials` | Required to mount the NAS during recovery |
 | `/storage/seafile/` | `latest/seafile/` | Seafile blob storage (~3 GB) |
+| `/data/ai-context/` | `latest/ai-context/` | AI Context, the main copy since 2026-11-23 (~180 MB on the NAS): `notes/` and `raw/` vaults **with their local `.git` history** (house transcripts, iPhone health, Mac mini dumps: the RAW vault has no other off-box copy), `work-laptop/`, `bin/`, the pull/push configs, `.secrets/` (Seafile library tokens), `logs/`, and `state/` (Obsidian Sync client state, seafile push/pull state, basic-memory config). Excluded: basic-memory's live `memory.db*` (copied separately, next row) and its downloaded embedding model `state/basic-memory/config/fastembed_cache/` (65 MB, re-downloaded on start) |
+| basic-memory `memory.db` (SQLite, 650 MB) | `latest/ai-context-db/memory.db.gz` (~290 MB) | basic-memory's index of the notes vault (entities, relations, search and vector index). Copied with the SQLite backup API from inside the `basic-memory` container (no `sqlite3` on the host), checked with `PRAGMA quick_check`, gzipped to `.partial` and renamed, so a failed run never replaces the previous good copy. Regenerable from `notes/` (a full reindex takes a while), so it's a convenience, not the only copy of anything |
+
+The AI Context part can be run on its own (mirror, DB copy and the
+`homelab_mcp_data` volume; no snapshot, cleanup or heartbeat):
+`~/83rr-poweredge/scripts/backup.sh --only ai-context` (about 2.5 min). Its
+failures are recorded like every other part, so in the nightly run they
+suppress the success heartbeat.
+
+The NAS (CIFS) mount does not keep file modification times, so every rsync
+re-copies every file each night and the hardlinked snapshots share almost
+nothing. That's why a snapshot costs about the full size of `latest/`
+(the AI Context part adds ~470 MB per snapshot, ~7.5 GB over the ~16 snapshots
+kept).
 
 ### Docker volumes — `latest/docker-volumes/<volume>/`
 
@@ -69,6 +83,7 @@ function, so the list is what a real run would delete.
 | `83rr-poweredge_uptime_kuma_data` | 666 M | Uptime Kuma monitors, notifications, status page, heartbeat history (SQLite; copied live, WAL files included) |
 | `83rr-poweredge_ntfy_data` | <1 M | ntfy users, access rules and tokens (`user.db`); message cache |
 | `83rr-poweredge_deptrack_data` | small | Dependency-Track's KEK keyset (`.dependency-track/keys/`). **Restore it together with the `deptrack_*.sql.gz` dump**: without it the secrets stored in the DB (ntfy token, GitHub token) can't be decrypted and must be re-entered (`scripts/deptrack-setup.sh apply`) |
+| `83rr-poweredge_homelab_mcp_data` | <1 M | homelab-mcp's OAuth proxy store (`oauth-proxy/`: registered claude.ai clients, refresh and upstream tokens; JSON files, no SQLite). Without it claude.ai just has to reconnect the connector once. Owned by uid 10001 (`mcp`) in the container |
 
 ---
 
@@ -189,13 +204,47 @@ for vol in 83rr-poweredge_grafana_data 83rr-poweredge_prometheus_data \
            83rr-poweredge_tallied_db_data 83rr-poweredge_tasks_db_data \
            83rr-poweredge_energy_monitor_db_data 83rr-poweredge_energy_monitor_data \
            83rr-poweredge_asa_server_files \
-           83rr-poweredge_uptime_kuma_data 83rr-poweredge_ntfy_data; do
+           83rr-poweredge_uptime_kuma_data 83rr-poweredge_ntfy_data \
+           83rr-poweredge_cookbook_db_data 83rr-poweredge_knowledge_data \
+           83rr-poweredge_deptrack_data 83rr-poweredge_homelab_mcp_data; do
   docker volume create "$vol"
   # Docker's data root on this host is /data/docker, not /var/lib/docker; ask Docker for the path.
   sudo rsync -aL "/mnt/nas/83rr-backup/latest/docker-volumes/$vol/" \
                  "$(docker volume inspect -f '{{.Mountpoint}}' "$vol")/"
 done
 ```
+
+### Step 6b — Restore AI Context
+
+Restore the folder before starting `basic-memory`, the Obsidian Sync clients or
+house-transcriber, so none of them starts on an empty vault (Obsidian Sync would
+then sync the emptiness to Mark's devices):
+
+```bash
+sudo mkdir -p /data/ai-context && sudo chown mcheli:mcheli /data/ai-context
+rsync -aL /mnt/nas/83rr-backup/latest/ai-context/ /data/ai-context/
+chmod 700 /data/ai-context/.secrets   # the NAS doesn't keep modes
+# basic-memory index (optional: without it basic-memory reindexes notes/ on start)
+gunzip -c /mnt/nas/83rr-backup/latest/ai-context-db/memory.db.gz \
+  > /data/ai-context/state/basic-memory/config/memory.db
+```
+
+Then reinstall the AI Context cron lines (git auto-commit, Seafile backup push,
+recent-ai-changes, work-laptop pull: see `infrastructure/ai-context/README.md`)
+and start the stack from `infrastructure/ai-context/docker-compose.yml`.
+`git -C /data/ai-context/notes log -1` shows how fresh the restored notes are;
+anything newer is in the private repo MCheli/notes (notes only) or the Seafile
+"AI Context" library (up to 30 min behind).
+
+To restore **one file** (a note or a transcript) from a given night, copy it from
+the snapshot into a temp dir, compare, then move it into place:
+
+```bash
+mkdir /tmp/restore && rsync -a /mnt/nas/83rr-backup/daily/<date>/ai-context/raw/house-transcripts/2026/<day>.md /tmp/restore/
+```
+
+For a note, prefer writing the restored text back through basic-memory
+(`bm_write`) over copying the file into the vault, per the AI Context write rule.
 
 ### Step 7 — Bring the stack up
 
@@ -364,4 +413,4 @@ backup loss is worse than no backup, because you trust it.
 
 ---
 
-**Last updated**: 2026-05-03
+**Last updated**: 2026-11-25 (AI Context, basic-memory index and homelab-mcp volume added)

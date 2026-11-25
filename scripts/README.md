@@ -709,6 +709,28 @@ scripts/emit_alert_metrics.sh && command cat logs/textfile/homelab-alerts.prom
 
 ---
 
+### 23. `backup.sh` ⭐ NIGHTLY BACKUP
+**Purpose:** Nightly backup of databases, volumes, configs, Seafile data and AI Context to the NAS (`/mnt/nas/83rr-backup`)
+**Size:** 28KB
+**Language:** Bash
+
+**Description:**
+Dumps the Postgres/MariaDB databases, rsyncs the project dir, Seafile data, `/data/ai-context` (notes + RAW vaults with git history) and the listed Docker volumes into `latest/`, copies basic-memory's SQLite index with the SQLite backup API (`latest/ai-context-db/memory.db.gz`), hardlinks daily/weekly/monthly snapshots, prunes by the retention policy and, only if nothing failed, emits the `backup-heartbeat` doc to OpenSearch (its absence alerts). Full details and restore steps: `docs/BACKUP_RESTORE.md`.
+
+**Usage:**
+```bash
+scripts/backup.sh                     # full run (what cron runs at 02:00 UTC, through cron-notify.sh)
+scripts/backup.sh --dry-run           # what would be copied and pruned
+scripts/backup.sh --only ai-context   # AI Context mirror + basic-memory DB + homelab_mcp_data only (no snapshot/cleanup/heartbeat)
+```
+
+**When to Use:**
+- Runs itself nightly; run `--only ai-context` by hand after changing that part, or before risky work on the vaults
+
+**Referenced in:** docs/BACKUP_RESTORE.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
