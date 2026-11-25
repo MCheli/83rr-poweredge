@@ -1,0 +1,16 @@
+# 83rr-poweredge: installed as /etc/logrotate.d/pg-auth by install.sh.
+# Fluent Bit appends the tallied-db auth failure lines here (fail2ban jail
+# postgresql-tallied). copytruncate: rotate in place, so neither Fluent Bit
+# nor fail2ban has to reopen anything. A scanner flood is bounded by maxsize.
+#
+# Validate: sudo logrotate --debug /etc/logrotate.d/pg-auth
+/var/log/pg-auth/*.log {
+    daily
+    rotate 14
+    maxsize 20M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

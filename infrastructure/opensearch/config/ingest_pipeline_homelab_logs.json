@@ -250,13 +250,43 @@
 
     {
       "grok": {
+        "if": "ctx.container_name == 'fail2ban'",
+        "field": "log",
+        "patterns": [
+          "^%{TIMESTAMP_ISO8601:app_time} %{NOTSPACE:logger}\\s+\\[%{INT:pid:int}\\]: %{LOGLEVEL:level}\\s+(?:\\[%{NOTSPACE:f2b_jail}\\] )?%{GREEDYDATA:msg}"
+        ],
+        "ignore_failure": true,
+        "description": "fail2ban's own log (/var/log/fail2ban.log via a Fluent Bit tail input): time logger [pid]: LEVEL [jail] message"
+      }
+    },
+    {
+      "script": {
+        "if": "ctx.container_name == 'fail2ban' && ctx.f2b_jail != null && ctx.msg != null",
+        "lang": "painless",
+        "source": "def m = /^(Restore Ban|Ban|Unban|Found|Ignore) ([0-9a-fA-F:.]+)/.matcher(ctx.msg); if (m.find()) { String a = m.group(1); String ip = m.group(2); if (ip ==~ /^[0-9]{1,3}(\\.[0-9]{1,3}){3}$/ || ip.contains(':')) { ctx.client_ip = ip; } if (a == 'Ban') { ctx.event_type = 'fail2ban_ban'; } else if (a == 'Unban') { ctx.event_type = 'fail2ban_unban'; } else if (a == 'Restore Ban') { ctx.event_type = 'fail2ban_restore'; } else if (a == 'Found') { ctx.event_type = 'fail2ban_found'; } else { ctx.event_type = 'fail2ban_ignore'; } }",
+        "ignore_failure": true,
+        "description": "fail2ban events: event_type fail2ban_ban / fail2ban_unban / fail2ban_restore (re-ban after a fail2ban restart, not a new ban) / fail2ban_found / fail2ban_ignore, client_ip"
+      }
+    },
+
+    {
+      "grok": {
         "if": "ctx.container_name != null && ctx.container_name.endsWith('-db')",
         "field": "log",
         "patterns": [
-          "^%{TIMESTAMP_ISO8601:app_time} (?:UTC|GMT|EST|EDT|PST|PDT) \\[%{INT:pid:int}\\] (?<pg_level>LOG|DEBUG|INFO|NOTICE|WARNING|ERROR|FATAL|PANIC):\\s+%{GREEDYDATA:msg}"
+          "^%{TIMESTAMP_ISO8601:app_time} (?:UTC|GMT|EST|EDT|PST|PDT) \\[%{INT:pid:int}\\] (?:host=(?<_pg_host>\\S*) user=(?<pg_user>.*?) db=(?<pg_db>.*?) )?(?<pg_level>LOG|DEBUG|INFO|NOTICE|WARNING|ERROR|FATAL|PANIC):\\s+%{GREEDYDATA:msg}"
         ],
         "ignore_failure": true,
-        "description": "Postgres log format for *-db containers — LOG is postgres-specific, mapped to INFO below"
+        "description": "Postgres log format for *-db containers — LOG is postgres-specific, mapped to INFO below. tallied-db (since 2026-11-25) adds 'host=%h user=%u db=%d ' to the prefix"
+      }
+    },
+    {
+      "script": {
+        "if": "ctx._pg_host != null || ctx.pg_user != null || ctx.pg_db != null",
+        "lang": "painless",
+        "source": "if (ctx._pg_host != null) { String h = ctx._pg_host; if (h ==~ /^[0-9]{1,3}(\\.[0-9]{1,3}){3}$/ || (h.contains(':') && h ==~ /^[0-9a-fA-F:.]+$/)) { ctx.client_ip = h; } ctx.remove('_pg_host'); } if (ctx.pg_user != null && (ctx.pg_user == '' || ctx.pg_user == '[unknown]')) { ctx.remove('pg_user'); } if (ctx.pg_db != null && (ctx.pg_db == '' || ctx.pg_db == '[unknown]')) { ctx.remove('pg_db'); } if (ctx.msg != null) { String m = ctx.msg; if (m.startsWith('password authentication failed') || m.startsWith('no pg_hba.conf entry') || m.startsWith('pg_hba.conf rejects connection')) { ctx.event_type = 'pg_auth_failure'; } else if (m.startsWith('connection authorized')) { ctx.event_type = 'pg_connection_authorized'; } }",
+        "ignore_failure": true,
+        "description": "Postgres prefix fields: client_ip (only a real address; socket connections log host=[local]), pg_user, pg_db, and event_type pg_auth_failure / pg_connection_authorized for the fail2ban and tld_ login monitors"
       }
     },
     {

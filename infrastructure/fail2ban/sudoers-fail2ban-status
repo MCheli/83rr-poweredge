@@ -1,0 +1,9 @@
+# 83rr-poweredge: installed as /etc/sudoers.d/fail2ban-status by install.sh
+# (visudo -cf checked first). Lets the Mac mini's weekly homelab check read
+# jail status without a password. Read-only commands only, exact arguments
+# (no wildcards), so nothing can ban, unban or reconfigure through it.
+Cmnd_Alias F2B_STATUS = /usr/bin/fail2ban-client status, \
+                        /usr/bin/fail2ban-client status sshd, \
+                        /usr/bin/fail2ban-client status postgresql-tallied
+
+mcheli ALL=(root) NOPASSWD: F2B_STATUS

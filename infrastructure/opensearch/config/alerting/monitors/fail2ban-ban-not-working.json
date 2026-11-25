@@ -1,0 +1,117 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "fail2ban-ban-not-working",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 0,
+          "track_total_hits": true,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "term": {
+                    "container_name": "tallied-db"
+                  }
+                },
+                {
+                  "term": {
+                    "event_type": "pg_auth_failure"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-10m"
+                    }
+                  }
+                }
+              ],
+              "must_not": [
+                {
+                  "term": {
+                    "client_ip": "127.0.0.0/8"
+                  }
+                },
+                {
+                  "term": {
+                    "client_ip": "10.0.0.0/8"
+                  }
+                },
+                {
+                  "term": {
+                    "client_ip": "172.16.0.0/12"
+                  }
+                },
+                {
+                  "term": {
+                    "client_ip": "192.168.1.0/24"
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "flood_ip": {
+              "terms": {
+                "field": "client_ip",
+                "size": 5,
+                "min_doc_count": 50
+              }
+            },
+            "top_ip": {
+              "terms": {
+                "field": "client_ip",
+                "size": 8
+              }
+            },
+            "ips": {
+              "cardinality": {
+                "field": "client_ip"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "one-ip-past-ban-or-distributed",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ctx.results[0].hits != null && (ctx.results[0].aggregations.flood_ip.buckets.size() > 0 || ctx.results[0].hits.total.value > 200)",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] tallied-db: {{ctx.results.0.hits.total.value}} auth failures in 10 min (ban not keeping up?)\", \"message\": \"{{ctx.results.0.hits.total.value}} Postgres auth failures on tallied-db (port 5432) in the last 10 min from {{ctx.results.0.aggregations.ips.value}} non-LAN address(es).\\nOver the single-address line (50 in 10 min; a working ban stops one address at about 10 to 40):\\n{{#ctx.results.0.aggregations.flood_ip.buckets}}  {{key}}: {{doc_count}}\\n{{/ctx.results.0.aggregations.flood_ip.buckets}}{{^ctx.results.0.aggregations.flood_ip.buckets}}  none, so this is many addresses (distributed; total line is 200)\\n{{/ctx.results.0.aggregations.flood_ip.buckets}}Top addresses: {{#ctx.results.0.aggregations.top_ip.buckets}}{{key}} ({{doc_count}}) {{/ctx.results.0.aggregations.top_ip.buckets}}\\nCheck: sudo fail2ban-client status postgresql-tallied; sudo iptables -S f2b-postgresql-tallied; tail /var/log/pg-auth/tallied-db.log (is Fluent Bit still writing it?). tld_ passwords are 32 random characters, so guessing is not a real risk, but a ban that doesn't apply is a bug.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover\", \"priority\": 4, \"tags\": [\"rotating_light\"]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 30,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "fail2ban-bans",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 10,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-6h"
+                    }
+                  }
+                }
+              ],
+              "should": [
+                {
+                  "bool": {
+                    "filter": [
+                      {
+                        "term": {
+                          "container_name": "fail2ban"
+                        }
+                      },
+                      {
+                        "term": {
+                          "event_type": "fail2ban_ban"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "bool": {
+                    "filter": [
+                      {
+                        "term": {
+                          "container_name": "tallied-db"
+                        }
+                      },
+                      {
+                        "term": {
+                          "event_type": "pg_auth_failure"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "minimum_should_match": 1
+            }
+          },
+          "aggs": {
+            "bans": {
+              "filter": {
+                "term": {
+                  "event_type": "fail2ban_ban"
+                }
+              },
+              "aggs": {
+                "by_jail": {
+                  "terms": {
+                    "field": "f2b_jail",
+                    "size": 5
+                  },
+                  "aggs": {
+                    "by_ip": {
+                      "terms": {
+                        "field": "client_ip",
+                        "size": 15
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "pgfail": {
+              "filter": {
+                "term": {
+                  "event_type": "pg_auth_failure"
+                }
+              },
+              "aggs": {
+                "by_ip": {
+                  "terms": {
+                    "field": "client_ip",
+                    "size": 10
+                  }
+                },
+                "ips": {
+                  "cardinality": {
+                    "field": "client_ip"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "bans-in-last-6h",
+      "severity": "4",
+      "condition": {
+        "script": {
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ctx.results[0].aggregations.bans != null && ctx.results[0].aggregations.bans.doc_count > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] fail2ban: {{ctx.results.0.aggregations.bans.doc_count}} ban(s) in the last 6 h\", \"message\": \"fail2ban banned {{ctx.results.0.aggregations.bans.doc_count}} address(es) in the last 6 h. FYI only: the ban is doing its job.\\nBans by jail (address and ban count):\\n{{#ctx.results.0.aggregations.bans.by_jail.buckets}}[{{key}}] {{#by_ip.buckets}}{{key}} ({{doc_count}}) {{/by_ip.buckets}}\\n{{/ctx.results.0.aggregations.bans.by_jail.buckets}}tallied-db auth failures in the same 6 h: {{ctx.results.0.aggregations.pgfail.doc_count}} from {{ctx.results.0.aggregations.pgfail.ips.value}} address(es); top: {{#ctx.results.0.aggregations.pgfail.by_ip.buckets}}{{key}} ({{doc_count}}) {{/ctx.results.0.aggregations.pgfail.by_ip.buckets}}\\nAt most one of these every 6 h. Louder alerts exist for a ban that isn't working (fail2ban-ban-not-working) and for guesses at tld_ roles (pg-auth-tld-user).\\nStatus: ssh 83rr-poweredge sudo fail2ban-client status postgresql-tallied\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover\", \"priority\": 2, \"tags\": [\"no_entry_sign\"]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 360,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}

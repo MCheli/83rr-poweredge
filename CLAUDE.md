@@ -127,7 +127,7 @@ docker compose down -v
 15. **node-exporter** - Host system metrics (CPU, memory, disk)
 16. **nginx-exporter** - NGINX metrics for Prometheus
 17. **tallied** - Personal finance dashboard (image from ghcr.io/mcheli/tallied)
-18. **tallied-db** - PostgreSQL database for Tallied
+18. **tallied-db** - PostgreSQL database for Tallied. Port 5432 is public on purpose (per-household `tld_*` roles, hostssl + scram; `tallied`/`tallied_app` rejected from outside Docker). Host fail2ban jail `postgresql-tallied` bans guessing on 5432 in DOCKER-USER (log fed by Fluent Bit to `/var/log/pg-auth/`); bans and `tld_` logins alert via ntfy. Docs: `infrastructure/fail2ban/README.md`
 19. **tasks** - Cycle-based todo app (image from ghcr.io/mcheli/tasks), Google SSO auth
 20. **tasks-db** - PostgreSQL database for Tasks
 21. **daily-report** - Thermal-printer daily report generator (image from ghcr.io/mcheli/daily-report), prints to LAN printer at 192.168.1.147:9100 once a day at 05:00 ET
