@@ -1,6 +1,15 @@
 # Seafile upgrade runbook: 11.0.13 → 12.0.14 → 13.0.28 (November 2026)
 
-**Status:** planned. Replaces the earlier draft in `docs/SEAFILE_UPGRADE_RUNBOOK.md`.
+**Status:** done. The upgrade to 13.0 went live around 2026-11-03 and is final; this runbook is now
+history. Replaces the earlier draft in `docs/SEAFILE_UPGRADE_RUNBOOK.md`.
+
+> **The pre-13 rollback is no longer possible.** The `seafileltd/seafile-mc:11.0.13` and
+> `seafileltd/notification-server:12.0.11` images were removed from the R630 on 2026-11-25, and
+> rolling back now would discard everything synced since 2026-11-03. The current rollback point is
+> `seafileltd/seafile-mc:13.0.28-rollback` (with `seafileltd/notification-server:13.0.21-rollback`);
+> see [`seafile-upgrade-13.0.29.md`](seafile-upgrade-13.0.29.md#6-rollback). Section 7 below is kept
+> as a record of the plan, not as a procedure to follow.
+
 **Why:** `seafileltd/seafile-mc:11.0.13` (built 2024-11-04, Ubuntu 22.04) is the last 11.0
 release and is internet-facing at files.markcheli.com. Dependency-Track shows ~417 critical/high
 findings, including OpenSSL CVE-2025-15467 (EPSS 0.75), Django 4.2.16, Pillow 10.2 and PyJWT 2.6.
@@ -422,7 +431,8 @@ Then:
 ### Finalise
 
 - [ ] Update `docs/DEPLOYMENT_STATUS.md` (Seafile 13.0.28, redis and notification-server entries).
-- [ ] Mark `docs/SEAFILE_UPGRADE_RUNBOOK.md` as done or delete it.
+- [x] Mark `docs/SEAFILE_UPGRADE_RUNBOOK.md` as done or delete it. Done 2026-11-25 (kept as history,
+      with the pre-13 rollback marked impossible).
 - [ ] Keep `~/seafile-upgrade.state` until the snapshots are deleted, because the rollback reads it.
 - [ ] Keep `$SNAP` (NAS) and `$LOCAL` (`/storage/seafile-pre13-*`) for **at least 2 weeks**, then
       `sudo rm -rf /storage/seafile-pre13-*`. The NAS copy can stay longer.
@@ -436,7 +446,11 @@ Then:
 
 ## 7. Rollback
 
-Use this if any verification fails and the fix isn't obvious. It restores 11.0.13 exactly as it was at step 2.
+> **History only. Don't run this.** The 11.0.13 image was removed on 2026-11-25, and a rollback to it
+> would discard everything synced since 2026-11-03. Roll back with the 13.0.28 images instead:
+> [`seafile-upgrade-13.0.29.md`, section 6](seafile-upgrade-13.0.29.md#6-rollback).
+
+At the time of the upgrade: use this if any verification fails and the fix isn't obvious. It restores 11.0.13 exactly as it was at step 2.
 Seafile migrations only go forward. **Reverting only the image won't work against a migrated DB.** You must restore the DB
 *and* `/storage/seafile` (the conf files and the `current_version` stamp changed).
 

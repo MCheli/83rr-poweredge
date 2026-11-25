@@ -121,7 +121,9 @@ an outage (c538355); `/storage` mount race mitigated by
 
 ## Phase 3 — projects
 
-- [ ] **P3-1 Seafile 11.0.13 (EOL) → 12 → 13** per `docs/SEAFILE_UPGRADE_RUNBOOK.md`.
+- [x] **P3-1 Seafile 11.0.13 (EOL) → 12 → 13**: done around 2026-11-03 per `docs/seafile-upgrade-2026-11.md`
+  (the older `docs/SEAFILE_UPGRADE_RUNBOOK.md` draft is history). The 11.0.13 image was removed 2026-11-25;
+  there is no pre-13 rollback any more.
 - [ ] **P3-2 Network segmentation** (per-app networks; plex/minecraft/asa off
   the shared net first). Requires fixing compose override drift first
   (memory: compose override drift / volume choice).

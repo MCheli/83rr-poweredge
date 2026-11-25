@@ -5,8 +5,16 @@
 > notification server, redis) and its rollback leaves migrated tables behind.
 > Don't follow it. Kept for history only.
 
-**Status:** planned change, not yet executed. Schedule a maintenance window
-(~30–60 min, files.markcheli.com down during it).
+> **Rolling back to 11.0.13 is no longer possible.** The upgrade to 13.0 went
+> live around 2026-11-03 and is final. The `seafileltd/seafile-mc:11.0.13` and
+> `notification-server:12.0.11` images were removed from the R630 on 2026-11-25,
+> and a roll-back now would throw away everything synced since 2026-11-03.
+> The current rollback point is `seafileltd/seafile-mc:13.0.28-rollback` (with
+> `seafileltd/notification-server:13.0.21-rollback`); see
+> [`seafile-upgrade-13.0.29.md`](seafile-upgrade-13.0.29.md#6-rollback).
+
+**Status (history):** this draft was never executed; the upgrade was done with
+`seafile-upgrade-2026-11.md` instead.
 
 ## Why
 
@@ -84,7 +92,11 @@ same verification checks.
 - Update memory `[[project-backup-rsync-recursion]]` siblings if relevant.
 - Keep the pre-upgrade snapshot for ≥2 weeks.
 
-## Rollback (per hop)
+## Rollback (per hop) — history only
+
+> No longer possible: the 11.0.13 image is gone (removed 2026-11-25) and
+> rolling back would discard everything synced since 2026-11-03. Use the
+> 13.0.28 rollback in `seafile-upgrade-13.0.29.md` instead.
 
 If a hop fails verification:
 
