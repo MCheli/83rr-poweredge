@@ -1,0 +1,119 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "pg-tld-login",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 10,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 0,
+          "track_total_hits": true,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "term": {
+                    "container_name": "tallied-db"
+                  }
+                },
+                {
+                  "term": {
+                    "event_type": "pg_connection_authorized"
+                  }
+                },
+                {
+                  "prefix": {
+                    "pg_user": "tld_"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-60m"
+                    }
+                  }
+                }
+              ],
+              "must_not": [
+                {
+                  "term": {
+                    "client_ip": "127.0.0.0/8"
+                  }
+                },
+                {
+                  "term": {
+                    "client_ip": "10.0.0.0/8"
+                  }
+                },
+                {
+                  "term": {
+                    "client_ip": "172.16.0.0/12"
+                  }
+                },
+                {
+                  "term": {
+                    "client_ip": "192.168.1.0/24"
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "by_user": {
+              "terms": {
+                "field": "pg_user",
+                "size": 10,
+                "include": "tld_[A-Za-z0-9_]{1,63}"
+              },
+              "aggs": {
+                "by_ip": {
+                  "terms": {
+                    "field": "client_ip",
+                    "size": 5
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "tld-login-from-outside",
+      "severity": "3",
+      "condition": {
+        "script": {
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ctx.results[0].hits != null && ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] tallied-db: tld_ login from outside the LAN\", \"message\": \"A Tallied database credential (tld_ role) logged in to tallied-db from a non-LAN address in the last hour. This is the intended use (psql, DBeaver, Excel from anywhere); the notice is so you can recognise your own.\\nRole: address (connections)\\n{{#ctx.results.0.aggregations.by_user.buckets}}  {{key}}: {{#by_ip.buckets}}{{key}} ({{doc_count}}) {{/by_ip.buckets}}\\n{{/ctx.results.0.aggregations.by_user.buckets}}Not you or the household? Revoke that credential in Tallied. At most one notice an hour while logins continue.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover\", \"priority\": 3, \"tags\": [\"key\"]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 60,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}

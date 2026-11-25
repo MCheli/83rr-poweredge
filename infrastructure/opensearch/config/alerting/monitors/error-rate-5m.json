@@ -110,6 +110,22 @@
                         "bool": {
                           "must": [
                             {
+                              "wildcard": {
+                                "container_name": "*-db"
+                              }
+                            },
+                            {
+                              "match_phrase": {
+                                "msg": "pg_hba.conf rejects connection"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "bool": {
+                          "must": [
+                            {
                               "term": {
                                 "container_name": "plex"
                               }
@@ -413,6 +429,22 @@
                           {
                             "match_phrase": {
                               "msg": "no PostgreSQL user name specified"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must": [
+                          {
+                            "wildcard": {
+                              "container_name": "*-db"
+                            }
+                          },
+                          {
+                            "match_phrase": {
+                              "msg": "pg_hba.conf rejects connection"
                             }
                           }
                         ]

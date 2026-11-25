@@ -158,6 +158,20 @@ container_name: flask-api AND log: *GET* OR log: *POST*
 | `./fluent-bit.conf` | `/fluent-bit/etc/fluent-bit.conf` | Configuration |
 | `./parsers.conf` | `/fluent-bit/etc/parsers.conf` | Parsers |
 | `./docker_metadata.lua` | `/fluent-bit/etc/docker_metadata.lua` | Lua script |
+| `/var/log/pg-auth` | `/pg-auth` | tallied-db auth failure lines for fail2ban (file output) |
+| `/var/log` | `/host-log:ro` | `/var/log/fail2ban.log` (tail input, `container_name: fail2ban`) |
+
+### tallied-db auth lines for fail2ban (2026-11-25)
+
+A `rewrite_tag` filter copies every tallied-db record to tag
+`pgauth.tallied-db` (keep on, so the original still goes to OpenSearch), a
+grep keeps only the `FATAL:` auth failures (password failed, no pg_hba entry,
+pg_hba rejects), and a `file` output writes just the log text to
+`/var/log/pg-auth/tallied-db.log`, a path that survives a tallied-db recreate.
+The OpenSearch output uses `Match_Regex ^(docker|plex|seafile|f2b)\..*` so the
+copies don't get indexed twice. **A new input tag must be added to that
+regex** or its records won't reach OpenSearch. Jail and thresholds:
+`infrastructure/fail2ban/README.md`.
 
 ## Index Management
 

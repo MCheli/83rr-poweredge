@@ -14,6 +14,9 @@
 #        loopback and NOT the docker bridge range (172.16.0.0/12). On a
 #        correctly firewalled host these backends are only reached via the
 #        docker network / nginx, so any such row is worth a look.
+#        Exception: 5432 is public on purpose (Tallied tld_* roles). Its rows
+#        are still emitted, but security-external-db-conn no longer pages on
+#        them (pg-tld-login and the fail2ban monitors cover Postgres).
 #
 # Read-only (ss); no sudo needed for socket/port enumeration. Emits via the
 # same in-container OpenSearch endpoint used by emit_host_metrics.sh /

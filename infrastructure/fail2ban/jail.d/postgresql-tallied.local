@@ -1,0 +1,25 @@
+# 83rr-poweredge: ban password guessing on the public tallied-db port.
+# Installed as /etc/fail2ban/jail.d/postgresql-tallied.local by install.sh.
+# See infrastructure/fail2ban/README.md (thresholds and why).
+#
+# 5432 is a Docker-published port, so it never passes ufw's INPUT chain:
+# the ban goes into DOCKER-USER (Docker 29 on this host uses iptables-nft;
+# DOCKER-USER sits in front of Docker's own FORWARD rules). After DNAT the
+# destination port is the container port, also 5432.
+
+[postgresql-tallied]
+enabled   = true
+filter    = postgresql-tallied
+logpath   = /var/log/pg-auth/tallied-db.log
+backend   = polling
+# A scanner logs one line per attempt; a wrong password with sslmode=prefer
+# logs two. 10 lines in 10 min = 5 to 10 attempts.
+maxretry  = 10
+findtime  = 10m
+bantime   = 1h
+bantime.increment = true
+bantime.factor    = 1
+bantime.maxtime   = 1w
+# Loopback, every Docker network, Mark's LAN.
+ignoreip  = 127.0.0.0/8 ::1 192.168.1.0/24 172.16.0.0/12 10.0.0.0/8
+action    = iptables-multiport[name=postgresql-tallied, port="5432", protocol=tcp, chain=DOCKER-USER, blocktype=DROP]

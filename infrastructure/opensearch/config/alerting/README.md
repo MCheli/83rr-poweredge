@@ -236,6 +236,40 @@ docker exec opensearch curl -s -X POST "http://localhost:9200/_plugins/_alerting
 | `healthcheck-failure.json` | 3+ failed genuine healthchecks in 5 min (see below) | 2 |
 | `auth-bruteforce.json` | nginx status 401 from same client_ip > 30 in 5 min | 2 |
 | `watchtower-update-failure.json` | watchtower Failed != 0 in last 1h | 3 |
+| `fail2ban-bans.json` | any fail2ban ban (all jails) in the last 6 h; summary | 4 (ntfy 2) |
+| `fail2ban-ban-not-working.json` | tallied-db auth failures from one non-LAN IP ≥ 50, or > 200 total, in 10 min | 2 (ntfy 4) |
+| `pg-auth-tld-user.json` | tallied-db auth failure naming a `tld_` role, last 10 min | 2 (ntfy 4) |
+| `pg-tld-login.json` | `tld_` login to tallied-db from a non-LAN IP, last 60 min | 3 (ntfy 3) |
+| `security-external-db-conn.json` | outside peer ESTABLISHED on 9200/9300/3000 (5432 excluded since 2026-11-25) | 1 (ntfy 5) |
+
+### Postgres and fail2ban (2026-11-25)
+
+tallied-db's port 5432 is public on purpose (Tallied's per-household `tld_*`
+roles); the host's fail2ban jail `postgresql-tallied` bans password guessing on
+it (`infrastructure/fail2ban/README.md`). The ingest pipeline reads the new
+Postgres prefix (`host=%h user=%u db=%d`) into `client_ip`, `pg_user`, `pg_db`
+and sets `event_type` `pg_auth_failure` / `pg_connection_authorized`; fail2ban's
+own log arrives as `container_name: fail2ban` with `f2b_jail`, `client_ip` and
+`event_type` `fail2ban_ban` / `fail2ban_unban` / `fail2ban_restore` (a re-ban
+when fail2ban restarts, not counted as a new ban) / `fail2ban_found` /
+`fail2ban_ignore`.
+
+| Monitor | Fires when | ntfy priority | Throttle |
+|---|---|---|---|
+| `fail2ban-bans` | a ban in the last 6 h (any jail) | 2, no buzz | 6 h: the alert stays active while bans keep coming, so at most one summary per 6 h; lists bans per jail and address, and the top tallied-db failure addresses |
+| `fail2ban-ban-not-working` | one non-LAN address ≥ 50 failures in 10 min (the ban should stop it at about 10 to 40, see the fail2ban README for the latency), or > 200 failures in total (distributed) | 4 | 30 min |
+| `pg-auth-tld-user` | any failure naming a `tld_` role (LAN included: a scanner doesn't know these names, so it's a stale password or a leaked name) | 4 | 60 min |
+| `pg-tld-login` | `connection authorized` for a `tld_` role from a non-LAN address, last 60 min | 3 | 60 min; names role and address so Mark can recognise his own use |
+
+"LAN" here means 127/8, 10/8, 172.16/12 and 192.168.1/24, the same as the
+jail's `ignoreip`. Role names in messages pass a `tld_[A-Za-z0-9_]` filter on
+the terms aggregation, because the user name is client-chosen and Mustache does
+no JSON escaping. `security-external-db-conn` (fed by
+`scripts/emit_security_telemetry.sh`) still records 5432 peers but no longer
+pages on them; its priority 5 page stays for 9200/9300/3000.
+`error-rate-5m` also excludes `pg_hba.conf rejects connection` on `*-db`
+(scanner noise, like the other hba/auth lines); the new connection lines are
+`LOG`, which the pipeline maps to INFO.
 
 The files' actions already point at `ntfy-homelab`; run `wire-ntfy.py` once
 after a fresh deploy so the channel exists. As of 2026-11-05 all 12 files are

@@ -49,7 +49,7 @@ crontab unread (no sudo). `/etc/webmin` mtime 04:02 UTC 10-18 unexplained.
   show `(WAN)` exploitation straight to it, bypassing nginx). Remove the
   forward + disable Remote Access/manual mapping **[router]**; bind compose
   port to `192.168.1.179:32400:32400` **[me]**.
-- [~] **P0-3 Postgres (tallied-db) 5432** *(2026-11-01: 5432 stays public for `tld_*` roles; superuser `tallied` now rejected from non-Docker addresses, PR `tallied-db/hba-no-remote-superuser`. Remaining: `tallied_app` still matches the public lines; `log_connections=on`.)* on 0.0.0.0, `pg_hba.conf:17-18`
+- [x] **P0-3 Postgres (tallied-db) 5432** *(done 2026-11-25. 5432 stays public on purpose for Tallied's `tld_*` roles (hostssl, scram, 32-char random passwords). `tallied` and, since 2026-11-25, `tallied_app` are rejected from non-Docker addresses (the 11-01 note was right: until then `tallied_app` still fell through to the hostssl lines). `log_connections=on` with a `host=%h user=%u db=%d` prefix; fail2ban jail `postgresql-tallied` bans an address on 5432 in DOCKER-USER after 10 failures in 10 min (1h, growing to 1 week); bans and `tld_` logins alert through ntfy. See `infrastructure/fail2ban/README.md`.)* Original note: on 0.0.0.0, `pg_hba.conf:17-18`
   `hostssl all all 0.0.0.0/0` + `::/0` (matches superuser too). Decide if any
   remote tenant (`tld_*`) needs it → restrict lines to those roles + reject
   tallied/tallied_app from non-docker, or drop/bind the port; set
