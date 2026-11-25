@@ -226,6 +226,14 @@ merge by hand through basic-memory, then the next push carries the server copy.
 `--adopt-remote` was run once at deployment to record the ids of the files
 uploaded before the guard existed.
 
+A Seafile file that is missing on this server but whose id is still the
+`remote_id` the script recorded at upload is **stale**, not diverged (since
+2026-11-25): the file was renamed or deleted here (e.g. the Nov 24
+`_month-summary.md` → `YYYY-MM Month YYYY summary.md` renames). Stale files
+are only counted (`stale: N` in one log line and the summary line), left in
+Seafile (nothing is deleted) and never DIVERGED. A missing file with no
+recorded id, or a different one, is still DIVERGED.
+
 The diary writer's state lives in the vault as notes since the cut-over:
 `03-diary/_state.md` (the old `_state.json` as one fenced JSON block) and
 `03-diary/_runs.md` (the old `_runs.log` lines), both written and read through

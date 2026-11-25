@@ -17,10 +17,13 @@ library once, uploads only the local files that changed since the last run
   token file, mode 600); it refuses a read-only one;
 - guards against something still writing into Seafile (guard_prefixes, default
   /03-diary, where the old diary skill wrote): before uploading, every Seafile
-  file under a guarded prefix that is missing on this server, or that Seafile
-  holds in a version this script did not upload and with a newer mtime than the
-  local copy, is logged as "DIVERGED <path>", is never overwritten, and is not
-  imported. Someone has to look at it and resolve it by hand.
+  file under a guarded prefix that is missing on this server (unless it is
+  stale, below), or that Seafile holds in a version this script did not upload
+  and with a newer mtime than the local copy, is logged as "DIVERGED <path>", is
+  never overwritten, and is not imported. Someone has to look at it and resolve
+  it by hand. A file missing on this server whose Seafile id is still the one
+  this script recorded at upload is *stale* (renamed or deleted here): it is
+  only counted in one "stale: N" line, left in Seafile, and not DIVERGED.
 
 Config is a JSON file (kept outside the repo, e.g. /data/ai-context/push-config.json):
 
@@ -239,13 +242,18 @@ def rel_of(full: str, root: str) -> str:
     return full[len(root):].lstrip("/") if root != "/" else full.lstrip("/")
 
 
-def find_diverged(remote: dict[str, dict], root: str, src: Path, state: dict, guard_prefixes: list[str]) -> dict[str, str]:
-    """Seafile files under a guarded prefix that this server did not produce: rel path -> reason.
+def find_diverged(remote: dict[str, dict], root: str, src: Path, state: dict,
+                  guard_prefixes: list[str]) -> tuple[dict[str, str], set[str]]:
+    """Seafile files under a guarded prefix that this server did not produce: rel path -> reason,
+    plus the set of stale rel paths.
 
-    Missing locally, or Seafile's version is not the one we uploaded (remote id
-    unknown or different) and is newer than the local copy.
+    Diverged: missing locally and not our own upload, or Seafile's version is not
+    the one we uploaded (remote id unknown or different) and is newer than the
+    local copy. Stale: missing locally, but Seafile still holds exactly the version
+    this script uploaded (the file was renamed or deleted here); left in Seafile.
     """
     out: dict[str, str] = {}
+    stale: set[str] = set()
     for full, r in remote.items():
         if not any(under(full, norm(g)) for g in guard_prefixes):
             continue
@@ -255,11 +263,15 @@ def find_diverged(remote: dict[str, dict], root: str, src: Path, state: dict, gu
         if not rel or ".." in rel.split("/"):
             continue
         local = src / rel
-        if not local.exists():
-            out[rel] = "missing on this server"
-            continue
         prev = state.get(rel) or {}
-        if prev.get("remote_id") and prev["remote_id"] == r.get("id"):
+        ours = bool(prev.get("remote_id")) and prev["remote_id"] == r.get("id")
+        if not local.exists():
+            if ours:
+                stale.add(rel)
+            else:
+                out[rel] = "missing on this server"
+            continue
+        if ours:
             continue  # exactly the version we uploaded
         try:
             local_mtime = local.stat().st_mtime
@@ -267,7 +279,7 @@ def find_diverged(remote: dict[str, dict], root: str, src: Path, state: dict, gu
             continue
         if parse_mtime(r.get("mtime", "")) > local_mtime + 1:
             out[rel] = "Seafile copy is newer and not ours"
-    return out
+    return out, stale
 
 
 def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Path, exclude_names: set[str],
@@ -297,9 +309,12 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
         save_state(state_path, state)
         log(f"[{name}] adopted the current Seafile version of {adopted} unchanged file(s) as our own")
 
-    diverged = find_diverged(remote, root, src, state, guard_prefixes)
+    diverged, stale = find_diverged(remote, root, src, state, guard_prefixes)
     for rel, why in sorted(diverged.items()):
         log(f"[{name}] DIVERGED {posixpath.join(root, rel)} ({why}); not overwritten, not imported")
+    if stale:
+        log(f"[{name}] stale: {len(stale)} Seafile file(s) are our own earlier uploads of files "
+            "renamed or deleted here; left in Seafile")
 
     todo, in_sync, skipped_big, refused = [], 0, 0, 0
     for rel in files:
@@ -340,7 +355,7 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
 
     suffix = " (dry run)" if dry_run else ""
     log(f"[{name}] local files: {len(files)}, in sync: {in_sync}, to upload: {len(todo)}, "
-        f"diverged: {len(diverged)}, refused: {refused}, too large: {skipped_big}{suffix}")
+        f"diverged: {len(diverged)}, stale: {len(stale)}, refused: {refused}, too large: {skipped_big}{suffix}")
     uploaded = failed = 0
     t0 = time.time()
     for i, (rel, full, entry) in enumerate(todo, 1):
@@ -363,7 +378,7 @@ def run_target(sf: Seafile, remote: dict[str, dict], target: dict, state_dir: Pa
         if todo:
             log(f"[{name}] uploaded {uploaded}, failed {failed}, {round(time.time() - t0)}s")
     return dict(target=name, files=len(files), in_sync=in_sync, uploaded=uploaded, failed=failed,
-                refused=refused, too_large=skipped_big, diverged=len(diverged))
+                refused=refused, too_large=skipped_big, diverged=len(diverged), stale=len(stale))
 
 
 def main() -> int:

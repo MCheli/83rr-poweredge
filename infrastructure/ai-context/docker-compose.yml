@@ -45,6 +45,11 @@ services:
       - BASIC_MEMORY_UPDATE_PERMALINKS_ON_MOVE=false
       - BASIC_MEMORY_KEBAB_FILENAMES=false
       - BASIC_MEMORY_ENABLE_PROJECT_DELETE=false
+      # 2 materialisation workers, not the default 4 (2026-11-25): fewer
+      # concurrent SQLite writers, so bulk write passes stop hitting the
+      # hard-coded 10 s busy_timeout ("database is locked"), which drops the
+      # write until a restart. Env beats config.json in 1.0.0.
+      - BASIC_MEMORY_MATERIALIZATION_WORKERS=2
       # No self-updates (the image is pinned), no cloud promos/telemetry.
       - BASIC_MEMORY_AUTO_UPDATE=false
       - BASIC_MEMORY_NO_PROMOS=1
