@@ -444,7 +444,7 @@ stop mid-deploy, either finish before 02:00 or remove the containers
 
 ```bash
 cd ~/83rr-poweredge && git pull
-cp -p .env ".env.$(date +%F)-pre-deptrack.bak"
+cp -p .env .env.bak && chmod 600 .env.bak   # one backup, overwritten each time
 grep -q '^DEPTRACK_DB_PASSWORD=' .env || \
   echo "DEPTRACK_DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-32)" >> .env
 grep -c '^NTFY_PUBLISH_TOKEN=' .env          # expect 1 (already used by OpenSearch/Kuma)
@@ -580,5 +580,5 @@ them, so the 02:00 backup skips the dump instead of failing on a stopped DB;
 the volumes stay). If the change has to come out entirely, follow
 **Rollback / removal** above: the cron line, a revert PR + `git pull`, and an
 nginx reload. Until the revert lands, nginx keeps the vhost; it just returns
-502 for deptrack.ops because of the variable `proxy_pass`. Restore `.env` from the `.env.<date>-pre-deptrack.bak` copy if needed.
+502 for deptrack.ops because of the variable `proxy_pass`. Restore `.env` from the `.env.bak` copy if needed.
 No other service is touched by this change, so nothing else needs restarting.
