@@ -1,8 +1,20 @@
 #!/bin/bash
 # /etc/nut/pre-shutdown.sh — managed by 83rr-poweredge infrastructure/nut/install.sh
-# Runs from upsmon's SHUTDOWNCMD (as root, via sh -c) just before
-# `/sbin/shutdown -h +0`: saves the game worlds so the host shutdown loses
-# nothing.
+# Runs as root before the R630 halts for a power cut, from two places:
+#   - upssched-cmd at 5 minutes on battery (as `sudo -n`, rule in
+#     /etc/sudoers.d/nut-pre-shutdown), BEFORE `upsmon -c fsd`: FSD sends the
+#     Synology NAS into safe mode at once, so /mnt/nas has to go first;
+#   - upsmon's SHUTDOWNCMD, just before `/sbin/shutdown -h +0` (the low-battery
+#     path goes straight to FSD without the 5-minute handler).
+# Safe to run twice: a second run within STAMP_FRESH seconds of a finished one
+# skips the world saves, and the unmount is a no-op once /mnt/nas is gone.
+# Concurrent runs wait for each other (flock).
+#
+# Steps:
+#   /mnt/nas   CIFS share on the NAS (fstab, soft,nofail). umount (20 s), then
+#              lazy umount as the fallback; never blocks. Unmounted first, while
+#              the NAS is still up. Mount state is read from /proc/mounts, which
+#              never touches the (maybe dead) share.
 #   asa        ARK ignores SIGTERM under Proton, so the shutdown's docker stop
 #              ends in SIGKILL (docker.service gives up after 90 s, asa's grace
 #              is 120 s). RCON Broadcast + SaveWorld first, then wait until
@@ -13,10 +25,10 @@
 # unless-stopped container as stopped by hand, so Docker would not start it
 # again when the R630 boots after the outage.
 #
-# Hard cap: DEADLINE seconds for the whole script (SHUTDOWNCMD also wraps it in
-# `timeout 120`). Every step is best effort: a missing container, docker or
-# RCON error is logged and skipped, and the script always exits 0 so the
-# shutdown goes ahead.
+# Hard cap: DEADLINE seconds for the whole script (both callers also wrap it
+# in `timeout 120`). Every step is best effort: a missing container, docker,
+# RCON or umount error is logged and skipped, and the script always exits 0
+# so the shutdown goes ahead.
 #
 # Install (with the rest of infrastructure/nut/):
 #   sudo infrastructure/nut/install.sh
@@ -24,6 +36,11 @@ set -u
 
 DEADLINE=110
 TAG=nut-pre-shutdown
+NAS_MOUNT=/mnt/nas
+UMOUNT_WAIT=20
+LOCK=/run/lock/nut-pre-shutdown.lock
+STAMP=/run/nut-pre-shutdown.done
+STAMP_FRESH=600
 ARK_SAVE=/home/gameserver/server-files/ShooterGame/Saved/SavedArks/TheIsland_WP/TheIsland_WP.ark
 ARK_SAVE_WAIT=60
 MSG="Power outage: the server is shutting down now. World saved."
@@ -42,6 +59,25 @@ left() {
 
 running() {
     [[ "$(timeout "$(left 10)" docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" == true ]]
+}
+
+nas_mounted() {
+    awk -v m="$NAS_MOUNT" '$2 == m { found = 1 } END { exit !found }' /proc/mounts
+}
+
+unmount_nas() {
+    if ! nas_mounted; then log "${NAS_MOUNT}: not mounted, skipped"; return; fi
+    if timeout "$(left "$UMOUNT_WAIT")" umount "$NAS_MOUNT" 2>/dev/null; then
+        log "${NAS_MOUNT}: unmounted"
+        return
+    fi
+    if nas_mounted && timeout "$(left 5)" umount -l "$NAS_MOUNT" 2>/dev/null; then
+        log "${NAS_MOUNT}: busy or unreachable, lazily unmounted"
+    elif nas_mounted; then
+        log "${NAS_MOUNT}: unmount failed, left mounted"
+    else
+        log "${NAS_MOUNT}: unmounted"
+    fi
 }
 
 save_ark() {
@@ -75,10 +111,20 @@ save_minecraft() {
     fi
 }
 
-log "UPS shutdown: saving game worlds before halting (cap ${DEADLINE} s)"
-if command -v docker >/dev/null 2>&1; then
+# Wait for a run already in progress (if any), but never past the deadline.
+if { exec 9>"$LOCK"; } 2>/dev/null; then
+    flock -w "$(left)" 9 2>/dev/null || log "lock wait timed out, going ahead"
+fi
+
+log "UPS shutdown: unmounting ${NAS_MOUNT} and saving game worlds before halting (cap ${DEADLINE} s)"
+unmount_nas
+if [[ -e "$STAMP" ]] &&
+   (( $(date +%s) - $(stat -c %Y "$STAMP" 2>/dev/null || echo 0) < STAMP_FRESH )); then
+    log "worlds already saved by an earlier run, skipped"
+elif command -v docker >/dev/null 2>&1; then
     save_ark
     save_minecraft
+    touch "$STAMP" 2>/dev/null || true
 else
     log "docker not found, nothing to save"
 fi

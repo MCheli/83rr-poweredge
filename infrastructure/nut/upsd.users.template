@@ -1,8 +1,16 @@
 # /etc/nut/upsd.users — managed by 83rr-poweredge infrastructure/nut/install.sh
-# The one account: the local upsmon, as primary (it may set FSD and shut the
-# UPS down). install.sh replaces __UPSMON_PASSWORD__ with a random password
+# upsmon: the local upsmon, as primary (it may set FSD and shut the UPS
+# down). install.sh replaces __UPSMON_PASSWORD__ with a random password
 # made on first install (kept on later runs) and puts the same value in
 # upsmon.conf. The real password is never committed.
 [upsmon]
     password = __UPSMON_PASSWORD__
     upsmon primary
+
+# monuser: the Synology NAS (MarksNAS). DSM's "Synology UPS server" mode logs
+# in with this fixed, publicly documented login and cannot be changed, so it
+# is not a secret. Secondary only: it can read the UPS and follow FSD, not
+# set it. Only the NAS's IP can reach upsd on the LAN (ufw rule, install.sh).
+[monuser]
+    password = secret
+    upsmon secondary

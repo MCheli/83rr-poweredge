@@ -240,8 +240,9 @@ ls -lt /mnt/nas/83rr-backup/daily/ | head -5
 - [ ] **UPS on mains**: `ups.status` is `OL` (or `OL CHRG` right after a power cut)
 
 ```bash
-systemctl is-active nut-driver@cp1500 nut-server nut-monitor
-upsc cp1500 ups.status
+systemctl is-active nut-driver@ups nut-server nut-monitor
+upsc ups@localhost ups.status
+ss -ltn 'sport = :3493'      # upsd also on 192.168.1.179 (the Synology NAS is a NUT client)
 ```
 
 ---

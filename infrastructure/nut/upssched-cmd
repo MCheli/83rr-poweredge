@@ -2,9 +2,12 @@
 # /etc/nut/upssched-cmd — managed by 83rr-poweredge infrastructure/nut/install.sh
 # CMDSCRIPT for upssched (runs as the nut user).
 # $1 is the timer or EXECUTE name from upssched.conf:
-#   onbatt-shutdown  5 minutes on battery: push an alert, then `upsmon -c fsd`
-#                    (upsmon sets FSD, runs SHUTDOWNCMD and leaves
-#                    /etc/killpower so the UPS power-cycles the R630 later)
+#   onbatt-shutdown  5 minutes on battery: push an alert, run pre-shutdown.sh
+#                    as root (sudo rule /etc/sudoers.d/nut-pre-shutdown: save
+#                    the game worlds, unmount /mnt/nas), then `upsmon -c fsd`
+#                    (upsmon sets FSD, which also sends the Synology NAS into
+#                    safe mode, and runs SHUTDOWNCMD; kill-power is off, so
+#                    the UPS keeps powering everything else)
 #   onbatt online lowbatt fsd commbad commok nocomm replbatt shutdown
 #                    one ntfy push each (topic homelab)
 #
@@ -22,7 +25,7 @@ set -u
 ENV_FILE=/etc/nut/ntfy.env
 NOCOMM_STAMP=/run/nut/upssched-nocomm.stamp
 NOCOMM_EVERY=3600   # NOCOMM repeats every 5 min; push it at most hourly
-UPS="${UPSNAME:-cp1500}"
+UPS="${UPSNAME:-ups}"
 
 NTFY_URL=""
 NTFY_TOPIC="homelab"
@@ -64,7 +67,12 @@ case "${1:-}" in
     onbatt-shutdown)
         log "UPS ${UPS} on battery for 5 minutes: forcing shutdown (upsmon -c fsd)"
         ntfy_push high "rotating_light,electric_plug" "R630 shutting down" \
-            "On battery 5 min: shutting the R630 down now"
+            "On battery 5 min: shutting the R630 and the NAS down now"
+        # Before FSD: FSD sends the NAS into safe mode straight away, and
+        # /mnt/nas has to be unmounted while it is still there. Never blocks.
+        if ! /usr/bin/timeout 120 /usr/bin/sudo -n /etc/nut/pre-shutdown.sh; then
+            log "pre-shutdown.sh failed or timed out; going on with FSD"
+        fi
         if ! /sbin/upsmon -c fsd; then
             log "upsmon -c fsd failed; LOWBATT is still the backstop"
         fi
@@ -72,7 +80,7 @@ case "${1:-}" in
     onbatt)
         log "UPS ${UPS} on battery"
         ntfy_push high "warning,electric_plug" "UPS on battery" \
-            "Mains power lost: the R630 is on UPS battery. It shuts down in 5 minutes unless power returns."
+            "Mains power lost: the R630 is on UPS battery. It and the NAS shut down in 5 minutes unless power returns."
         ;;
     online)
         log "UPS ${UPS} back on mains"
@@ -87,7 +95,7 @@ case "${1:-}" in
     fsd)
         log "UPS ${UPS} forced shutdown (FSD)"
         ntfy_push urgent "rotating_light" "UPS forced shutdown" \
-            "Forced shutdown set on the UPS: the R630 is going down and the UPS will power-cycle it."
+            "Forced shutdown set on the UPS: the R630 and the NAS are going down. The UPS keeps the router and Home Assistant running."
         ;;
     commbad)
         log "lost communication with UPS ${UPS}"
@@ -108,7 +116,7 @@ case "${1:-}" in
         fi
         touch "$NOCOMM_STAMP" 2>/dev/null
         ntfy_push high "warning" "UPS unreachable" \
-            "The R630 cannot reach its UPS, so it will not shut down on a power cut. Check the USB cable and nut-driver@cp1500."
+            "The R630 cannot reach its UPS, so it will not shut down on a power cut. Check the USB cable and nut-driver@ups."
         ;;
     replbatt)
         log "UPS ${UPS} battery needs replacing"
@@ -118,7 +126,7 @@ case "${1:-}" in
     shutdown)
         log "system shutdown for UPS ${UPS}"
         ntfy_push urgent "rotating_light" "R630 halting" \
-            "The R630 is halting now for the power cut; it boots by itself when mains returns."
+            "The R630 is halting now for the power cut. It stays off until it is powered on (iDRAC or the button), or until the UPS battery runs out and mains returns."
         ;;
     *)
         log "unknown upssched command: ${1:-<none>}"
