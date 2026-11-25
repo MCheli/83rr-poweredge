@@ -101,6 +101,8 @@ mode (DSM's clean shutdown) when the R630 declares FSD.
   upsd after `network-online.target`, since upsd skips an address that is not up yet
   (the R630's LAN address comes from DHCP).
 - **Firewall:** install.sh adds `ufw allow proto tcp from 192.168.1.201 to any port 3493`.
+  3493 is in `ALLOWED_PORTS` of `scripts/emit_security_telemetry.sh`, so the
+  `security-unexpected-listen-port` monitor treats it as expected.
   No other host can reach upsd. If the NAS's address ever changes, update `NAS_IP` in
   install.sh and the ufw rule (`sudo ufw status numbered`, delete the old one).
 - `nut.conf` is `MODE=netserver` (was `standalone`) to match.

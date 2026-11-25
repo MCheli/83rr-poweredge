@@ -305,7 +305,10 @@ endpoint as `emit_host_metrics.sh` / `backup.sh`. All failures non-fatal.
 - Runs automatically; run manually to seed/test telemetry after changes.
 
 **Maintenance:** when you intentionally add a service/port, add the port to
-`ALLOWED_PORTS` or the unexpected-port monitor will alert.
+`ALLOWED_PORTS` or the unexpected-port monitor will alert. Host services in
+the list: 3493 (NUT upsd for the NAS's UPS client, since 2026-11-25). 5432
+connections are still emitted but `security-external-db-conn` no longer pages
+on them (public on purpose for Tallied's `tld_*` roles).
 
 **Referenced in:** CLAUDE.md (security backlog E3)
 

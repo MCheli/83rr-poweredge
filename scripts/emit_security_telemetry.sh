@@ -30,7 +30,9 @@ set -uo pipefail
 # Known-good LISTEN ports. Everything here is an intentionally-running
 # service (see CLAUDE.md / docker-compose). A port NOT in this set fires
 # the unexpected-port alert. Update deliberately when adding a service.
-ALLOWED_PORTS=" 22 53 80 139 443 445 1900 3000 5001 5353 5432 7777 9200 9300 9600 9650 10000 11520 25565 32400 32410 32412 32413 32414 32469 32919 137 138 "
+# 3493: NUT upsd (host service, infrastructure/nut), on loopback + the LAN IP
+# for the Synology NAS's UPS client; ufw admits only the NAS (2026-11-25).
+ALLOWED_PORTS=" 22 53 80 139 443 445 1900 3000 3493 5001 5353 5432 7777 9200 9300 9600 9650 10000 11520 25565 32400 32410 32412 32413 32414 32469 32919 137 138 "
 
 SENSITIVE_PORTS="9200 9300 5432 3000"
 
