@@ -1,0 +1,7 @@
+# 83rr-poweredge: installed as /etc/fail2ban/fail2ban.d/83rr.local by install.sh.
+# bantime.increment looks up an address's earlier bans in the fail2ban
+# database; with the Debian default dbpurgeage of 1d a returning scanner
+# would start again at 1h. Keep 8 days so the ban can grow to the 1-week cap.
+
+[DEFAULT]
+dbpurgeage = 8d

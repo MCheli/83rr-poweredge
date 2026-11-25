@@ -1,0 +1,97 @@
+{
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "name": "pg-auth-tld-user",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "logs-homelab-*"
+        ],
+        "query": {
+          "size": 0,
+          "track_total_hits": true,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "term": {
+                    "container_name": "tallied-db"
+                  }
+                },
+                {
+                  "term": {
+                    "event_type": "pg_auth_failure"
+                  }
+                },
+                {
+                  "prefix": {
+                    "pg_user": "tld_"
+                  }
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-10m"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "by_user": {
+              "terms": {
+                "field": "pg_user",
+                "size": 10,
+                "include": "tld_[A-Za-z0-9_]{1,63}"
+              },
+              "aggs": {
+                "by_ip": {
+                  "terms": {
+                    "field": "client_ip",
+                    "size": 5
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "failures-for-a-tld-role",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results.size() > 0 && ctx.results[0].aggregations != null && ctx.results[0].hits != null && ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": [
+        {
+          "name": "ntfy-homelab",
+          "destination_id": "ntfy-homelab",
+          "message_template": {
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] tallied-db: failed logins for a tld_ role ({{ctx.results.0.hits.total.value}} in 10 min)\", \"message\": \"Postgres auth failures on tallied-db that name a tld_ role, the per-household credentials Tallied hands out. A scanner doesn't know these names, so it is either a household with an old or mistyped password, or a leaked role name.\\nRole: address (lines). Two lines per wrong password is normal for libpq sslmode=prefer.\\n{{#ctx.results.0.aggregations.by_user.buckets}}  {{key}}: {{#by_ip.buckets}}{{key}} ({{doc_count}}) {{/by_ip.buckets}}\\n{{/ctx.results.0.aggregations.by_user.buckets}}Do: if the address isn't the household's, rotate or revoke that database credential in Tallied. Non-LAN addresses get banned after 10 lines in 10 min.\\nDiscover: https://logs.ops.markcheli.com/app/data-explorer/discover\", \"priority\": 4, \"tags\": [\"warning\"]}",
+            "lang": "mustache"
+          },
+          "throttle_enabled": true,
+          "throttle": {
+            "value": 60,
+            "unit": "MINUTES"
+          }
+        }
+      ]
+    }
+  ]
+}

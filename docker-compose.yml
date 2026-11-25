@@ -322,6 +322,12 @@ services:
       - fluent_bit_data:/var/log
       - plex_config:/plex-logs:ro
       - /storage/seafile/seafile/logs:/seafile-logs:ro
+      # fail2ban: Fluent Bit writes the tallied-db auth lines to
+      # /var/log/pg-auth/tallied-db.log (a stable path for the jail) and reads
+      # /var/log/fail2ban.log. The whole /var/log is mounted read-only because
+      # logrotate replaces fail2ban.log (a single-file mount would go stale).
+      - /var/log/pg-auth:/pg-auth
+      - /var/log:/host-log:ro
     depends_on:
       - opensearch
     # Note: Fluent Bit distroless image has no shell utilities for health checks
@@ -599,12 +605,19 @@ services:
     container_name: tallied-db
     restart: unless-stopped
     logging: *default-logging
+    # log_connections + a prefix with the client address: fail2ban (jail
+    # postgresql-tallied, infrastructure/fail2ban) bans on the host= field and
+    # the OpenSearch pipeline reads host/user/db from it. No auth_delay: a delay
+    # holds a backend slot per failed attempt, so a flood could use up
+    # max_connections and lock the app out; the ban does that job instead.
     command: >
       postgres
       -c ssl=on
       -c ssl_cert_file=/var/lib/postgresql/data/server.crt
       -c ssl_key_file=/var/lib/postgresql/data/server.key
       -c hba_file=/etc/postgresql/pg_hba.conf
+      -c log_connections=on
+      -c "log_line_prefix=%m [%p] host=%h user=%u db=%d "
     environment:
       - POSTGRES_USER=tallied
       - POSTGRES_PASSWORD=${TALLIED_DB_PASSWORD}

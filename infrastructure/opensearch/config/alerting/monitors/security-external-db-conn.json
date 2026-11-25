@@ -15,6 +15,9 @@
               "must": [
                 { "term": { "event_type": "security_external_db_conn" } },
                 { "range": { "@timestamp": { "gte": "now-10m" } } }
+              ],
+              "must_not": [
+                { "term": { "port": 5432 } }
               ]
             }
           },
@@ -43,7 +46,7 @@
           "name": "ntfy-homelab",
           "destination_id": "ntfy-homelab",
           "message_template": {
-            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] SECURITY: direct connection to a backend port (OpenSearch/Postgres/Grafana)\", \"message\": \"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\n\\nSomething connected DIRECTLY to a sensitive backend port from a non-loopback, non-docker peer. These should only be reached via the docker network / nginx. A real peer here means the port is exposed past the intended boundary (firewall/NAT gap) or lateral movement.\\n\\n{{#ctx.results.0.aggregations.by_port.buckets}}port {{key}}: {{#by_peer.buckets}}{{key}}({{doc_count}}) {{/by_peer.buckets}}\\n{{/ctx.results.0.aggregations.by_port.buckets}}\\n=== Act ===\\n  - Confirm whether that peer is you/an admin host.\\n  - If not: treat as incident. Check ufw/router NAT for 9200/5432/3000.\\n  - Rebind the service to 127.0.0.1/LAN (security backlog B1).\\n\", \"priority\": 5, \"tags\": [\"rotating_light\"]}",
+            "source": "{\"topic\": \"homelab\", \"title\": \"[homelab] SECURITY: direct connection to a backend port (OpenSearch/Grafana)\", \"message\": \"Monitor: {{ctx.monitor.name}} (severity {{ctx.trigger.severity}})\\n\\nSomething connected DIRECTLY to a sensitive backend port from a non-loopback, non-docker peer. These should only be reached via the docker network / nginx. A real peer here means the port is exposed past the intended boundary (firewall/NAT gap) or lateral movement.\\n(Postgres 5432 is public on purpose for Tallied's tld_ roles and is not paged here: pg-tld-login, pg-auth-tld-user and the fail2ban monitors cover it.)\\n\\n{{#ctx.results.0.aggregations.by_port.buckets}}port {{key}}: {{#by_peer.buckets}}{{key}}({{doc_count}}) {{/by_peer.buckets}}\\n{{/ctx.results.0.aggregations.by_port.buckets}}\\n=== Act ===\\n  - Confirm whether that peer is you/an admin host.\\n  - If not: treat as incident. Check ufw/router NAT for 9200/9300/3000.\\n  - Rebind the service to 127.0.0.1/LAN (security backlog B1).\\n\", \"priority\": 5, \"tags\": [\"rotating_light\"]}",
             "lang": "mustache"
           },
           "throttle_enabled": true,
