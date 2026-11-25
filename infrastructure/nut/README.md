@@ -17,8 +17,25 @@ databases and the `/storage` RAID array are better off with a clean shutdown.
 2. **Mains back within 5 minutes** → timer cancelled, ntfy push "back on mains". Nothing else happens.
 3. **Still on battery after 5 minutes** → `upssched-cmd` sends "On battery 5 min:
    shutting the R630 down now" and runs `upsmon -c fsd`. upsmon sets forced shutdown
-   (FSD), writes `/etc/killpower` and runs `/sbin/shutdown -h +0`. Docker stops the
-   containers in the normal way.
+   (FSD), writes `/etc/killpower` and runs `SHUTDOWNCMD`: first
+   `/etc/nut/pre-shutdown.sh` (capped at 120 s), then `/sbin/shutdown -h +0`. Docker
+   stops the containers in the normal way.
+   - **Game worlds first:** `pre-shutdown.sh` saves ARK (`asa`: RCON `Broadcast`, then
+     `SaveWorld`, then waits until the `.ark` file has been rewritten; about 4 s) and
+     Minecraft (RCON `say`, then `save-all flush`). ARK ignores SIGTERM under Proton,
+     so the shutdown's `docker stop` always ends in SIGKILL (docker.service stops
+     after 90 s). Without the save, everything since the last autosave (every ~2 h 15 min)
+     would be lost. Minecraft stops cleanly on SIGTERM; the flush just makes sure
+     nothing depends on its 10 s stop timeout.
+   - It saves but does **not** `docker stop` them: a manual stop marks an
+     `unless-stopped` container as stopped by hand, and Docker would then leave it off
+     when the R630 boots after the outage.
+   - Every step is best effort (a missing container or an RCON failure is logged under
+     `nut-pre-shutdown` and skipped) and the script always exits 0, so the shutdown
+     goes ahead regardless.
+   - Budget: the shutdown starts at 5 min on battery, the save takes well under a
+     minute (120 s at most), and the halt about 1.5 min. On 2026-11-17 the UPS
+     lasted ~14 min.
 4. **Backstop:** if the UPS reports low battery (`OB LB`) before the 5 minutes are up
    (old battery, high load), upsmon shuts down straight away without waiting for the timer.
    If the UPS stops answering while on battery, upsmon treats it as low battery after
@@ -57,6 +74,7 @@ never blocks the shutdown, and the token is never on a command line or in a log.
 | `upsmon.conf` | `/etc/nut/upsmon.conf` | same password placeholder; shutdown + notify settings |
 | `upssched.conf` | `/etc/nut/upssched.conf` | 5-min timer + notices |
 | `upssched-cmd` | `/etc/nut/upssched-cmd` (750) | logger + ntfy + `upsmon -c fsd` |
+| `pre-shutdown.sh` | `/etc/nut/pre-shutdown.sh` (750) | run by `SHUTDOWNCMD` as root: saves the ARK + Minecraft worlds, ≤ 120 s, never fails |
 | (generated) | `/etc/nut/ntfy.env` | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` (from the repo `.env`), `NTFY_CACERT` |
 | `../nginx/certs/wildcard-markcheli.crt` | `/etc/nut/ntfy-origin.crt` (644) | public cert, pinned for the local push |
 
@@ -96,6 +114,7 @@ upsc cp1500 battery.runtime                    # seconds of runtime at the curre
 systemctl is-active nut-driver@cp1500 nut-server nut-monitor
 journalctl -u nut-monitor -u nut-driver@cp1500 --since today
 journalctl -t upssched-cmd --since today       # what the notify script did
+journalctl -t nut-pre-shutdown                 # world saves before the last UPS shutdown
 sudo infrastructure/nut/install.sh --check
 ```
 
@@ -116,6 +135,7 @@ sudo ipmitool chassis policy always-on                    # set it
 
 The same setting is "AC Power Recovery" in the BIOS (System Setup → System BIOS →
 System Security) and in iDRAC. Agents: check only, don't change it without Mark's yes.
+Set to `always-on` on 2026-11-25 (it was `previous`); undo with `sudo ipmitool chassis policy previous`.
 
 ## Real test (needs Mark's yes; cuts mains)
 
