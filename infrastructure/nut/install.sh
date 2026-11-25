@@ -74,9 +74,11 @@ status() {
     fi
     printf '  %-28s %s\n' "kill-power" "$kp"
     printf '  %-28s %s\n' "/etc/killpower" "$([[ -e /etc/killpower ]] && echo 'PRESENT (should not exist)' || echo absent)"
-    printf '  %-28s %s\n' "upsc -l localhost" "$(upsc -l localhost 2>&1 | tr '\n' ' ' || true)"
+    # upsc prints "Init SSL without certificate database" on stderr every time
+    printf '  %-28s %s\n' "upsc -l localhost" "$(upsc -l localhost 2>/dev/null | tr '\n' ' ' || true)"
     printf '  %-28s %s\n' "lsusb 0764 (CyberPower)" "$(lsusb -d 0764: 2>/dev/null || echo 'not found (USB cable not plugged in?)')"
-    printf '  %-28s %s\n' "upsc ${UPS_NAME} ups.status" "$(upsc "${UPS_NAME}@localhost" ups.status 2>&1 || true)"
+    printf '  %-28s %s\n' "upsc ${UPS_NAME} ups.status" "$(upsc "${UPS_NAME}@localhost" ups.status 2>/dev/null || echo 'unreachable (driver not running?)')"
+    printf '  %-28s %s\n' "upsc -c (clients)" "$(upsc -c "${UPS_NAME}@localhost" 2>/dev/null | tr '\n' ' ' || true)"
     printf '  %-28s %s\n' "upsd listening (${NUT_PORT})" "$(ss -Hltn "sport = :${NUT_PORT}" 2>/dev/null | awk '{print $4}' | tr '\n' ' ')"
     printf '  %-28s %s\n' "sudoers rule" "$([[ -e "$SUDOERS_FILE" ]] && echo "$SUDOERS_FILE" || echo MISSING)"
     printf '  %-28s %s\n' "nut-server drop-in" "$([[ -e "$DROPIN_FILE" ]] && echo "$DROPIN_FILE" || echo MISSING)"

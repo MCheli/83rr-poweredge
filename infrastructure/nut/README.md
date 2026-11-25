@@ -167,6 +167,10 @@ R630**. Nothing else: the udev rule in the nut package gives the `nut` group acc
 device and systemd retries the driver, so it picks the UPS up within a few seconds.
 Installing before the cable is in is fine.
 
+**Done 2026-11-25:** the driver sees the UPS (`device.model` CP1500PFCRM2U; lsusb calls it
+PR1500LCDRT2U), `ups.status` `OL`, `ups.load` 28 % of 1000 W (≈ 280 W, close to Home
+Assistant's "Server Wattage" plug at ≈ 296 W), `battery.runtime` 1500 s at that load.
+
 ## Install
 
 On the server, from the repo checkout:
