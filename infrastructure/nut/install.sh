@@ -10,7 +10,7 @@
 # What it does:
 #   - apt-get install nut-server nut-client
 #   - copies nut.conf ups.conf upsd.conf upssched.conf into /etc/nut
-#     (root:nut 640) and upssched-cmd (root:nut 750); the package's own
+#     (root:nut 640), upssched-cmd and pre-shutdown.sh (root:nut 750); the package's own
 #     files are kept once as <name>.dist
 #   - renders upsd.users + upsmon.conf with the upsmon password: random on
 #     first install, reused from /etc/nut/upsd.users afterwards (never printed)
@@ -109,6 +109,7 @@ for f in nut.conf ups.conf upsd.conf upssched.conf; do
     put_file "${SRC_DIR}/${f}" "${NUT_DIR}/${f}" 640
 done
 put_file "${SRC_DIR}/upssched-cmd" "${NUT_DIR}/upssched-cmd" 750
+put_file "${SRC_DIR}/pre-shutdown.sh" "${NUT_DIR}/pre-shutdown.sh" 750
 
 # Reuse the password only from a upsd.users this script wrote.
 UPSMON_PASSWORD=""
