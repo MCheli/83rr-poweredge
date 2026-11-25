@@ -35,7 +35,7 @@ image as the roll-back. Code, model choice and cleanup rules:
 | --- | --- |
 | `HOUSE_TRANSCRIBER_HA_TOKEN` | Agents / `HA agent token` |
 | `HOUSE_TRANSCRIBER_PROTECT_API_KEY` | Agents / `UniFi Protect API key` (Protect → Settings → Control Plane → Integrations → Create API Key) |
-| `HOUSE_TRANSCRIBER_SEAFILE_TOKEN` | Agents / `Seafile AI Context token (house-transcriber, rw)`: files.markcheli.com → AI Context library → ⋯ → Advanced → API Token → app `house-transcriber`, permission **Read-Write**. Since the cut-over the service doesn't read it; the same value lives in `/data/ai-context/.secrets/seafile-rw-token` for the backup push (`scripts/ai-context/seafile-backup-push.py`), and it is the roll-back credential (below) |
+| `HOUSE_TRANSCRIBER_SEAFILE_TOKEN` | Agents / `House transcriber Seafile token`. Roll-back only, and **not in `.env` today**; see [Seafile fallback token](#seafile-fallback-token) |
 
 Optional: `HOUSE_TRANSCRIBER_HA_URL` (default `http://192.168.1.121:8123`; fall back to
 `https://home.markcheli.com` only if the LAN address is unreachable from containers),
@@ -46,7 +46,48 @@ Optional: `HOUSE_TRANSCRIBER_HA_URL` (default `http://192.168.1.121:8123`; fall 
 Add them to `~/83rr-poweredge/.env` on the server like the other secrets there, without echoing
 values into a terminal or log. From the Mac mini, one way is
 `op read --no-newline "op://Agents/HA agent token/credential" | ssh 83rr-poweredge 'cd ~/83rr-poweredge && printf "HOUSE_TRANSCRIBER_HA_TOKEN=%s\n" "$(cat)" >> .env'`
-(and the same for the other two).
+(and the same for the Protect key).
+
+### Seafile fallback token
+
+The read-write library API token the transcriber used to write into Seafile before the
+2026-11-23 cut-over, and would use again in the [roll-back](#deploy) below.
+
+- **Where it is configured (checked 2026-11-25):** only in
+  `/data/ai-context/.secrets/seafile-rw-token` on the server (one line, mode 600, owner
+  `mcheli`), which `/data/ai-context/push-config.json` names as `token_file` for the Seafile
+  backup push (`scripts/ai-context/seafile-backup-push.py`, cron `*/30`). The root `.env` has
+  **no** `HOUSE_TRANSCRIBER_SEAFILE_TOKEN` line, and the running container gets no
+  `SEAFILE_REPO_TOKEN`. Don't confuse it with `/data/ai-context/.secrets/seafile-token`, the
+  read-only token of the work-laptop pull.
+- **Source of truth:** the 1Password **Agents** vault item `House transcriber Seafile token`
+  (field `credential`). Mark saves it there; agents can only read the vault
+  (`~/.local/bin/agent-op read "op://Agents/House transcriber Seafile token/credential"`), so
+  after a rotation Mark updates the item first and the server file is written from it, never
+  the other way round. Never print or log the value.
+- **Roll-back:** add it to `.env` from the item before switching the compose service back:
+  `~/.local/bin/agent-op read "op://Agents/House transcriber Seafile token/credential" | ssh 83rr-poweredge 'cd ~/83rr-poweredge && printf "HOUSE_TRANSCRIBER_SEAFILE_TOKEN=%s\n" "$(cat)" >> .env'`.
+
+**Rotate** (e.g. after a leak, or when retiring the token):
+
+1. In Seafile (files.markcheli.com, as the library owner): AI Context library → ⋯ →
+   **Advanced** → **API Token**. Delete the token of app `house-transcriber`, then add app
+   `house-transcriber` again with permission **Read-Write** and copy the new token. The old
+   one stops working at once, so the next backup push fails until step 3 is done.
+2. Mark saves the new value in the Agents item `House transcriber Seafile token` (replacing
+   the old one).
+3. Write it to the server from the item (from the Mac mini, nothing echoed):
+   `~/.local/bin/agent-op read "op://Agents/House transcriber Seafile token/credential" | ssh 83rr-poweredge 'umask 077 && cat > /data/ai-context/.secrets/seafile-rw-token.new && mv -f /data/ai-context/.secrets/seafile-rw-token.new /data/ai-context/.secrets/seafile-rw-token'`.
+   The push refuses a file that isn't mode 600 and a token that isn't read-write.
+4. If `.env` carries `HOUSE_TRANSCRIBER_SEAFILE_TOKEN` (roll-back mode), replace that line
+   the same way and recreate the service:
+   `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d house-transcriber`.
+   In normal (vault) mode the transcriber doesn't read the token and needs no redeploy.
+5. **Verify:** after the next `:00`/`:30`, `tail -3 /data/ai-context/logs/seafile-backup-push.log`
+   ends with `done rc=0` and has no `Seafile refused the token` / `need read-write` line (or
+   run `python3 /data/ai-context/bin/seafile-backup-push.py --config /data/ai-context/push-config.json`
+   once by hand). In roll-back mode the transcriber log shows `transcripts go to Seafile
+   through its web API (roll-back mode)` and no 401/403.
 
 ## Deploy
 
