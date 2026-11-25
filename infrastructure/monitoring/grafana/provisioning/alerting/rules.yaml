@@ -66,7 +66,7 @@ groups:
         for: 15m
         labels: {severity: warning}
         annotations:
-          summary: '{{ .Labels.mountpoint }} is {{ humanize .Values.A.Value }}% full.'
+          summary: '{{ .Labels.mountpoint }} is {{ with .Values.A }}{{ humanize .Value }}{{ end }}% full.'
 
       - uid: hl-disk-95
         title: Disk above 95%
@@ -92,7 +92,7 @@ groups:
         for: 5m
         labels: {severity: critical}
         annotations:
-          summary: '{{ .Labels.mountpoint }} is {{ humanize .Values.A.Value }}% full.'
+          summary: '{{ .Labels.mountpoint }} is {{ with .Values.A }}{{ humanize .Value }}{{ end }}% full.'
 
       - uid: hl-memory-low
         title: Host memory pressure
@@ -118,7 +118,7 @@ groups:
         for: 15m
         labels: {severity: critical}
         annotations:
-          summary: 'Only {{ humanize .Values.A.Value }}% of RAM available for 15 minutes.'
+          summary: 'Only {{ with .Values.A }}{{ humanize .Value }}{{ end }}% of RAM available for 15 minutes.'
 
       - uid: hl-restart-loop
         title: Container restarting repeatedly
@@ -145,7 +145,7 @@ groups:
         for: 1m
         labels: {severity: critical}
         annotations:
-          summary: '{{ .Labels.name }} restarted {{ .Values.A.Value }} times in 30 minutes.'
+          summary: '{{ .Labels.name }} restarted {{ with .Values.A }}{{ .Value }}{{ end }} times in 30 minutes.'
 
       - uid: hl-backup-stale
         title: Backup not succeeded in 26 h
@@ -171,7 +171,7 @@ groups:
         for: 10m
         labels: {severity: warning}
         annotations:
-          summary: 'Nightly backup last exited 0 {{ humanize .Values.A.Value }} h ago (backstop; the OpenSearch backup-no-heartbeat monitor is the loud one).'
+          summary: 'Nightly backup last exited 0 {{ with .Values.A }}{{ humanize .Value }}{{ end }} h ago (backstop; the OpenSearch backup-no-heartbeat monitor is the loud one).'
 
       - uid: hl-cert-expiry
         title: Certificate expires in under 14 days
@@ -197,7 +197,7 @@ groups:
         for: 1h
         labels: {severity: warning}
         annotations:
-          summary: '{{ .Labels.cert }} expires in {{ humanize .Values.A.Value }} days (Let''s Encrypt renews at 30; check logs of renew-letsencrypt-certs.sh).'
+          summary: '{{ .Labels.cert }} expires in {{ with .Values.A }}{{ humanize .Value }}{{ end }} days (Let''s Encrypt renews at 30; check logs of renew-letsencrypt-certs.sh).'
 
       - uid: hl-ups-on-battery
         title: UPS on battery
