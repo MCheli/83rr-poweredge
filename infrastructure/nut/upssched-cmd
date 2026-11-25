@@ -1,0 +1,127 @@
+#!/bin/bash
+# /etc/nut/upssched-cmd — managed by 83rr-poweredge infrastructure/nut/install.sh
+# CMDSCRIPT for upssched (runs as the nut user).
+# $1 is the timer or EXECUTE name from upssched.conf:
+#   onbatt-shutdown  5 minutes on battery: push an alert, then `upsmon -c fsd`
+#                    (upsmon sets FSD, runs SHUTDOWNCMD and leaves
+#                    /etc/killpower so the UPS power-cycles the R630 later)
+#   onbatt online lowbatt fsd commbad commok nocomm replbatt shutdown
+#                    one ntfy push each (topic homelab)
+#
+# ntfy settings come from /etc/nut/ntfy.env (root:nut 640, written by
+# install.sh): NTFY_URL, NTFY_TOPIC, NTFY_TOKEN, NTFY_CACERT. The push goes
+# first to the local nginx (127.0.0.1, pinned to the Cloudflare origin cert, so
+# it works with the internet down; ntfy keeps it for phones to fetch later),
+# then to the public URL. A push never fails the script and the token never
+# reaches the command line or the logs.
+#
+# Install (with the rest of infrastructure/nut/):
+#   sudo infrastructure/nut/install.sh
+set -u
+
+ENV_FILE=/etc/nut/ntfy.env
+NOCOMM_STAMP=/run/nut/upssched-nocomm.stamp
+NOCOMM_EVERY=3600   # NOCOMM repeats every 5 min; push it at most hourly
+UPS="${UPSNAME:-cp1500}"
+
+NTFY_URL=""
+NTFY_TOPIC="homelab"
+NTFY_TOKEN=""
+NTFY_CACERT=""
+# shellcheck source=/dev/null
+[[ -r "$ENV_FILE" ]] && . "$ENV_FILE"
+
+log() { logger -t upssched-cmd -- "$*"; }
+
+# ntfy_push PRIORITY TAGS TITLE MESSAGE
+ntfy_push() {
+    local prio="$1" tags="$2" title="$3" msg="$4" host
+    if [[ -z "$NTFY_URL" || -z "$NTFY_TOKEN" ]]; then
+        log "ntfy not configured in ${ENV_FILE}; push skipped: ${title}"
+        return 0
+    fi
+    host="${NTFY_URL#https://}"
+    host="${host%%/*}"
+    local -a common=(-fsS -o /dev/null --config -
+        -H "Title: ${title}" -H "Priority: ${prio}" -H "Tags: ${tags}"
+        --data-binary "$msg")
+    local -a local_opts=(--max-time 4 --resolve "${host}:443:127.0.0.1")
+    [[ -n "$NTFY_CACERT" && -r "$NTFY_CACERT" ]] && local_opts+=(--cacert "$NTFY_CACERT")
+    # The token travels on curl's stdin (--config -), never in argv.
+    if auth_cfg | curl "${common[@]}" "${local_opts[@]}" "${NTFY_URL%/}/${NTFY_TOPIC}" 2>/dev/null; then
+        log "ntfy push sent (local): ${title}"
+    elif auth_cfg | curl "${common[@]}" --max-time 6 "${NTFY_URL%/}/${NTFY_TOPIC}" 2>/dev/null; then
+        log "ntfy push sent (public): ${title}"
+    else
+        log "ntfy unreachable; push not sent: ${title}"
+    fi
+    return 0
+}
+
+auth_cfg() { printf 'header = "Authorization: Bearer %s"\n' "$NTFY_TOKEN"; }
+
+case "${1:-}" in
+    onbatt-shutdown)
+        log "UPS ${UPS} on battery for 5 minutes: forcing shutdown (upsmon -c fsd)"
+        ntfy_push high "rotating_light,electric_plug" "R630 shutting down" \
+            "On battery 5 min: shutting the R630 down now"
+        if ! /sbin/upsmon -c fsd; then
+            log "upsmon -c fsd failed; LOWBATT is still the backstop"
+        fi
+        ;;
+    onbatt)
+        log "UPS ${UPS} on battery"
+        ntfy_push high "warning,electric_plug" "UPS on battery" \
+            "Mains power lost: the R630 is on UPS battery. It shuts down in 5 minutes unless power returns."
+        ;;
+    online)
+        log "UPS ${UPS} back on mains"
+        ntfy_push default "white_check_mark,electric_plug" "UPS back on mains" \
+            "Mains power is back; the shutdown timer is cancelled."
+        ;;
+    lowbatt)
+        log "UPS ${UPS} low battery"
+        ntfy_push urgent "rotating_light,battery" "UPS low battery" \
+            "UPS battery is low: the R630 is shutting down now."
+        ;;
+    fsd)
+        log "UPS ${UPS} forced shutdown (FSD)"
+        ntfy_push urgent "rotating_light" "UPS forced shutdown" \
+            "Forced shutdown set on the UPS: the R630 is going down and the UPS will power-cycle it."
+        ;;
+    commbad)
+        log "lost communication with UPS ${UPS}"
+        ntfy_push high "warning" "UPS connection lost" \
+            "The R630 lost contact with its UPS (USB cable or driver)."
+        ;;
+    commok)
+        log "communication with UPS ${UPS} established"
+        rm -f "$NOCOMM_STAMP"
+        ntfy_push low "electric_plug" "UPS connected" \
+            "The R630 is talking to its UPS again."
+        ;;
+    nocomm)
+        log "UPS ${UPS} unavailable (NOCOMM)"
+        if [[ -e "$NOCOMM_STAMP" ]] &&
+           (( $(date +%s) - $(stat -c %Y "$NOCOMM_STAMP" 2>/dev/null || echo 0) < NOCOMM_EVERY )); then
+            exit 0
+        fi
+        touch "$NOCOMM_STAMP" 2>/dev/null
+        ntfy_push high "warning" "UPS unreachable" \
+            "The R630 cannot reach its UPS, so it will not shut down on a power cut. Check the USB cable and nut-driver@cp1500."
+        ;;
+    replbatt)
+        log "UPS ${UPS} battery needs replacing"
+        ntfy_push default "battery" "UPS battery needs replacing" \
+            "The UPS reports its battery needs replacing."
+        ;;
+    shutdown)
+        log "system shutdown for UPS ${UPS}"
+        ntfy_push urgent "rotating_light" "R630 halting" \
+            "The R630 is halting now for the power cut; it boots by itself when mains returns."
+        ;;
+    *)
+        log "unknown upssched command: ${1:-<none>}"
+        ;;
+esac
+exit 0

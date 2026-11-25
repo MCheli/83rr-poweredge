@@ -234,6 +234,18 @@ ls -lt /mnt/nas/83rr-backup/daily/ | head -5
 
 ---
 
+## 11. UPS Shutdown (NUT)
+
+- [ ] **nut-monitor active**: upsmon is watching the UPS (`infrastructure/nut/README.md`)
+- [ ] **UPS on mains**: `ups.status` is `OL` (or `OL CHRG` right after a power cut)
+
+```bash
+systemctl is-active nut-driver@cp1500 nut-server nut-monitor
+upsc cp1500 ups.status
+```
+
+---
+
 ## Troubleshooting
 
 ### If Docker containers didn't start:
