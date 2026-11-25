@@ -664,7 +664,52 @@ python3 scripts/test_ha_auto_update.py   # unit tests
 
 ---
 
-### 21. `backup.sh` ⭐ NIGHTLY BACKUP
+### 21. `cron-notify.sh` 🚀 CRON FAILURE ALERTS
+**Purpose:** Run one cron job; if it exits non-zero, send ONE ntfy push naming the job
+**Size:** 6KB
+**Language:** Bash (+ a python3 one-liner for the JSON body)
+
+**Description:**
+Every line of the server's crontab runs through it. Runs the command directly (no eval) and exits with its exit code. First failure after a success: one push to topic `homelab`, priority 4, "cron job failed: NAME" (exit code, duration, host). Further failures stay quiet (state file `logs/cron-notify/NAME.failed`) until the next success sends one priority-2 "recovered". Every run also writes `logs/textfile/cron-NAME.prom` (`homelab_cron_last_run_timestamp_seconds`, `homelab_cron_last_exit_code`, `homelab_cron_last_success_timestamp_seconds`, label `job`) for the Grafana rule "Backup not succeeded in 26 h". Token: `NTFY_PUBLISH_TOKEN` from `.env`, sent in a header file (never argv or log); posts to the ntfy container's IP, falls back to the public URL. A failed push never changes the exit code.
+
+**Usage:**
+```bash
+# crontab (env assignments before the wrapper, redirect at the end):
+0 2 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh backup /home/mcheli/83rr-poweredge/scripts/backup.sh >> /home/mcheli/83rr-poweredge/logs/backup.log 2>&1
+# route test (one push, no state left behind):
+CRON_NOTIFY_STATE_DIR=$(mktemp -d) CRON_NOTIFY_TEXTFILE_DIR=/nonexistent scripts/cron-notify.sh TEST-cron-route false
+```
+
+**When to Use:**
+- For every cron job, including new ones (docs/OBSERVABILITY.md#cron-wrapper)
+
+**Referenced in:** docs/OBSERVABILITY.md
+
+---
+
+### 22. `emit_alert_metrics.sh` 📊 ALERT METRICS
+**Purpose:** Certificate expiry and UPS state as node-exporter textfile metrics for the Grafana alert rules
+**Size:** 4KB
+**Language:** Bash
+
+**Description:**
+Writes `logs/textfile/homelab-alerts.prom` atomically: `homelab_cert_not_after_timestamp_seconds{cert}` for every `ssl_certificate` nginx's `production.conf` serves (read from `infrastructure/nginx/certs`), and `homelab_ups_up`, `homelab_ups_on_battery`, `homelab_ups_low_battery`, `homelab_ups_battery_charge_percent`, `homelab_ups_battery_runtime_seconds`, `homelab_ups_load_percent` from `upsc ups@localhost`. Read-only, no secrets, no sudo. Grafana's "Alert metrics stale" rule fires if the file stops being refreshed.
+
+**Usage:**
+```bash
+scripts/emit_alert_metrics.sh && command cat logs/textfile/homelab-alerts.prom
+# cron (every minute):
+#   * * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh alert-metrics /home/mcheli/83rr-poweredge/scripts/emit_alert_metrics.sh >> /home/mcheli/83rr-poweredge/logs/alert_metrics.log 2>&1
+```
+
+**When to Use:**
+- Runs itself from cron; run by hand to check what the cert/UPS rules see
+
+**Referenced in:** docs/OBSERVABILITY.md, infrastructure/monitoring/grafana/provisioning/alerting/rules.yaml
+
+---
+
+### 23. `backup.sh` ⭐ NIGHTLY BACKUP
 **Purpose:** Nightly backup of databases, volumes, configs, Seafile data and AI Context to the NAS (`/mnt/nas/83rr-backup`)
 **Size:** 28KB
 **Language:** Bash
@@ -674,7 +719,7 @@ Dumps the Postgres/MariaDB databases, rsyncs the project dir, Seafile data, `/da
 
 **Usage:**
 ```bash
-scripts/backup.sh                     # full run (what cron runs, 02:00 UTC)
+scripts/backup.sh                     # full run (what cron runs at 02:00 UTC, through cron-notify.sh)
 scripts/backup.sh --dry-run           # what would be copied and pruned
 scripts/backup.sh --only ai-context   # AI Context mirror + basic-memory DB + homelab_mcp_data only (no snapshot/cleanup/heartbeat)
 ```

@@ -50,6 +50,7 @@ services:
       - grafana_data:/var/lib/grafana  # Production data volume
       - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./infrastructure/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
 
   cadvisor: {}  # No changes from base - accessed via NGINX
 
