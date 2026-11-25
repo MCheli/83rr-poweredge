@@ -1,0 +1,19 @@
+# /etc/systemd/network/10-83rr-eno1-wol.link — managed by 83rr-poweredge
+# infrastructure/nut/install.sh
+# Wake-on-LAN (magic packet) on the R630's uplink eno1 (igb, onboard port 1), so
+# Home Assistant can power the server back on after a UPS shutdown
+# (infrastructure/nut/README.md "Coming back").
+#
+# The first matching .link file wins, so this one replaces
+# /usr/lib/systemd/network/99-default.link for eno1: the [Link] naming lines are
+# copied from it unchanged, so the interface keeps its name eno1.
+# Applied by udev when the NIC appears (every boot); install.sh also runs
+# `ethtool -s eno1 wol g` so it is on without a reboot.
+[Match]
+PermanentMACAddress=ec:f4:bb:e6:f7:f4
+
+[Link]
+NamePolicy=keep kernel database onboard slot path
+AlternativeNamesPolicy=database onboard slot path
+MACAddressPolicy=persistent
+WakeOnLan=magic

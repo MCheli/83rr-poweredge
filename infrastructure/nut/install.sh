@@ -19,6 +19,11 @@
 #   - writes /etc/nut/ntfy.env from NTFY_PUBLISH_TOKEN in the repo .env, and
 #     /etc/nut/ntfy-origin.crt (the public origin cert nginx serves, pinned for
 #     the local push path)
+#   - /etc/nut/ha.env (Home Assistant power-restore webhook URL): never
+#     overwritten, only owner/mode fixed; created empty if missing (README.md
+#     "Power restore (Home Assistant)" has the one-time setup)
+#   - Wake-on-LAN on eno1: /etc/systemd/network/10-83rr-eno1-wol.link (every
+#     boot) and `ethtool -s eno1 wol g` (now)
 #   - /etc/sudoers.d/nut-pre-shutdown (0440, checked with visudo -c): the nut
 #     user may run exactly /etc/nut/pre-shutdown.sh as root
 #   - nut-server drop-in: start after network-online.target (upsd LISTENs on
@@ -46,12 +51,15 @@ NUT_PORT=3493
 SUDOERS_FILE=/etc/sudoers.d/nut-pre-shutdown
 DROPIN_DIR=/etc/systemd/system/nut-server.service.d
 DROPIN_FILE=${DROPIN_DIR}/83rr-network-online.conf
+HA_ENV="${NUT_DIR}/ha.env"
+WOL_IF=eno1                  # uplink, MAC ec:f4:bb:e6:f7:f4 (matched in the .link file)
+WOL_LINK=/etc/systemd/network/10-83rr-eno1-wol.link
 
 CHECK_ONLY=false
 case "${1:-}" in
     "") ;;
     --check) CHECK_ONLY=true ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,34p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (use --check or nothing)" >&2; exit 2 ;;
 esac
 
@@ -82,6 +90,19 @@ status() {
     printf '  %-28s %s\n' "upsd listening (${NUT_PORT})" "$(ss -Hltn "sport = :${NUT_PORT}" 2>/dev/null | awk '{print $4}' | tr '\n' ' ')"
     printf '  %-28s %s\n' "sudoers rule" "$([[ -e "$SUDOERS_FILE" ]] && echo "$SUDOERS_FILE" || echo MISSING)"
     printf '  %-28s %s\n' "nut-server drop-in" "$([[ -e "$DROPIN_FILE" ]] && echo "$DROPIN_FILE" || echo MISSING)"
+    printf '  %-28s %s\n' "WoL .link file" "$([[ -e "$WOL_LINK" ]] && echo "$WOL_LINK" || echo MISSING)"
+    if [[ $EUID -eq 0 ]]; then
+        printf '  %-28s %s\n' "${WOL_IF} Wake-on" "$(ethtool "$WOL_IF" 2>/dev/null | awk -F': ' '/^[[:space:]]*Wake-on:/ {print $2}') (want g)"
+        local ha="MISSING"
+        if [[ -e "$HA_ENV" ]]; then
+            ha="placeholder (webhook not set)"
+            grep -q '^HA_WEBHOOK_URL=http.*/api/webhook/.' "$HA_ENV" && ha="set"
+            ha="${ha}, $(stat -c '%U:%G %a' "$HA_ENV")"
+        fi
+        printf '  %-28s %s\n' "ha.env webhook" "$ha"
+    else
+        printf '  %-28s %s\n' "${WOL_IF} Wake-on / ha.env" "(needs sudo to read)"
+    fi
     if [[ $EUID -eq 0 ]] && command -v ufw >/dev/null 2>&1; then
         printf '  %-28s %s\n' "ufw ${NUT_PORT}" "$(ufw status | awk -v p="${NUT_PORT}" '$1 ~ "^"p"(/tcp)?$" {print $1, $2, $3, $4, $5}' | tr '\n' ';')"
     else
@@ -188,7 +209,36 @@ tmp=$(mktemp)
 put_file "$tmp" "${NUT_DIR}/ntfy.env" 640
 rm -f "$tmp"
 unset NTFY_TOKEN UPSMON_PASSWORD
+
+echo "== Home Assistant webhook (${HA_ENV})"
+# Holds the webhook id (a secret, not in git): keep it, only fix owner/mode.
+if [[ -e "$HA_ENV" ]]; then
+    chown root:nut "$HA_ENV"
+    chmod 640 "$HA_ENV"
+    echo "  kept the existing ${HA_ENV} (640, not shown)"
+else
+    tmp=$(mktemp)
+    {
+        echo "# Home Assistant power-restore webhook, read by upssched-cmd. Not in git."
+        echo "# Set once: HA_WEBHOOK_URL=http://192.168.1.121:8123/api/webhook/<id>"
+        echo "# (infrastructure/nut/README.md \"Power restore (Home Assistant)\")"
+        echo "HA_WEBHOOK_URL="
+    } > "$tmp"
+    put_file "$tmp" "$HA_ENV" 640
+    rm -f "$tmp"
+    echo "  WARNING: placeholder only; Home Assistant will not power the R630 back on until it is set"
+fi
 umask 022
+
+echo "== Wake-on-LAN (${WOL_IF})"
+install -o root -g root -m 644 "${SRC_DIR}/10-83rr-eno1-wol.link" "$WOL_LINK"
+udevadm control --reload 2>/dev/null || true
+echo "  ${WOL_LINK} (644, applied by udev at boot)"
+if ethtool "$WOL_IF" 2>/dev/null | grep -q '^[[:space:]]*Supports Wake-on:.*g'; then
+    ethtool -s "$WOL_IF" wol g && echo "  ethtool -s ${WOL_IF} wol g (now)"
+else
+    echo "  WARNING: ${WOL_IF} does not report Wake-on g support; not set"
+fi
 
 echo "== sudoers (nut may run pre-shutdown.sh as root)"
 tmp=$(mktemp)

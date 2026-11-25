@@ -243,7 +243,15 @@ ls -lt /mnt/nas/83rr-backup/daily/ | head -5
 systemctl is-active nut-driver@ups nut-server nut-monitor
 upsc ups@localhost ups.status
 ss -ltn 'sport = :3493'      # upsd also on 192.168.1.179 (the Synology NAS is a NUT client)
+sudo infrastructure/nut/install.sh --check    # eno1 Wake-on: g, ha.env webhook: set
+networkctl status eno1 | grep 'Link File'     # /etc/systemd/network/10-83rr-eno1-wol.link
 ```
+
+- [ ] **Power restore ready**: after a UPS shutdown Home Assistant woke the R630 and the
+  NAS (HA automation `r630_ups_power_restore`, webhook id only in `/etc/nut/ha.env` and the
+  HA trigger). If it did not, check the automation's trace in HA and the R630 BIOS NIC
+  Wake-on-LAN setting. A real test needs a planned shutdown
+  (`infrastructure/nut/README.md` "Power restore (Home Assistant)").
 
 ---
 
