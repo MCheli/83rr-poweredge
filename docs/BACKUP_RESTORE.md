@@ -125,13 +125,22 @@ script needs to grow.
 ### Known failure mode: NAS not mounted
 
 If the NAS is unreachable at 02:00, `check_nas_mount` aborts the entire run.
-There's currently **no alerting on backup failure** — the only signal is `[ERROR]`
-lines in `logs/backup.log`. A 10-day silent gap actually happened in April 2026.
+A 10-day silent gap happened in April 2026, before there was any backup
+alerting. A failed or missing run now pushes to ntfy three ways (details in
+[OBSERVABILITY.md](OBSERVABILITY.md#alerting)):
 
-Mitigation until alerting is added: include `tail -3 logs/backup.log` in your
-morning routine, or grep weekly:
+- **Cron wrapper**: the crontab line runs through `scripts/cron-notify.sh backup`,
+  so a non-zero exit sends "cron job failed: backup" (priority 4), and the next
+  success sends "recovered".
+- **OpenSearch `backup-no-heartbeat`**: no `backup_completed` document (written
+  by a successful run) in the last 26 hours; the loudest page (priority 5).
+- **Grafana `hl-backup-stale`** ("Backup not succeeded in 26 h"): the cron
+  wrapper's `homelab_cron_last_success_timestamp_seconds{job="backup"}` is older
+  than 26 hours. A backstop that still works if OpenSearch is down.
+
+To check by hand:
 ```bash
-grep -c "Backup completed successfully" ~/83rr-poweredge/logs/backup.log | tail -7
+grep "Backup completed successfully" ~/83rr-poweredge/logs/backup.log | tail -7
 ```
 
 ---
@@ -143,7 +152,7 @@ pulls and SSL setup.
 
 ### Step 1 — Bootstrap the OS
 
-1. Install Ubuntu 22.04 LTS (or matching version), Docker Engine, Docker Compose v2,
+1. Install Ubuntu 24.04 LTS (what the server runs), Docker Engine, Docker Compose v2,
    `cifs-utils`, `git`.
 2. Create user `mcheli` with the same UID/GID (1000:1000) the existing files use.
 3. Add the user to the `docker` group.
@@ -251,7 +260,7 @@ For a note, prefer writing the restored text back through basic-memory
 ```bash
 cd ~/83rr-poweredge
 docker login ghcr.io          # GITHUB_USERNAME / GITHUB_TOKEN from .env
-docker compose pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -289,7 +298,7 @@ gunzip -c /mnt/nas/83rr-backup/databases/deptrack_<ts>.sql.gz | \
 ```
 
 The Postgres targets need the database to exist (it will, from the volume restore) —
-if you're starting from an empty volume, `docker compose up -d <db>` first, then
+if you're starting from an empty volume, `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d <db>` first, then
 let the app's migrations run, then load the dump.
 
 ### Step 9 — Reinstall the backup cron
@@ -369,7 +378,7 @@ fall back to the volume mirror or an earlier snapshot. Log what you find.
 
 This is closer to a real DR drill. Plan for half a day.
 
-1. Provision a fresh VM (Ubuntu 22.04, Docker, ≥50 GB disk, ≥8 GB RAM).
+1. Provision a fresh VM (Ubuntu 24.04, Docker, ≥50 GB disk, ≥8 GB RAM).
 2. Follow steps 2–8 of the **Recovery from full device failure** procedure above,
    but:
    - Mount the NAS **read-only** (`-o ro`) to guarantee you can't damage backups
@@ -403,8 +412,6 @@ backup loss is worse than no backup, because you trust it.
 
 ## Improvements queued (not yet implemented)
 
-- Backup-failure alerting (push to ntfy / Slack / Home Assistant when a run
-  doesn't end with `Backup completed successfully`).
 - Stale entries in `/mnt/nas/83rr-backup/latest/docker-volumes/` from removed
   services (e.g., the JupyterHub leftovers) need a cleanup pass — `rsync --delete`
   doesn't remove sibling dirs that aren't in the sync list.
@@ -413,4 +420,4 @@ backup loss is worse than no backup, because you trust it.
 
 ---
 
-**Last updated**: 2026-11-25 (AI Context, basic-memory index and homelab-mcp volume added)
+**Last updated**: 2026-11-25 (AI Context, basic-memory index and homelab-mcp volume added; backup alerting, Ubuntu 24.04)

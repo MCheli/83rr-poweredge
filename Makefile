@@ -5,6 +5,11 @@
         nginx-reload nginx-test prometheus-reload grafana-reload \
         venv deps shell backup deploy pull purge-cache
 
+# Production compose files. A bare `docker compose` also loads
+# docker-compose.override.yml (local development), which never belongs on the
+# server. Only `make up-dev` uses it.
+DC := docker compose -f docker-compose.yml -f docker-compose.prod.yml
+
 # Default target
 help:
 	@echo "83RR PowerEdge Infrastructure - Available Commands"
@@ -58,20 +63,20 @@ help:
 # =============================================================================
 
 up:
-	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+	$(DC) up -d
 
 up-dev:
 	docker compose up -d
 
 down:
-	docker compose down
+	$(DC) down
 
 restart:
 ifdef s
-	docker compose restart $(s)
+	$(DC) restart $(s)
 else
-	docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+	$(DC) down
+	$(DC) up -d
 endif
 
 # Pull latest image for a service
@@ -81,7 +86,7 @@ ifndef s
 	@echo "Example: make pull s=cookbook"
 	@exit 1
 endif
-	docker compose pull $(s)
+	$(DC) pull $(s)
 
 # Purge Cloudflare cache for a service
 purge-cache:
@@ -103,10 +108,10 @@ endif
 	@echo "=== Deploying $(s) ==="
 	@echo ""
 	@echo "Step 1: Pulling latest image..."
-	docker compose pull $(s)
+	$(DC) pull $(s)
 	@echo ""
 	@echo "Step 2: Restarting service..."
-	docker compose up -d $(s)
+	$(DC) up -d $(s)
 	@echo ""
 	@echo "Step 3: Purging Cloudflare cache..."
 	@. venv/bin/activate && python scripts/cloudflare_cache_purge.py $(s) || echo "Warning: Cache purge failed (token may need Cache Purge permission)"
@@ -123,16 +128,16 @@ endif
 
 build:
 ifdef s
-	docker compose build $(s)
+	$(DC) build $(s)
 else
-	docker compose build
+	$(DC) build
 endif
 
 build-no-cache:
 ifdef s
-	docker compose build --no-cache $(s)
+	$(DC) build --no-cache $(s)
 else
-	docker compose build --no-cache
+	$(DC) build --no-cache
 endif
 
 # =============================================================================
@@ -151,9 +156,9 @@ status:
 
 logs:
 ifdef s
-	docker compose logs -f --tail=100 $(s)
+	$(DC) logs -f --tail=100 $(s)
 else
-	docker compose logs -f --tail=50
+	$(DC) logs -f --tail=50
 endif
 
 health:
@@ -186,26 +191,26 @@ health:
 # =============================================================================
 
 nginx-test:
-	docker compose exec nginx nginx -t
+	$(DC) exec nginx nginx -t
 
 nginx-reload:
-	docker compose exec nginx nginx -s reload
+	$(DC) exec nginx nginx -s reload
 
 # =============================================================================
 # Monitoring Stack Commands
 # =============================================================================
 
 prometheus-reload:
-	docker compose restart prometheus
+	$(DC) restart prometheus
 	@echo "Waiting for Prometheus to start..."
 	@sleep 5
-	docker compose exec nginx nginx -s reload
+	$(DC) exec nginx nginx -s reload
 
 grafana-reload:
-	docker compose restart grafana
+	$(DC) restart grafana
 	@echo "Waiting for Grafana to start..."
 	@sleep 5
-	docker compose exec nginx nginx -s reload
+	$(DC) exec nginx nginx -s reload
 
 # =============================================================================
 # Python Commands

@@ -87,7 +87,7 @@ docker run --rm \
     cp /src/Saved/Config/WindowsServer/*.ini                /v/ShooterGame/Saved/Config/WindowsServer/
     chown -R 25000:25000 /v/ShooterGame/Saved/
   '
-docker compose up -d asa
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d asa
 ```
 
 Restore per-player profiles + tribe (extracted from the embedded `GameModeCustomBytes`):
@@ -138,7 +138,7 @@ PY
 docker compose stop asa
 docker run --rm -v /tmp/profiles:/in:ro -v 83rr-poweredge_asa_server_files:/v \
   alpine sh -c 'cp /in/*.arkprofile /in/*.arktribe /v/ShooterGame/Saved/SavedArks/<Map>_WP/ && chown 25000:25000 /v/ShooterGame/Saved/SavedArks/<Map>_WP/*'
-docker compose up -d asa
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d asa
 ```
 
 ## Operations
@@ -147,7 +147,7 @@ docker compose up -d asa
 # Start / stop / restart
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d asa
 docker compose stop asa     # graceful, honors 120s grace period
-docker compose restart asa  # restart without recreating
+docker compose -f docker-compose.yml -f docker-compose.prod.yml restart asa  # restart without recreating
 
 # Logs
 docker logs --tail 30 asa
@@ -178,7 +178,7 @@ cheat ForceTame              # claim/tame creature in front of you
 - `config/GameUserSettings.ini.template` — committed source of truth for server settings (PvP/PvE, taming rates, stack sizes, MaxPlayers, RCON port, etc.). Contains `__ADMIN_PASSWORD__` and `__SERVER_PASSWORD__` placeholders.
 - `config/GameUserSettings.ini` — **NOT committed** (gitignored). Rendered automatically into the named volume on each container start by the `asa` service's entrypoint wrapper: `sed` substitutes `${ASA_SERVER_ADMIN_PASSWORD}` and `${ASA_SERVER_PASSWORD}` (from `.env`) into the template, writes to the volume's config path, chowns to UID 25000, then `exec`s `/usr/bin/start_server`.
 
-To rotate passwords: change values in `.env`, then `docker compose up -d asa` (recreate). To change gameplay settings: edit the template, commit, recreate the container.
+To rotate passwords: change values in `.env`, then `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d asa` (recreate). To change gameplay settings: edit the template, commit, recreate the container.
 
 Required `.env` entries:
 ```bash

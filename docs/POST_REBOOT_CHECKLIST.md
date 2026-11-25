@@ -96,7 +96,7 @@ docker ps -q | wc -l
 **If containers not running**:
 ```bash
 cd ~/83rr-poweredge
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ---
@@ -260,7 +260,7 @@ networkctl status eno1 | grep 'Link File'     # /etc/systemd/network/10-83rr-eno
 ### If Docker containers didn't start:
 ```bash
 cd ~/83rr-poweredge
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker compose logs --tail 50
 ```
 

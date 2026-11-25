@@ -1,164 +1,166 @@
-# Observability — Logs, Dashboards, Alerting
+# Observability: logs, metrics, dashboards, alerting
 
-Living reference for the homelab observability stack: what fields are
-indexed, what dashboards exist (or *should* exist), what alerts to wire,
-and how to extend each piece.
+How the homelab watches itself: where logs and metrics come from, where they are
+stored, which dashboards exist, and how alerts reach a phone. Config lives in the
+repo; this page is the map.
 
-The data plumbing is described in
-`infrastructure/opensearch/config/`. This doc is the consumer-side
-manual — what you can do with what's there.
-
----
-
-## Index pattern
-
-- **Name**: `logs-homelab-*`
-- **Time field**: `@timestamp`
-- **Saved index pattern ID**: `logs-homelab` (created via Dashboards API)
-
-Open Discover at <https://logs.ops.markcheli.com/app/discover> and it
-should be the default index pattern.
-
-## Available fields
-
-Set in `infrastructure/opensearch/config/index_template_logs_homelab.json`.
-Refreshing the index-pattern field list after schema changes:
-*Stack Management → Index Patterns → logs-homelab → Refresh field list*.
-
-| Field | Type | Where it comes from | Notes |
+| Piece | What it does | Config | UI |
 |---|---|---|---|
-| `@timestamp` | date | Fluent Bit | Authoritative time field. Use this in dashboards. |
-| `time` | date | Fluent Bit (docker JSON) | Original Docker write timestamp. Usually within 1 ms of `@timestamp`. |
-| `app_time` | keyword | Per-app grok | App's own embedded timestamp (varied formats — kept as keyword to avoid mapping rejection). |
-| `container_name` | keyword | Lua filter | One of the values shown by `docker ps`. |
-| `container_id` | keyword | Lua filter | First 12 chars of the container ID. |
+| **Fluent Bit** | ships container logs, Docker events and a few host log files to OpenSearch | `infrastructure/fluent-bit/` | none |
+| **OpenSearch** | log store (daily indices `logs-homelab-YYYY.MM.DD`), log-based alert monitors | `infrastructure/opensearch/config/` | <https://opensearch.ops.markcheli.com> (API) |
+| **OpenSearch Dashboards** | Discover, saved searches, 4 log dashboards | `infrastructure/opensearch/config/saved_objects/` | <https://logs.ops.markcheli.com> |
+| **Prometheus** | metrics, 15 s scrapes, 30-day retention | `infrastructure/monitoring/prometheus.yml` | <https://prometheus.ops.markcheli.com> |
+| **node-exporter / cAdvisor / nginx-exporter** | host, container and nginx metrics; node-exporter also reads textfile metrics written by cron scripts | `docker-compose.yml` | <https://cadvisor.ops.markcheli.com> |
+| **Grafana** | 7 provisioned dashboards, Prometheus alert rules | `infrastructure/monitoring/grafana/provisioning/` | <https://dashboard.ops.markcheli.com> |
+| **Uptime Kuma** | external up/down probes and the public status page | `scripts/setup_uptime_kuma.py` | <https://status.markcheli.com> |
+| **Dependency-Track** | CVEs in every running container's SBOM | `docs/dependency-track.md` | <https://deptrack.ops.markcheli.com> |
+| **ntfy** | where every alert ends up (topic `homelab`) | `infrastructure/ntfy/server.yml` | <https://ntfy.markcheli.com> |
+
+The `*.ops` hostnames are LAN-only (nginx allowlist, see `CLAUDE.md`).
+
+---
+
+## Logs
+
+### Pipeline
+
+```
+docker logs ─┐
+docker events ┤                                    ingest pipeline
+plex, seafile ├─▶ Fluent Bit ──(filters)──▶ OpenSearch ──(homelab-logs)──▶ logs-homelab-YYYY.MM.DD
+fail2ban.log ─┘        │                                                    (ISM: 7 d hot, delete at 90 d)
+                       └─▶ /var/log/pg-auth/ (tallied-db auth lines, for fail2ban)
+```
+
+**Inputs** (`infrastructure/fluent-bit/fluent-bit.conf`):
+- every container's JSON log under `/var/lib/docker/containers/`, with the
+  container name added by `extract_container.lua`;
+- the Docker event stream (`docker_events`), normalised by `docker_metadata.lua`:
+  `die`/`kill`/`oom` become `level: ERROR`, and the record gets `event_type`,
+  `compose_project`, `compose_oneoff`, `exit_code` and `image`, so restarts, OOMs and
+  Watchtower updates are queryable without grepping log text;
+- Plex's and Seafile's own log files, and the host's `/var/log/fail2ban.log`
+  (tagged `container_name: plex`, `seafile`, `fail2ban`, `source: file`).
+
+**Dropped before indexing** (noise with no signal): successful healthchecks (`GET
+/health`, `/api/health`, `/api/v1/health` answered 200), Plex `DEBUG`/`VERBOSE`
+lines, and tallied-db's routine connection lines (local-socket connections and the
+"received"/"authenticated" lines; remote "connection authorized" lines are kept for
+the `pg-tld-login` monitor). Background: `docs/log-noise-2026-11.md`.
+
+**Parsing** happens in the OpenSearch ingest pipeline `homelab-logs`
+(`ingest_pipeline_homelab_logs.json`, the index template's default pipeline), one
+grok branch per log format: nginx (combined + XFF + host/upstream/timing),
+uvicorn/asgi apps, gunicorn, Watchtower, OpenSearch and Dashboards, Seafile, Fluent
+Bit, fail2ban, and Postgres (`*-db`). Levels are normalised to upper case (`WARN` →
+`WARNING`); lines no branch matches get a level from a fallback regex.
+
+**Retention**: ISM policy `ism_policy_homelab_logs.json`, hot for 7 days, then
+read-only, deleted at 90 days (about 90 daily indices at any time).
+
+**Other writers**: a few cron scripts post documents straight into the same indices,
+so they can be alerted on like logs: `backup.sh` (`event_type: backup_completed`),
+`renew-letsencrypt-certs.sh` (`renew_completed` / `renew_failed`),
+`emit_host_metrics.sh` (`metric`: disk, memory, CPU, load every 5 min) and
+`emit_security_telemetry.sh` (`security_unexpected_port`,
+`security_external_db_conn`).
+
+Applying template, pipeline and Fluent Bit changes in the right order:
+`infrastructure/opensearch/config/alerting/README.md`, "Rollout order".
+
+### Index pattern and fields
+
+Index pattern `logs-homelab-*` (saved object id `logs-homelab`), time field
+`@timestamp`. Mappings: `index_template_logs_homelab.json`; after a mapping change,
+refresh the field list in *Dashboards Management → Index patterns*.
+
+| Field | Type | Set by | Notes |
+|---|---|---|---|
+| `@timestamp` | date | Fluent Bit | The time field to use everywhere. |
+| `time` | date | Docker JSON | Original write time; within a millisecond of `@timestamp`. |
+| `app_time` | keyword | grok | The app's own timestamp (formats vary, so kept as text). |
+| `container_name`, `container_id` | keyword | Lua filters | Name as in `docker ps`; first 12 chars of the id. |
 | `stream` | keyword | Docker | `stdout` / `stderr`. |
-| `log` | text | Fluent Bit (raw) | Full unparsed line. Always present. |
-| `msg` | text | Per-app grok | Parsed message body (no level/timestamp). |
-| `level` | keyword | Per-app grok / fallback regex | Normalized to UPPERCASE. Values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, `FATAL`. |
-| `logger` | keyword | Per-app grok | Logger / module name (Python apps, Grafana, etc.). |
-| `method` | keyword | nginx / app HTTP grok | `GET`, `POST`, etc. |
-| `path` | keyword | nginx / app HTTP grok | URL path without query string. |
-| `status` | integer | nginx / app HTTP grok | HTTP status code. |
-| `bytes` | long | nginx grok | Response body size. |
-| `request_time` | float | (none since 2026-11-01) | Seconds. Was set by the edge-tts grok; the service is removed, the mapping stays for older indices. |
-| `client_ip` | ip | nginx / app HTTP grok | Real `ip` type — supports CIDR queries. |
-| `x_forwarded_for` | keyword | nginx grok | The XFF chain (string). |
-| `client_port` | integer | uvicorn / asgi grok | Source port from the request. |
-| `referrer` | keyword | nginx grok | HTTP Referer. |
-| `user_agent` | keyword | nginx grok | UA string. |
-| `http_version` | keyword | nginx / app HTTP grok | `1.0`, `1.1`, `2.0`, `3.0`. |
-| `healthcheck` | boolean | Pipeline | `true` if path matches `/health`, `/api/health`, `/api/v1/health`, etc. **Successful healthchecks are dropped at Fluent Bit, so any healthcheck doc with `status:!=200` is a real signal.** |
-| `ingest_error` | text | Pipeline `on_failure` | Set when grok / a processor failed. Filter on `_exists_:ingest_error` to find broken parses. |
-| `source` | keyword | Multiple | Either Prometheus's `source=...` field, or the Fluent Bit `source: file` marker for Plex/Seafile file inputs. |
+| `log` | text | Fluent Bit | The raw line; always present. |
+| `msg` | text | grok | Message body without level/timestamp. |
+| `level` | keyword | grok / fallback | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, `FATAL`. |
+| `logger`, `scope`, `subscope`, `thread_id`, `pid` | keyword | grok | Logger/module and process details where the format has them. |
+| `method`, `path`, `status`, `bytes`, `http_version` | keyword / integer / long | nginx and app access logs | `path` has no query string. |
+| `client_ip` | ip | access logs, Postgres, fail2ban | A real `ip` type: CIDR queries work. |
+| `client_port`, `remote_user`, `referrer`, `user_agent`, `x_forwarded_for` | various | access logs | |
+| `host`, `upstream_addr`, `upstream_status`, `upstream_response_time`, `request_time` | keyword / float | nginx | Which vhost, which backend, how long. |
+| `healthcheck` | boolean | pipeline | `true` only for genuine probes (Kuma, Docker HEALTHCHECK, LAN curl/wget). Successes are dropped at Fluent Bit, so any `healthcheck:true` document is a failure. |
+| `event_type`, `event_scope` | keyword | Docker events, pipeline, scripts | e.g. `die`, `start`, `fail2ban_ban`, `pg_auth_failure`, `backup_completed`, `metric`. |
+| `compose_project`, `compose_oneoff`, `exit_code`, `image` | keyword / integer | Docker events | `exit_code` 137 = SIGKILL/OOM, 143 = SIGTERM. |
+| `wt_failed`, `wt_updated`, `wt_scanned`, `extras` | integer / text | Watchtower | Per update session. |
+| `pg_user`, `pg_db` | keyword | Postgres | From the tallied-db log prefix. |
+| `metric_name`, `metric_value` | keyword / float | `emit_host_metrics.sh` | |
+| `source` | keyword | several | `file` for the Plex/Seafile/fail2ban file inputs. |
+| `ingest_error` | text | pipeline `on_failure` | A processor failed: `_exists_:ingest_error` finds broken parses. |
 
----
+### Log dashboards (OpenSearch Dashboards)
 
-## Recommended dashboards
+Exported in `infrastructure/opensearch/config/saved_objects/*.ndjson`; a fresh
+install imports them with `POST /api/saved_objects/_import` on Dashboards.
 
-Build these in OpenSearch Dashboards' UI from the queries below, then
-export the saved-objects ndjson and add it to `infrastructure/opensearch/config/`
-so a fresh deploy can re-import.
+| Dashboard | What's on it |
+|---|---|
+| **Service Health Overview** | log volume and error rate by service, level breakdown, recent errors and warnings |
+| **HTTP Edge (nginx)** | status-code distribution, top paths, top client IPs, 5xx / 4xx / 401 events |
+| **Operations & Lifecycle** | healthcheck failures, Watchtower update failures, lines the parser couldn't read |
+| **Lifecycle History** | backups, image updates and container restarts over time |
 
-### 1. Service Health Overview
+### Querying logs
 
-**Purpose**: single-pane "is anything on fire" view. First thing you
-look at in the morning.
+From a terminal, `scripts/logq.sh` runs read-only searches (on the server or from a
+machine that can ssh to it): `logq.sh errors 6` (errors in the last 6 h),
+`logq.sh errors 1 tasks`, `logq.sh 'container_name:tasks AND log:timeout' 2`. It
+prints hits per container and the top messages, and exits 1 when anything matched,
+so a deploy check can use it.
 
-**Time picker**: last 24h, refresh 30s.
-
-**Panels**:
-- **Error rate by service** (line chart):
-  - Y: count of `level:ERROR OR level:CRITICAL OR level:FATAL`
-  - X: `@timestamp` 5-min buckets
-  - Split: `container_name` keyword, top 10
-- **Warning rate by service** (line chart, same as above with `level:WARNING`)
-- **Log volume by service** (stacked area):
-  - Y: count
-  - X: `@timestamp` 5-min buckets
-  - Split: `container_name`, top 10
-- **Recent ERRORs** (saved search table):
-  - Filter: `level:ERROR OR level:CRITICAL OR level:FATAL`
-  - Columns: `@timestamp`, `container_name`, `logger`, `msg`, `log`
-  - Sort: `@timestamp` desc
-- **Top error messages** (data table):
-  - Aggregation: terms on `msg.keyword` (or `log.keyword` if `msg` not parsed)
-  - Filter: `level:ERROR`
-  - Top 25
-
-### 2. HTTP Edge (nginx)
-
-**Purpose**: spot edge problems — 5xx spikes, slow paths, abuse.
-
-**Filters available globally**: `container_name:nginx`, exclude `healthcheck:true`.
-
-**Panels**:
-- **Request rate** (line chart): count over `@timestamp` 5-min buckets.
-- **Status code distribution** (stacked area):
-  - Filters: `status:[200 TO 299]`, `[300 TO 399]`, `[400 TO 499]`, `[500 TO 599]`
-  - Split each as a series.
-- **5xx burst** (line chart):
-  - Y: count where `status:[500 TO 599]`
-  - This is the alert candidate.
-- **Top paths** (data table):
-  - Terms on `path`, top 25, exclude `healthcheck:true`
-- **Top 4xx paths** (data table): same with `status:[400 TO 499]` filter.
-- **Top client IPs** (data table): terms on `client_ip`, top 25.
-- **Auth failures by IP** (data table): `status:401`, terms on `client_ip`. Catches brute-force.
-- **User agent breakdown** (pie / table): terms on `user_agent`. Useful for spotting scanners.
-
-### 3. Per-Service Detail (template)
-
-**Purpose**: one reusable dashboard, parameterized by service name.
-
-**Variable**: `container_name` (controls input on the dashboard).
-
-**Panels**:
-- Log volume over time (line)
-- Level breakdown (pie: `level`)
-- Recent ERROR / WARNING saved search
-- Top loggers (terms on `logger`)
-- Most-logged messages (terms on `msg.keyword`)
-
-### 4. Container Lifecycle
-
-**Purpose**: see what Watchtower is doing, who restarted, who failed.
-
-**Panels**:
-- **Watchtower sessions** (table): `container_name:watchtower AND msg:"Session done"`. Columns: `@timestamp`, `extras` (which contains `Failed`, `Scanned`, `Updated`).
-- **Watchtower failures**: `container_name:watchtower AND level:ERROR`.
-- **Container starts** (saved search): `log:"Starting" OR log:"started"` filtered to first-line-of-life patterns. (Cleaner version: ingest Docker daemon events — see "Future improvements" below.)
-- **OOM events**: `log:"OOMKilled" OR log:"out of memory"` across all containers.
-
-### 5. Security / Edge
-
-**Purpose**: separate the "actual user" traffic from "internet noise."
-
-**Panels**:
-- **Failed auth attempts**: `status:401`, columns `@timestamp`, `client_ip`, `path`, `user_agent`.
-- **Scanner traffic**: requests where `path` matches `/cgi-bin/`, `/.env`, `wp-`, `phpMyAdmin`, etc. Saved search.
-- **TLS probe garbage** (the `\x16\x03\x01...` lines): `log:"\\x16\\x03\\x01"`.
-- **LAN allowlist denies**: filter `nginx` for 403 on `*.ops.markcheli.com` host.
-
----
-
-## Useful Discover queries
-
-Copy-paste into the search bar at the top of Discover. Lucene syntax.
+Discover queries (Lucene):
 
 | What | Query |
 |---|---|
-| All errors right now | `level:(ERROR OR CRITICAL OR FATAL)` |
-| All warnings | `level:WARNING` |
+| Errors right now | `level:(ERROR OR CRITICAL OR FATAL)` |
 | Server errors at the edge | `container_name:nginx AND status:[500 TO 599]` |
-| Failed auth | `container_name:nginx AND status:401` |
-| Healthcheck failures | `healthcheck:true AND status:!=200` |
-| Watchtower update failures | `container_name:watchtower AND extras:"Failed=*" AND NOT extras:"Failed=0"` |
-| Things the parser couldn't understand | `_exists_:ingest_error` |
-| One specific service | `container_name:tallied` |
-| Path pattern at the edge | `container_name:nginx AND path:/api/*` |
-| One client IP | `client_ip:192.168.1.150` |
-| External (non-LAN) requests | `container_name:nginx AND NOT client_ip:192.168.0.0/16 AND NOT client_ip:10.0.0.0/8` |
+| One vhost | `container_name:nginx AND host:"tasks.markcheli.com"` |
+| Failed auth at the edge | `container_name:nginx AND status:401` |
+| Healthcheck failures | `healthcheck:true` |
+| Containers that died | `event_scope:container AND event_type:die AND NOT exit_code:0` |
+| Watchtower failures | `container_name:watchtower AND wt_failed:>0` |
+| fail2ban bans | `container_name:fail2ban AND event_type:fail2ban_ban` |
+| Lines the parser couldn't read | `_exists_:ingest_error` |
+| External (non-LAN) requests | `container_name:nginx AND NOT client_ip:192.168.0.0/16` |
+
+---
+
+## Metrics
+
+**Prometheus** (`infrastructure/monitoring/prometheus.yml`) scrapes four jobs every
+15 s: `prometheus`, `cadvisor`, `node-exporter`, `nginx-exporter`; retention is 30
+days. Its port isn't published: from the host use `docker exec prometheus wget -qO-
+http://localhost:9090/...`, or the LAN UI.
+
+**Textfile metrics**: node-exporter reads `logs/textfile/*.prom`, written by cron
+scripts (alert metrics, cron job results, Dependency-Track gauges). The list of
+files and metrics is under "Alerting" below.
+
+**Grafana dashboards** (provisioned from
+`infrastructure/monitoring/grafana/provisioning/dashboards/`, picked up within 30 s):
+
+| Dashboard | File |
+|---|---|
+| Infrastructure Overview | `infrastructure-overview.json` |
+| System Metrics (node-exporter) | `system.json` |
+| Docker Containers | `containers.json` |
+| Containers — Glance | `containers-glance.json` |
+| Docker Services | `docker-services.json` |
+| NGINX | `nginx.json` |
+| Dependency-Track trend | `dependency-track.json` |
+
+The JSON files directly under `infrastructure/monitoring/` are older exports and are
+not provisioned. More on the exporters and queries: `infrastructure/monitoring/README.md`.
 
 ---
 
@@ -221,7 +223,8 @@ pending period. No Alertmanager: Grafana's built-in one does routing and groupin
 
 ### Cron wrapper
 
-Every line in the server's crontab (`crontab -l` as `mcheli`) runs through
+Every line in the server's crontab (`crontab -l` as `mcheli`; versioned in
+`infrastructure/cron/crontab`) runs through
 `scripts/cron-notify.sh NAME COMMAND [ARGS...]`; the log redirect stays at the end of
 the line and env assignments go before the wrapper. A non-zero exit sends one push;
 further failures stay quiet (state in `logs/cron-notify/NAME.failed`) until a success
@@ -246,66 +249,41 @@ sends "recovered". New cron jobs must be added the same way:
 - Read what arrived: `GET https://ntfy.markcheli.com/homelab/json?poll=1&since=15m`
   as the `mark` user (or the cache.db query in `scripts/alert-test.sh`).
 
-Email via SMTP (SendGrid until 2026-10-31) is retired; ntfy replaced it.
-
 ---
 
 ## Status page
 
-External-facing status page lives at <https://status.markcheli.com>
-(planned, see operator decisions). Two architectural patterns:
-
-### Pattern A — Uptime Kuma as the source of truth
-
-Uptime Kuma runs its own polling on every public endpoint
-(`www.markcheli.com`, `flask.markcheli.com`, etc.) and exposes a status
-page. OpenSearch alerts pipe in via webhook to update incident state in
-Kuma. The page reflects Kuma's polling + Kuma's incident log.
-
-**Pros**: status page is honest about reachability (it's a real probe,
-not a log-derived inference). Kuma has a built-in public status page UI
-that's reasonable out of the box.
-
-**Cons**: now you have two systems doing checks (Kuma + OpenSearch
-alerts). Need to keep them in sync.
-
-### Pattern B — Static page generated from OpenSearch + Prometheus
-
-A small script runs every minute, queries OpenSearch (recent error
-counts, healthcheck failures) + Prometheus (`up{}`, latency), and writes
-an HTML page nginx serves at `status.markcheli.com`.
-
-**Pros**: single source of truth (the metrics+logs you already have).
-No new service.
-
-**Cons**: more code to maintain. No incident-tracking UI.
-
-**Recommendation**: Pattern A with Uptime Kuma. It's the homelab default
-for a reason — works well, low maintenance, integrates with everything.
+<https://status.markcheli.com> is Uptime Kuma's public status page (slug
+`homelab`), built by `scripts/setup_uptime_kuma.py` (re-runnable: it upserts the
+monitors, tags, the ntfy notification and the page). Groups: **Public services**
+(the `*.markcheli.com` sites), **LAN-only services** (the `*.ops` tools), and
+**External SaaS dependencies**; it also checks the ARK and Minecraft game servers.
+Kuma probes from the server itself, which is honest about reachability but not an
+outside view: an outage of the whole host or its internet link takes the page down
+with it. It has its own Let's Encrypt certificate (`letsencrypt-status.crt`) so LAN
+clients get a trusted certificate too.
 
 ---
 
-## Future improvements
+## Ideas not built yet
 
-- **Docker daemon events** — currently no ingestion of "container started"
-  / "container stopped" / "container died" events. The
-  `docker events --format json` stream could be tailed by a tiny
-  sidecar and shipped to OpenSearch under a `docker-events-*` index.
-  This would give clean restart / OOM detection without grepping log
-  text. Useful for the Container Lifecycle dashboard.
-- **Trace IDs** — none of the apps emit request IDs that we propagate
-  across nginx → app. Adding `X-Request-Id` headers and a parse field
-  would make end-to-end debugging much easier.
-- **Saved-object export** — once dashboards are built in the UI,
-  export ndjson and check it in to
-  `infrastructure/opensearch/config/saved_objects/`. Then a fresh
-  deploy can `POST _dashboards/api/saved_objects/_import` to restore.
-- **Alert inhibition** — if `nginx` goes down (alerts fire for every
-  service that depends on it), suppress dependent alerts. OpenSearch
-  alerting doesn't do inhibition natively; Prometheus Alertmanager does.
-  Worth migrating service-down alerts there.
+- **Request IDs**: no app propagates an `X-Request-Id` from nginx, so following one
+  request across nginx and an app means matching times and paths by hand.
+- **Alert inhibition**: when nginx or the whole host is down, every dependent check
+  fires. Neither OpenSearch alerting nor Grafana's built-in Alertmanager is set up to
+  suppress the dependants.
+- **Off-host probe**: a check from outside the house (a free external monitor
+  against `www.markcheli.com`) would catch the case the status page can't.
 
 ---
 
-**Last updated**: 2026-05-03 (Phases 1-3 deployed; Phase 4-5 outlined,
-not yet built).
+## History
+
+- 2026-05: Fluent Bit → OpenSearch pipeline, ingest pipeline, saved dashboards.
+- 2026-10-31: ntfy replaced email alerting (SendGrid, whose free plan had silently
+  stopped sending on 2026-09-04).
+- 2026-11: Docker events, nginx host/upstream fields, Postgres and fail2ban parsing,
+  log-noise cleanup; Grafana alert rules, Watchtower reports and the cron wrapper
+  joined ntfy (PRs #88, #89).
+
+**Last updated**: 2026-11-25

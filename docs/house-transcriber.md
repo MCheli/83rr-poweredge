@@ -146,7 +146,7 @@ Startup exits on purpose (and restarts) if `/output` is missing or not writable 
 `docker-compose.yml` drop `HT_OUTPUT_DIR` and the `/output` volume, put back
 `SEAFILE_REPO_TOKEN=${HOUSE_TRANSCRIBER_SEAFILE_TOKEN:-}`, `SEAFILE_URL=http://seafile`,
 `SEAFILE_HOST_HEADER=files.markcheli.com` and `depends_on: [seafile]`, then
-`docker compose up -d house-transcriber`. The log then says `transcripts go to Seafile through
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d house-transcriber`. The log then says `transcripts go to Seafile through
 its web API (roll-back mode)`.
 
 ## Verify
