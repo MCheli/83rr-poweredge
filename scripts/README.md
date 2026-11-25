@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 24, 2026
+**Last Updated:** November 25, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -633,6 +633,34 @@ python3 scripts/ai-context/recent-ai-changes.py [--days 7] [--max-lines 300]    
 
 ---
 
+### 20. `ha-auto-update.py` 🏗️ HOME ASSISTANT AUTO-UPDATE
+**Purpose:** Install Home Assistant's own updates (Supervisor, add-ons, HACS, Core, OS) unattended, after a 3-day soak, with a backup and health checks
+**Size:** 31KB (+ `test_ha_auto_update.py`, unit tests for the planning logic)
+**Language:** Python 3 (standard library only; runs on the server from cron)
+
+**Description:**
+Talks to the HA Yellow over the LAN REST API (`HA_URL`, default `http://192.168.1.121:8123`, so restarts don't go through nginx). **Scope** is the `update.*` entities of the `hassio` and `hacs` integrations only (found with the `integration_entities()` template); device firmware (UniFi, ZHA, ESPHome devices, Matter, Synology DSM, the Yellow's radio/board firmware) is never touched. **Hold rules:** a version installs only after it has been offered for 3 days (first-seen times in `~/.cache/ha-auto-update/state.json`; a version the state file hasn't seen is dated from HA's own history, up to 10 days back); Core `X.Y.0` releases are never installed (waits for `X.Y.1`); a version skipped in the HA UI is never installed; nothing is installed while any in-scope update shows *in progress* (someone updating by hand), and one stuck there with no change for 6 h gets a single alert. **Order:** Supervisor → add-ons → HACS → Core → OS, one at a time. Before Core or OS it runs `backup.create_automatic` (Mark's automatic-backup settings: locations, encryption, retention) and waits for it; `update.install` gets `backup: true` where the entity supports it and `version: <soaked version>` where it supports choosing one. **After each install and at the end:** `/api/` answers, `/api/config` is `RUNNING`, `installed_version` is the target, and unavailable entities are not more than 25 (or 10 %) above the pre-run count (waits up to 10 min for them to come back). The first failure stops the run, sends a **priority-5 ntfy push** (topic `homelab`, says whether a backup was made) and files a **Tasks agent item** "Home Assistant auto-update failed: <component>" (personal list, source `ha-auto-update`). It never restores backups (Supervisor already rolls back a Core update that fails to start). Installs that succeed → one priority-2 push listing the versions; nothing installed → silent. Log: `logs/ha-auto-update.log` (no secrets).
+
+**Usage:**
+```bash
+scripts/ha-auto-update.py --dry-run      # the plan for every in-scope entity, changes nothing
+scripts/ha-auto-update.py                # a real run (what cron runs)
+scripts/ha-auto-update.py --no-notify    # no ntfy push / Tasks item
+python3 scripts/test_ha_auto_update.py   # unit tests
+# cron (mcheli, server on UTC; --at-hour keeps only the 04:15 America/New_York firing, DST-proof):
+#   15 8,9 * * * /home/mcheli/83rr-poweredge/scripts/ha-auto-update.py --at-hour 4 >/dev/null 2>&1
+```
+`.env` keys: `HA_AUTO_UPDATE_TOKEN` (1Password Agents "HA agent token"), `HA_AUTO_UPDATE_TASKS_API_KEY` (Agents "Tasks API key"), `NTFY_PUBLISH_TOKEN`; optional `HA_URL`. Copy a key in without printing it: `agent-op read "op://Agents/HA agent token/credential" | ssh 83rr-poweredge '...append to .env...'`.
+
+**When to Use:**
+- Runs itself daily at 04:15 ET; `--dry-run` to see what is pending and when each update becomes due
+- To hold an update for good: skip that version in the HA UI (Settings → System → Updates → Skip)
+- Don't use it for device firmware; those stay manual by design
+
+**Referenced in:** docs/home-assistant-auto-update.md
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -650,6 +678,8 @@ scripts/
 ├── install-syft.sh                  # 🔐 Pinned, verified Syft install
 ├── deptrack-setup.sh                # 🏗️ Dependency-Track first boot / config
 ├── cookbook-deploy.sh               # 🏗️ Cookbook app + demo deploy with checks
+├── ha-auto-update.py                # 🏗️ Daily Home Assistant updates (soak, backup, health checks)
+├── test_ha_auto_update.py           # Unit tests for ha-auto-update.py
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
 ├── ai-context/                      # 🔄 Notes vault: bm.py (basic-memory client) + BM-CLIENT.md, recent-ai-changes.py, git-autocommit.sh, seafile-backup-push.py, seafile-pull.py (retired)
 ├── one-time/                        # One-time setup scripts
