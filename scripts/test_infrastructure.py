@@ -215,7 +215,6 @@ class InfrastructureHealthTest:
             'plex': {'status': 'running', 'health': 'healthy'},
             'seafile': {'status': 'running', 'health': 'healthy'},
             'seafile-db': {'status': 'running', 'health': None},
-            'seafile-memcached': {'status': 'running', 'health': None},
             'seafile-redis': {'status': 'running', 'health': None},
             'seafile-notification': {'status': 'running', 'health': None},
             'grafana': {'status': 'running', 'health': 'healthy'},

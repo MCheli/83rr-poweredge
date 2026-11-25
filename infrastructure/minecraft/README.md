@@ -69,18 +69,17 @@ A containerized Minecraft Java Edition server hosted at `minecraft.markcheli.com
 ## 🛠️ Management
 
 ### Starting/Stopping
+The server is the `minecraft` service in the main `docker-compose.yml` (there is
+no standalone compose file here any more). From `~/83rr-poweredge`:
 ```bash
-# Start the Minecraft server
-docker-compose up -d
+# Start / recreate the Minecraft server
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d minecraft
 
 # Stop the server
-docker-compose down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml stop minecraft
 
 # View logs
-docker-compose logs -f minecraft
-
-# View web interface logs
-docker-compose logs -f minecraft-web
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f minecraft
 ```
 
 ### Server Administration
@@ -99,10 +98,12 @@ docker-compose logs -f minecraft-web
 ### Data Management
 ```bash
 # Backup world data
-docker run --rm -v minecraft_minecraft_data:/data -v $(pwd):/backup alpine tar czf /backup/minecraft-backup-$(date +%Y%m%d).tar.gz /data
+# (the live world is the volume 83rr-poweredge_minecraft_data_local; the
+# nightly NAS backup already copies it)
+docker run --rm -v 83rr-poweredge_minecraft_data_local:/data -v $(pwd):/backup alpine tar czf /backup/minecraft-backup-$(date +%Y%m%d).tar.gz /data
 
-# Restore from backup
-docker run --rm -v minecraft_minecraft_data:/data -v $(pwd):/backup alpine tar xzf /backup/minecraft-backup.tar.gz -C /
+# Restore from backup (stop the server first)
+docker run --rm -v 83rr-poweredge_minecraft_data_local:/data -v $(pwd):/backup alpine tar xzf /backup/minecraft-backup.tar.gz -C /
 ```
 
 ## 🔒 Security Features
@@ -117,9 +118,9 @@ docker run --rm -v minecraft_minecraft_data:/data -v $(pwd):/backup alpine tar x
 
 ```
 infrastructure/minecraft/
-├── docker-compose.yml      # Service orchestration
 ├── README.md              # This documentation
-└── data/                  # World data (Docker volume)
+├── config/, web/          # Leftovers of the old standalone setup
+└── /data (in the container, volume 83rr-poweredge_minecraft_data_local)
     ├── world/             # Main world files
     ├── world_nether/      # Nether dimension
     ├── world_the_end/     # End dimension

@@ -426,9 +426,11 @@ Then:
 - [ ] Keep `~/seafile-upgrade.state` until the snapshots are deleted, because the rollback reads it.
 - [ ] Keep `$SNAP` (NAS) and `$LOCAL` (`/storage/seafile-pre13-*`) for **at least 2 weeks**, then
       `sudo rm -rf /storage/seafile-pre13-*`. The NAS copy can stay longer.
-- [ ] After 2 stable weeks: follow-up PR removing `seafile-memcached` (13.0 uses redis), its
+- [x] After 2 stable weeks: follow-up PR removing `seafile-memcached` (13.0 uses redis), its
       `depends_on` entry and its test expectation, then `dc rm -sf seafile-memcached`.
-- [ ] Remove the `seafileltd/seafile-mc:11.0.13` and 12.0.x images once the snapshot is retired.
+      Done 2026-11-25 (memcached had 0 gets/sets under 13.0).
+- [x] Remove the `seafileltd/seafile-mc:11.0.13` and 12.0.x images once the snapshot is retired.
+      Done 2026-11-25 (Mark approved dropping the pre-13 rollback images).
 
 ---
 
