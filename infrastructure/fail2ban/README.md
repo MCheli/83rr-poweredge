@@ -118,9 +118,40 @@ earlier bans age out of the database (8 days).
 
 ## Tests run at install (2026-11-25)
 
-See the PR. In short: fail2ban-regex against the real log; a temporary
-`tld_f2btest_*` role logged in from the Mac mini over the LAN with
-`sslmode=require`, then wrong passwords from the LAN were logged but not
-banned; a TEST-NET address banned by hand showed a DROP rule in DOCKER-USER
-for 5432, reached OpenSearch and fired `fail2ban-bans` through ntfy, and the
-rule was gone after the unban.
+- **LAN login**: a temporary role `tld_f2btest_<hex>` (random password,
+  `VALID UNTIL` +1 h, no grants) logged in with `sslmode=require` (TLSv1.3).
+  The client was psql in a `--network host` scratch container on the server
+  connecting to 192.168.1.179 (the Mac mini's psql is not on its dontAsk
+  allow list), so Postgres saw `host=192.168.1.179`, a LAN address. The
+  `connection authorized` line reached OpenSearch with `event_type
+  pg_connection_authorized`, `client_ip 192.168.1.179`, `pg_user`. Role dropped.
+- **LAN not banned**: 6 wrong passwords (`sslmode=prefer`, 12 lines) from the
+  same address were logged, written to `/var/log/pg-auth/tallied-db.log`, and
+  reached OpenSearch as `pg_auth_failure`. `fail2ban-regex` on the real file:
+  12 lines, 12 ignored, 0 matched. No ban. (The test used a non-`tld_` name so
+  `pg-auth-tld-user` wouldn't page for a test.)
+- **Ban path**: `fail2ban-client set postgresql-tallied banip 203.0.113.77`
+  added `-A DOCKER-USER -p tcp -m multiport --dports 5432 -j f2b-postgresql-tallied`
+  and `-A f2b-postgresql-tallied -s 203.0.113.77/32 -j DROP`; the ban reached
+  OpenSearch (`fail2ban_ban`, `f2b_jail`, `client_ip`) and `fail2ban-bans`
+  pushed "[homelab] fail2ban: 1 ban(s) in the last 6 h" at ntfy priority 2.
+  `unbanip` removed the DROP line (the jump and the empty chain stay, as
+  fail2ban leaves them until it stops).
+- Passwordless `sudo -n fail2ban-client status postgresql-tallied` works for mcheli.
+
+The DOCKER-USER jump is added at the first ban, not at jail start.
+
+Fluent Bit's file output writes the Docker `log` field as is, which ends in a
+newline, so the file has a blank line after each entry. fail2ban skips them.
+
+## Weekly homelab check
+
+`~/.claude/skills/homelab-weekly-check/remote-collect.sh` only runs its
+fail2ban block when `sudo -n true` works, which it never does here, so it
+still prints "needs sudo; skipped" even though `sudo -n fail2ban-client status`
+is now allowed. To collect jail status the skill needs its fail2ban block gated
+on `sudo -n /usr/bin/fail2ban-client status >/dev/null 2>&1` instead of
+`SUDO_OK`, plus `status postgresql-tallied` next to `status sshd` (use the full
+path `/usr/bin/fail2ban-client`: sudoers matches the exact command). Bans of
+every jail are in OpenSearch either way (`container_name:fail2ban and
+event_type:fail2ban_ban`).
