@@ -50,6 +50,7 @@ services:
     networks:
       - infrastructure
       - nginx-openclaw
+      - demo-proxy
 
   # ═════════════════════════════════════════════════════════════════════════════
   # Personal Website (Nuxt.js)
@@ -177,7 +178,7 @@ services:
       - COOKBOOK_COOKIE_SECURE=true
       - COOKBOOK_ALLOWED_ORIGINS=https://cookbook-demo.markcheli.com
     networks:
-      - infrastructure
+      - demo-proxy
       - cookbook-demo
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"]
@@ -725,7 +726,7 @@ services:
       - FINANCE_API_KEY_PEPPER=${TALLIED_DEMO_API_KEY_PEPPER}
       - FINANCE_CREDENTIAL_KEY=${TALLIED_DEMO_CREDENTIAL_KEY}
     networks:
-      - infrastructure
+      - demo-proxy
       - tallied-demo
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5).read()"]
@@ -838,7 +839,7 @@ services:
       - TASKS_COOKIE_SECURE=true
       - TASKS_ALLOWED_ORIGINS=https://tasks-demo.markcheli.com
     networks:
-      - infrastructure
+      - demo-proxy
       - tasks-demo
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"]
@@ -1442,6 +1443,10 @@ networks:
     # Created by infrastructure/openclaw/docker-compose.yml
     external: true
     name: openclaw_nginx-openclaw
+  demo-proxy:
+    # Only nginx and the public demo apps; keeps the demos off `infrastructure`, where the
+    # production databases are. Not internal, so the demos keep their outbound internet access.
+    driver: bridge
   tallied-demo:
     # Only the Tallied demo app and its database; the demo can't reach tallied-db
     internal: true
