@@ -4,7 +4,8 @@
     printf 'HOMELAB_MCP_JWT_SIGNING_KEY=%s\\n' "$(openssl rand -hex 32)" \\
       | python3 infrastructure/homelab-mcp/scripts/env_set.py --if-missing
 
-- Backs .env up first (.env.bak-YYYYmmdd-HHMMSS, mode 600), once per run.
+- Backs .env up first to a single .env.bak (mode 600), overwritten on every run,
+  so copies of the secrets don't pile up.
 - Replaces an existing KEY= line (and drops duplicates of it) or appends one.
 - --if-missing leaves a key alone when it already has a non-empty value.
 - Values with spaces or '#' are single-quoted so docker compose reads them whole.
@@ -20,7 +21,6 @@ import re
 import shutil
 import sys
 import tempfile
-from datetime import datetime
 from pathlib import Path
 
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             out.append(f"{key}={value}")
 
     if path.exists():
-        backup = path.with_name(f"{path.name}.bak-{datetime.now():%Y%m%d-%H%M%S}")
+        backup = path.with_name(f"{path.name}.bak")
         shutil.copy2(path, backup)
         os.chmod(backup, 0o600)
         mode = path.stat().st_mode & 0o777
