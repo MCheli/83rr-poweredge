@@ -113,7 +113,7 @@ docker compose down -v
 ### Active Services
 1. **nginx** - Reverse proxy and SSL termination
 2. **personal-website** - Nuxt.js personal portfolio (image from ghcr.io/mcheli/personal-website)
-3. **cookbook** / **cookbook-db** - Cookbook app (FastAPI + Vue, image from ghcr.io/mcheli/cookbook, port 8000): public recipes, Google sign-in for anyone, weekly lists, Whole Foods cart, AI on each user's own Anthropic key (no server AI key). **cookbook-demo** / **cookbook-demo-db**: the read-only public demo (Claudius Banks seed, internal network, explicit env only; cron restarts it nightly). Deploy with checks: `scripts/cookbook-deploy.sh`
+3. **cookbook** / **cookbook-db** - Cookbook app (FastAPI + Vue, image from ghcr.io/mcheli/cookbook, port 8000): public recipes, Google sign-in for anyone, weekly lists, Whole Foods cart, AI on each user's own Anthropic key (no server AI key). **cookbook-demo** / **cookbook-demo-db**: the read-only public demo (Claudius Banks seed, internal network for its DB, reached by nginx over `demo-proxy` and not on `infrastructure`, explicit env only; cron restarts it nightly). Deploy with checks: `scripts/cookbook-deploy.sh`
 4. **flask-api** - Python Flask REST API (image from ghcr.io/mcheli/flask-api)
 6. **minecraft** - Minecraft Java Edition server
 7. **plex** - Plex Media Server for streaming movies/TV/music
