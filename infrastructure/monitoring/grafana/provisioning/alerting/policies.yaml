@@ -1,0 +1,18 @@
+# Notification policy tree (replaces Grafana's default; there is only one).
+# severity=critical -> ntfy-high (buzzes), everything else -> ntfy-low (silent).
+# One push per alert group; critical ones repeat every 4 h while still firing,
+# the rest once a day. Resolved notices go to the same contact point.
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: ntfy-low
+    group_by: ['alertname', 'grafana_folder']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 24h
+    routes:
+      - receiver: ntfy-high
+        object_matchers:
+          - ['severity', '=', 'critical']
+        repeat_interval: 4h
