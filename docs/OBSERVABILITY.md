@@ -234,8 +234,11 @@ sends "recovered". New cron jobs must be added the same way:
 ### Testing the routes
 
 - OpenSearch + Kuma: `scripts/alert-test.sh` (weekly from the Mac mini's homelab check).
-- Grafana: Alerting → Contact points → `ntfy-high` / `ntfy-low` → Test, or
-  `POST /api/alertmanager/grafana/config/api/v1/receivers/test` as admin.
+- Grafana: Alerting → Contact points → `ntfy-high` / `ntfy-low` → Test, or as admin
+  `POST /apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/<name>/test`
+  (`<name>` from `GET …/receivers`, e.g. `bnRmeS1oaWdo` for ntfy-high) with body
+  `{"integration": {"uid": "ntfy-high", "type": "webhook", "settings": {…url, httpMethod, authorization_scheme…}, "secureFields": {"authorization_credentials": true}}, "alert": {"labels": {"alertname": "TEST …"}, "annotations": {"summary": "TEST …"}}}`
+  (the stored token is reused; Grafana 13 removed the old `/api/alertmanager/grafana/config/api/v1/receivers/test`).
 - Watchtower: a `--run-once --monitor-only` watchtower container that matches no
   container sends only its startup message; set `WATCHTOWER_NOTIFICATION_TITLE_TAG=TEST`.
 - Cron wrapper: `CRON_NOTIFY_STATE_DIR=$(mktemp -d) CRON_NOTIFY_TEXTFILE_DIR=/nonexistent scripts/cron-notify.sh TEST-cron-route false`

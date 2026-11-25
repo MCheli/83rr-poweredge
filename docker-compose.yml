@@ -466,6 +466,8 @@ services:
       # stays private, because shared cache uses table locks and contends more.
       - GF_DATABASE_WAL=true
       - GF_DATABASE_QUERY_RETRIES=5
+      # Links in alert notifications (silence, panel) point here, not localhost:3000.
+      - GF_SERVER_ROOT_URL=https://dashboard.ops.markcheli.com/
       # Alerting -> ntfy (provisioning/alerting/contact-points.yaml expands it).
       - NTFY_PUBLISH_TOKEN=${NTFY_PUBLISH_TOKEN:?set NTFY_PUBLISH_TOKEN in .env}
     volumes:
