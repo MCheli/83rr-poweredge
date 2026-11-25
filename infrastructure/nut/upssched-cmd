@@ -2,7 +2,9 @@
 # /etc/nut/upssched-cmd — managed by 83rr-poweredge infrastructure/nut/install.sh
 # CMDSCRIPT for upssched (runs as the nut user).
 # $1 is the timer or EXECUTE name from upssched.conf:
-#   onbatt-shutdown  5 minutes on battery: push an alert, run pre-shutdown.sh
+#   onbatt-shutdown  5 minutes on battery: tell Home Assistant (webhook, so it
+#                    powers the R630 and the NAS back on once mains returns),
+#                    push an alert, run pre-shutdown.sh
 #                    as root (sudo rule /etc/sudoers.d/nut-pre-shutdown: save
 #                    the game worlds, unmount /mnt/nas), then `upsmon -c fsd`
 #                    (upsmon sets FSD, which also sends the Synology NAS into
@@ -18,11 +20,18 @@
 # then to the public URL. A push never fails the script and the token never
 # reaches the command line or the logs.
 #
+# The Home Assistant webhook URL comes from /etc/nut/ha.env (root:nut 640, made
+# once by hand, never in git; install.sh only creates an empty placeholder):
+# HA_WEBHOOK_URL=http://192.168.1.121:8123/api/webhook/<id>. The webhook id is
+# the secret: it stays off the command line (curl reads the URL on stdin) and
+# out of the logs, and a failed call never delays the shutdown by more than 5 s.
+#
 # Install (with the rest of infrastructure/nut/):
 #   sudo infrastructure/nut/install.sh
 set -u
 
 ENV_FILE=/etc/nut/ntfy.env
+HA_ENV_FILE=/etc/nut/ha.env
 NOCOMM_STAMP=/run/nut/upssched-nocomm.stamp
 NOCOMM_EVERY=3600   # NOCOMM repeats every 5 min; push it at most hourly
 UPS="${UPSNAME:-ups}"
@@ -33,8 +42,28 @@ NTFY_TOKEN=""
 NTFY_CACERT=""
 # shellcheck source=/dev/null
 [[ -r "$ENV_FILE" ]] && . "$ENV_FILE"
+HA_WEBHOOK_URL=""
+# shellcheck source=/dev/null
+[[ -r "$HA_ENV_FILE" ]] && . "$HA_ENV_FILE"
 
 log() { logger -t upssched-cmd -- "$*"; }
+
+# ha_power_restore: tell Home Assistant the R630 and the NAS are about to go
+# down, so it wakes them (Wake-on-LAN) once mains is back. Never fails.
+ha_power_restore() {
+    if [[ "$HA_WEBHOOK_URL" != http*://*/api/webhook/* ]]; then
+        log "HA webhook not configured in ${HA_ENV_FILE}; power-restore call skipped"
+        return 0
+    fi
+    # The URL (and its webhook id) travels on curl's stdin, never in argv.
+    if printf 'url = "%s"\n' "$HA_WEBHOOK_URL" | curl -fsS -o /dev/null --max-time 5 --config - \
+        -X POST -H "Content-Type: application/json" --data '{"source":"r630-nut"}' 2>/dev/null; then
+        log "HA power-restore webhook sent"
+    else
+        log "HA power-restore webhook failed; the R630 and the NAS will need a manual power-on"
+    fi
+    return 0
+}
 
 # ntfy_push PRIORITY TAGS TITLE MESSAGE
 ntfy_push() {
@@ -66,6 +95,7 @@ auth_cfg() { printf 'header = "Authorization: Bearer %s"\n' "$NTFY_TOKEN"; }
 case "${1:-}" in
     onbatt-shutdown)
         log "UPS ${UPS} on battery for 5 minutes: forcing shutdown (upsmon -c fsd)"
+        ha_power_restore
         ntfy_push high "rotating_light,electric_plug" "R630 shutting down" \
             "On battery 5 min: shutting the R630 and the NAS down now"
         # Before FSD: FSD sends the NAS into safe mode straight away, and
@@ -126,7 +156,7 @@ case "${1:-}" in
     shutdown)
         log "system shutdown for UPS ${UPS}"
         ntfy_push urgent "rotating_light" "R630 halting" \
-            "The R630 is halting now for the power cut. It stays off until it is powered on (iDRAC or the button), or until the UPS battery runs out and mains returns."
+            "The R630 is halting now for the power cut. Home Assistant wakes it and the NAS (Wake-on-LAN) once mains has been back for 2 minutes."
         ;;
     *)
         log "unknown upssched command: ${1:-<none>}"

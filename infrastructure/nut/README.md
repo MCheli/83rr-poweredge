@@ -24,7 +24,9 @@ The UPS is named **`ups`** (it was `cp1500` until 2026-11-25) because DSM's
 1. **Mains lost** → UPS goes on battery (`ONBATT`). ntfy push (high), wall + syslog,
    and a 5-minute timer starts (`upssched`, timer `onbatt-shutdown`).
 2. **Mains back within 5 minutes** → timer cancelled, ntfy push "back on mains". Nothing else happens.
-3. **Still on battery after 5 minutes** → `upssched-cmd` sends "On battery 5 min:
+3. **Still on battery after 5 minutes** → `upssched-cmd` calls the Home Assistant
+   power-restore webhook (see [Power restore (Home Assistant)](#power-restore-home-assistant);
+   5 s cap, a failure is logged and ignored), sends "On battery 5 min:
    shutting the R630 and the NAS down now", then:
    1. runs `/etc/nut/pre-shutdown.sh` **as root** (`sudo -n`, the one rule in
       `/etc/sudoers.d/nut-pre-shutdown`; capped at 120 s): unmounts `/mnt/nas` and saves
@@ -68,11 +70,13 @@ The UPS is named **`ups`** (it was `cp1500` until 2026-11-25) because DSM's
    [Kill-power (off)](#kill-power-off)). The systemd shutdown hook
    (`/usr/lib/systemd/system-shutdown/nutshutdown`) finds no `/etc/killpower` and skips
    the UPS command ("Not in FSD (killpower) mode").
-6. **Coming back** (see [Kill-power (off)](#kill-power-off) for the open decision):
+6. **Coming back:**
    - Outage **shorter than the battery**: the UPS never loses output, so the R630 sees no
-     AC loss and **stays off** until someone powers it on (iDRAC, or the front power
-     button). The NAS likewise stays off (DSM's "restart when power supply issue is
-     fixed" only covers a real AC loss), so it needs its power button or Wake-on-LAN.
+     AC loss and would stay off (the NAS too: DSM's "restart when power supply issue is
+     fixed" only covers a real AC loss). Home Assistant, which stays up on the UPS,
+     wakes both with Wake-on-LAN once mains has been back for 2 minutes
+     ([Power restore (Home Assistant)](#power-restore-home-assistant)). If that fails:
+     the R630's power button (iDRAC has no login available) and the NAS's button.
    - Outage **longer than the battery**: the UPS runs flat and its outlets go dark; when
      mains returns the UPS powers them up and the R630 boots by itself because its
      power-restore policy is "always on" (see [Power restore policy](#power-restore-policy-r630));
@@ -111,17 +115,59 @@ a config that sets it. NUT 2.8.1 has no built-in default for it, so upsmon never
 halts (`offdelay` 60 s), which would take the router and Home Assistant down about 7
 minutes into an outage: the opposite of what Mark wants.
 
-**Open decision for Mark:** the cost is that after an outage shorter than the battery
-the R630 (and the NAS) stay off until powered on by hand (iDRAC at the R630's iDRAC
-address, or the power button). Options:
-- **Keep it this way** (current): the network stays up longest; power the R630 on from
-  iDRAC after the outage (and the NAS from its button or Wake-on-LAN).
-- **Turn kill-power back on:** uncomment `POWERDOWNFLAG /etc/killpower`, drop the guard
-  in install.sh, re-run it. Everything comes back by itself, but the router and Home
-  Assistant lose power ~7 min into every outage that lasts that long.
-- **Later, automate the power-on:** e.g. Home Assistant (which stays up on the UPS)
-  powers the R630 on through iDRAC/IPMI and wakes the NAS once mains has been back for a
-  few minutes. Not built.
+The cost is that after an outage shorter than the battery the R630 and the NAS stay
+off, since they never see AC come back. Mark chose (2026-11-25) to have Home Assistant
+power them back on: [Power restore (Home Assistant)](#power-restore-home-assistant).
+The alternative, turning kill-power back on (uncomment `POWERDOWNFLAG /etc/killpower`,
+drop the guard in install.sh, re-run it), would bring everything back by itself, but
+the router and Home Assistant would lose power ~7 min into every outage that long.
+
+## Power restore (Home Assistant)
+
+Built 2026-11-25. Home Assistant (192.168.1.121, on the UPS) wakes the R630 and the NAS
+with Wake-on-LAN after a short outage.
+
+1. **Webhook:** just before the shutdown (5 min on battery), `upssched-cmd` POSTs
+   `{"source":"r630-nut"}` to `HA_WEBHOOK_URL` from **`/etc/nut/ha.env`** on the R630
+   (root:nut 640, **not in git**; the webhook id `r630_ups_shutdown_<32 hex>` is the
+   secret, also in the HA automation's trigger). curl reads the URL on stdin, so the id is
+   not in `ps` or the logs. install.sh never overwrites ha.env; on a fresh host it writes an
+   empty placeholder and `--check` shows "placeholder". The LAN URL is used because
+   home.markcheli.com is proxied by the R630 and goes down with it.
+2. **HA automation** `r630_ups_power_restore` ("UPS: power R630 and NAS back on after
+   outage", `automation.ups_power_r630_and_nas_back_on_after_outage`, mode single, created
+   through the REST API; there is no YAML for it): webhook trigger (POST, local only) →
+   wait 5 min (both halt) → wait until **house mains** is back: at least 2 of the five
+   ESPHome minisplit heads (`climate.*_head`) and the Kasa `switch.bedroom_tv` are not
+   unavailable/unknown, for 2 min (they are on mains, not the UPS, and drop within a
+   minute of a cut); gives up after 24 h → presses **`button.wake_r630`** and
+   **`button.wake_nas`** 3 times, 2 min apart → persistent notification and a push to
+   `notify.mobile_app_iphone`.
+3. **Wake on LAN** integration entries (UI: Settings → Devices → Wake on LAN), broadcast
+   192.168.1.255:9: "Wake R630" = eno1 `ec:f4:bb:e6:f7:f4`, "Wake NAS" = `90:09:d0:0c:f4:e6`
+   (WoL enabled in DSM).
+4. **R630 NIC:** eno1 (igb) supports `Wake-on: pumbg`; Ubuntu leaves it at `d`. install.sh
+   installs `10-83rr-eno1-wol.link` to `/etc/systemd/network/` (matches the permanent MAC,
+   `WakeOnLan=magic`, naming lines copied from `99-default.link` so the name stays eno1;
+   applied at every boot) and runs `ethtool -s eno1 wol g` for the running boot. Not
+   confirmable from Linux: the BIOS/iDRAC side (System Setup → Device Settings → NIC
+   port 1 → Wake On LAN, and that the board keeps standby power to the NIC in S5). Without
+   iDRAC access only a real test shows it.
+
+Set up / replace the webhook id (one time; keep the HA trigger and ha.env in step):
+
+```bash
+# on the R630, as root; <id> = r630_ups_shutdown_ + 32 hex chars
+sudo install -o root -g nut -m 640 /dev/null /etc/nut/ha.env
+sudoedit /etc/nut/ha.env     # HA_WEBHOOK_URL=http://192.168.1.121:8123/api/webhook/<id>
+sudo infrastructure/nut/install.sh --check    # ha.env webhook: set, root:nut 640
+```
+
+Safe test (no shutdown): POST the webhook from the R630 as `nut` using ha.env (not via
+`upssched-cmd`, whose `onbatt-shutdown` branch would really shut down), check the
+automation's `last_triggered` / trace, then cancel the run with `automation.turn_off` +
+`automation.turn_on`. Pressing "Wake NAS" while the NAS runs is harmless. An end-to-end
+test needs a planned shutdown ([Real test](#real-test-needs-marks-yes-cuts-mains)).
 
 Every event (ONLINE, ONBATT, LOWBATT, FSD, COMMOK, COMMBAD, SHUTDOWN, REPLBATT, NOCOMM)
 also goes to syslog, wall and ntfy topic `homelab`:
@@ -148,7 +194,9 @@ never blocks the shutdown, and the token is never on a command line or in a log.
 | `upsd.users.template` | `/etc/nut/upsd.users` | `upsmon` (primary; password filled in at install), `monuser` (secondary, DSM's fixed login) |
 | `upsmon.conf` | `/etc/nut/upsmon.conf` | same password placeholder; shutdown + notify settings; no `POWERDOWNFLAG` |
 | `upssched.conf` | `/etc/nut/upssched.conf` | 5-min timer + notices |
-| `upssched-cmd` | `/etc/nut/upssched-cmd` (750) | logger + ntfy; at 5 min `sudo -n pre-shutdown.sh`, then `upsmon -c fsd` |
+| `upssched-cmd` | `/etc/nut/upssched-cmd` (750) | logger + ntfy; at 5 min the HA webhook, `sudo -n pre-shutdown.sh`, then `upsmon -c fsd` |
+| `10-83rr-eno1-wol.link` | `/etc/systemd/network/10-83rr-eno1-wol.link` (644, root:root) | Wake-on-LAN (magic) on eno1 at every boot |
+| (by hand, not in git) | `/etc/nut/ha.env` | `HA_WEBHOOK_URL` (Home Assistant power-restore webhook); install.sh keeps it, or writes an empty placeholder |
 | `pre-shutdown.sh` | `/etc/nut/pre-shutdown.sh` (750) | as root, from upssched-cmd and `SHUTDOWNCMD`: unmounts `/mnt/nas`, saves the ARK + Minecraft worlds, ≤ 120 s, never fails, safe twice |
 | `sudoers-nut-pre-shutdown` | `/etc/sudoers.d/nut-pre-shutdown` (440, root:root) | user `nut` may run exactly `/etc/nut/pre-shutdown.sh` (no arguments) as root; checked with `visudo -c` |
 | `nut-server-network-online.conf` | `/etc/systemd/system/nut-server.service.d/83rr-network-online.conf` (644) | upsd starts after `network-online.target` |
@@ -239,9 +287,10 @@ time, confirm a recent backup, and be next to the rack.
 4. Full test: unplug again and wait. At 5 minutes: "R630 shutting down", `/mnt/nas`
    unmounted (`journalctl -t nut-pre-shutdown`), FSD, the NAS goes into safe mode,
    "R630 halting". The host halts; the UPS output (router, Home Assistant) stays on.
-5. Plug mains back in. Nothing powers on by itself (kill-power is off): power the R630
-   on from iDRAC or its button, and the NAS from its button. Then run
-   `docs/POST_REBOOT_CHECKLIST.md`.
+5. Plug mains back in. About 2 min after the minisplit heads reconnect (and at least
+   5 min after the webhook), Home Assistant presses "Wake R630" and "Wake NAS" (3 times,
+   2 min apart) and notifies. Expect both to boot; if not, use their power buttons and
+   check the NIC's Wake-on-LAN in the R630 BIOS. Then run `docs/POST_REBOOT_CHECKLIST.md`.
 
 Quicker alternative for step 4 (still a real shutdown of the R630 **and the NAS**, mains
 stays in): `sudo upsmon -c fsd`.
