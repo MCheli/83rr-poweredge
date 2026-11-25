@@ -118,7 +118,7 @@ curl https://flask.markcheli.com/health
 - **Node Exporter** - Host system metrics (CPU, memory, disk)
 - **NGINX Exporter** - NGINX metrics for Prometheus
 - **Seafile DB** - MariaDB database backend for Seafile
-- **Seafile Memcached** - Cache server for Seafile performance
+- **Seafile Redis** - Cache for Seafile 13 (`CACHE_PROVIDER=redis`)
 - **Tallied DB** - PostgreSQL database backend for Tallied
 - **Tasks DB** - PostgreSQL database backend for Tasks
 - **Watchtower** - Automatic container updates (monitors ghcr.io images)

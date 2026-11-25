@@ -1204,18 +1204,6 @@ services:
     networks:
       - infrastructure
 
-  # Only needed for the 12.0 hop (12.0 seahub still reads CACHES from
-  # seahub_settings.py). 13.0 uses seafile-redis. Remove this service in a
-  # follow-up once 13.0 has been stable for two weeks (runbook step 6).
-  seafile-memcached:
-    image: memcached:1.6.45@sha256:a395a1bcf5e0e2b0fa4a0142e12b4e24a2320ba4b7c6ffa8655a1a86e8f29dee
-    container_name: seafile-memcached
-    restart: unless-stopped
-    logging: *default-logging
-    entrypoint: memcached -m 256
-    networks:
-      - infrastructure
-
   seafile-redis:
     image: redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     container_name: seafile-redis
@@ -1238,7 +1226,6 @@ services:
     logging: *default-logging
     depends_on:
       - seafile-db
-      - seafile-memcached
       - seafile-redis
     environment:
       - SEAFILE_MYSQL_DB_HOST=seafile-db

@@ -77,7 +77,7 @@
     - Status: Healthy
     - Endpoint: files.markcheli.com
     - Features: File storage, sync, sharing (Dropbox alternative)
-    - Dependencies: seafile-db, seafile-memcached
+    - Dependencies: seafile-db, seafile-redis (memcached removed 2026-11-25)
 
 16. **Seafile Database** (MariaDB) ✅
     - Status: Healthy

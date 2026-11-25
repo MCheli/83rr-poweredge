@@ -79,7 +79,7 @@ docker ps -q | wc -l
 | minecraft | Game server |
 | plex | Media server |
 | seafile | File sync |
-| seafile-memcached | Seafile cache |
+| seafile-redis | Seafile cache |
 | seafile-db | Seafile database |
 | opensearch | Log storage |
 | opensearch-dashboards | Log visualization |
