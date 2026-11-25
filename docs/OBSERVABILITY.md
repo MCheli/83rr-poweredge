@@ -164,50 +164,86 @@ Copy-paste into the search bar at the top of Discover. Lucene syntax.
 
 ## Alerting
 
-Set up via OpenSearch Dashboards → *Alerting* → *Monitors*. Each monitor
-has triggers; each trigger has destinations (where to send the alert).
+Every alert ends up as a push from the self-hosted **ntfy** (`ntfy.markcheli.com`,
+topic `homelab`, deny-all auth) to Mark's phone. Publishers use the write-only
+`alerts` user's token (`NTFY_PUBLISH_TOKEN` in `.env`, never in the repo); the phone
+reads with the read-only `mark` user (1Password Agents / "ntfy phone user"). ntfy setup,
+users and token rotation: `infrastructure/opensearch/config/alerting/README.md`.
 
-### Recommended monitors
+**Priorities:** 4–5 (high/urgent) buzz the phone; 3 makes a normal sound; 1–2 are
+silent and only show in the ntfy app. Only things that need action soon use 4+.
 
-Names matter — keep them stable so a status page can subscribe by name.
+### Routes
 
-| Monitor | Query / threshold | Severity |
-|---|---|---|
-| `error-rate-5m` | per-service: `level:(ERROR OR CRITICAL OR FATAL)` count > 10 in 5 min | 2 (high) |
-| `nginx-5xx-burst` | `container_name:nginx AND status:[500 TO 599]` count > 5 in 5 min | 1 (critical) |
-| `auth-bruteforce` | `container_name:nginx AND status:401` from same `client_ip` count > 30 in 5 min | 2 |
-| `healthcheck-failure` | `healthcheck:true AND status:!=200` any in 5 min | 2 |
-| `watchtower-update-failure` | `container_name:watchtower AND extras:"Failed=*" AND NOT extras:"Failed=0"` any in 1h | 3 |
-| `parser-failures-spike` | `_exists_:ingest_error` count > 100 in 1h | 4 (warning) |
-| `backup-no-success-24h` | (separate cron job that writes a heartbeat doc to OpenSearch when backup succeeds; alert on its absence) | 1 |
-| `disk-pressure` | (Prometheus side — `node_filesystem_avail_bytes` < 10%) | 2 |
-| `service-down-prom` | (Prometheus `up{} == 0` for 5 min) | 1 |
+| Route | Source of truth | What it sends | Priority |
+|---|---|---|---|
+| OpenSearch alerting | `infrastructure/opensearch/config/alerting/monitors/*.json` (`apply-monitors.py`) | log-based monitors: error rate, nginx 5xx, auth brute force, healthcheck failures, container died, **backup heartbeat absent 26 h** (`backup-no-heartbeat`), **LE renewal failed**, **watchtower update failed**, root disk pressure, security telemetry, fail2ban, Postgres | per monitor (see that README, "Phone alerts: what each one means") |
+| Uptime Kuma | `scripts/setup_uptime_kuma.py` | public endpoint up/down | 4 |
+| Grafana unified alerting | `infrastructure/monitoring/grafana/provisioning/alerting/` (`rules.yaml`, `contact-points.yaml`, `policies.yaml`) | Prometheus rules below | 4 for `severity=critical`, 2 for `warning` |
+| Watchtower | `WATCHTOWER_NOTIFICATION_URL` in `docker-compose.yml` (`logger://` + `ntfy://`) | each update session's report (what was updated, what failed) and its startup message | 2 (the loud failure alert is the OpenSearch `watchtower-update-failure` monitor on the `logger://` output) |
+| Cron jobs | `scripts/cron-notify.sh` wrapping every crontab line | "cron job failed: NAME" once per failure streak; "recovered" on the next success | 4 failed, 2 recovered |
+| NUT (UPS) | `infrastructure/nut/upssched-cmd` | on battery, low battery, shutdown, back on mains | 2–5 (`infrastructure/nut/README.md`) |
+| Dependency-Track | `scripts/sbom-scan.sh`, `scripts/deptrack-setup.sh` | new HIGH/CRITICAL CVEs | 3 |
 
-The last three need separate plumbing — backup heartbeat needs a small
-`echo '{"source":"backup","status":"ok"}' | curl ...` line at the end of
-`scripts/backup.sh`, and the Prometheus alerts go through Prometheus
-Alertmanager (or via OpenSearch's Prometheus integration if simpler).
+### Grafana rules (Prometheus)
 
-### Destination notes
+Grafana-managed rules, evaluated every minute against the `prometheus` datasource and
+provisioned read-only from the repo (edit the YAML, then recreate grafana; UI edits are
+refused). Group key `alertname`, so one push per rule even when several series fire.
+Critical alerts repeat every 4 h while firing, warnings once a day; resolved notices go
+to the same contact point.
 
-OpenSearch's built-in destinations: Slack, Microsoft Teams, custom webhook,
-Amazon Chime, email (via SMTP).
+| Rule (uid) | Condition | For | Severity |
+|---|---|---|---|
+| Prometheus target down (`hl-target-down`) | `up < 1` (prometheus, cadvisor, node-exporter, nginx-exporter) | 5 m | critical |
+| Disk above 85% (`hl-disk-85`) | `/`, `/data`, `/storage`, `/mnt/nas` used > 85% | 15 m | warning |
+| Disk above 95% (`hl-disk-95`) | same mounts > 95% | 5 m | critical |
+| Host memory pressure (`hl-memory-low`) | `MemAvailable/MemTotal < 10%` | 15 m | critical |
+| Container restarting repeatedly (`hl-restart-loop`) | > 5 starts of one container name in 30 min (cAdvisor `container_start_time_seconds`) | 1 m | critical |
+| Backup not succeeded in 26 h (`hl-backup-stale`) | `homelab_cron_last_success_timestamp_seconds{job="backup"}` older than 26 h | 10 m | warning (backstop to the OpenSearch heartbeat monitor) |
+| Certificate expires in under 14 days (`hl-cert-expiry`) | any `ssl_certificate` in `production.conf` | 1 h | warning (LE renews at 30 days; renewal failures already alert) |
+| UPS on battery (`hl-ups-on-battery`) | `homelab_ups_on_battery > 0` | 1 m | warning (backstop; NUT sends the loud push itself) |
+| Alert metrics stale (`hl-alert-metrics-stale`) | `logs/textfile/homelab-alerts.prom` missing or > 10 min old | 5 m | warning |
+| node-exporter textfile parse error (`hl-textfile-error`) | `node_textfile_scrape_error > 0` | 10 m | warning |
 
-**Current (2026-10-31):** alerts are push notifications via the self-hosted
-ntfy (`ntfy.markcheli.com`, topic `homelab`), not email. See
-`infrastructure/opensearch/config/alerting/README.md`. SendGrid was used
-until its free plan ran out of credits; the notes below are historical.
+Query errors (Prometheus unreachable) raise a `DatasourceError` alert after the same
+pending period. No Alertmanager: Grafana's built-in one does routing and grouping.
 
-For email from `status@markcheli.com`, you need an outbound SMTP relay.
-Options the operator has called out (see status-page setup below):
-- **Resend** — recommended. Configure with API key + verified domain.
-- **SendGrid** — same shape.
-- **AWS SES** — cheapest at scale; requires DNS verification.
-- **Google Workspace SMTP relay** — if Workspace is in use.
+**Textfile metrics** (node-exporter, `logs/textfile/` → `/textfile`):
+- `scripts/emit_alert_metrics.sh` (cron every minute) → `homelab-alerts.prom`:
+  `homelab_cert_not_after_timestamp_seconds{cert}`, `homelab_ups_up`,
+  `homelab_ups_on_battery`, `homelab_ups_low_battery`,
+  `homelab_ups_battery_charge_percent`, `homelab_ups_battery_runtime_seconds`,
+  `homelab_ups_load_percent` (from `upsc ups@localhost`, no login needed).
+- `scripts/cron-notify.sh` → `cron-<job>.prom`: `homelab_cron_last_run_timestamp_seconds`,
+  `homelab_cron_last_exit_code`, `homelab_cron_last_success_timestamp_seconds` (label `job`).
+- `scripts/sbom-scan.sh` → `deptrack.prom` (Dependency-Track portfolio gauges).
 
-The OpenSearch alerting destination type for SMTP is "Email": configure
-host, port (587 STARTTLS), credentials, and the from-address. **Set the
-display name to the monitor name** so the status page can route on it.
+### Cron wrapper
+
+Every line in the server's crontab (`crontab -l` as `mcheli`) runs through
+`scripts/cron-notify.sh NAME COMMAND [ARGS...]`; the log redirect stays at the end of
+the line and env assignments go before the wrapper. A non-zero exit sends one push;
+further failures stay quiet (state in `logs/cron-notify/NAME.failed`) until a success
+sends "recovered". New cron jobs must be added the same way:
+
+```cron
+0 2 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh backup /home/mcheli/83rr-poweredge/scripts/backup.sh >> /home/mcheli/83rr-poweredge/logs/backup.log 2>&1
+```
+
+### Testing the routes
+
+- OpenSearch + Kuma: `scripts/alert-test.sh` (weekly from the Mac mini's homelab check).
+- Grafana: Alerting → Contact points → `ntfy-high` / `ntfy-low` → Test, or
+  `POST /api/alertmanager/grafana/config/api/v1/receivers/test` as admin.
+- Watchtower: a `--run-once --monitor-only` watchtower container that matches no
+  container sends only its startup message; set `WATCHTOWER_NOTIFICATION_TITLE_TAG=TEST`.
+- Cron wrapper: `CRON_NOTIFY_STATE_DIR=$(mktemp -d) CRON_NOTIFY_TEXTFILE_DIR=/nonexistent scripts/cron-notify.sh TEST-cron-route false`
+  sends one "cron job failed: TEST-cron-route" and leaves no state.
+- Read what arrived: `GET https://ntfy.markcheli.com/homelab/json?poll=1&since=15m`
+  as the `mark` user (or the cache.db query in `scripts/alert-test.sh`).
+
+Email via SMTP (SendGrid until 2026-10-31) is retired; ntfy replaced it.
 
 ---
 

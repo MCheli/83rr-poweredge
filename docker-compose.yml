@@ -466,10 +466,13 @@ services:
       # stays private, because shared cache uses table locks and contends more.
       - GF_DATABASE_WAL=true
       - GF_DATABASE_QUERY_RETRIES=5
+      # Alerting -> ntfy (provisioning/alerting/contact-points.yaml expands it).
+      - NTFY_PUBLISH_TOKEN=${NTFY_PUBLISH_TOKEN:?set NTFY_PUBLISH_TOKEN in .env}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./infrastructure/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
     depends_on:
       - prometheus
     healthcheck:
@@ -1437,7 +1440,13 @@ services:
       - WATCHTOWER_ROLLING_RESTART=false
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_NOTIFICATIONS=shoutrrr
-      - WATCHTOWER_NOTIFICATION_URL=logger://
+      # Space-separated: logger:// feeds the OpenSearch monitor
+      # watchtower-update-failure (the loud one); ntfy:// sends each update
+      # session's report (updates and failures) to topic homelab at priority
+      # low (silent), over the infrastructure network with the write-only
+      # token (empty user + token as password, which ntfy accepts).
+      - WATCHTOWER_NOTIFICATION_URL=logger:// ntfy://:${NTFY_PUBLISH_TOKEN:?set NTFY_PUBLISH_TOKEN in .env}@ntfy/homelab?scheme=http&priority=low&tags=whale
+      - WATCHTOWER_NOTIFICATIONS_HOSTNAME=83rr-poweredge
       - WATCHTOWER_LIFECYCLE_HOOKS=false
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

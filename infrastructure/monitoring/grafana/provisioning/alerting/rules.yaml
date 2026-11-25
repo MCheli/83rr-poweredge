@@ -1,0 +1,270 @@
+# Grafana-managed alert rules on Prometheus (docs/OBSERVABILITY.md#alerting).
+# Few and quiet on purpose. Each rule: A = instant PromQL query, C = threshold
+# on A (one alert instance per series). Labels: severity=critical goes to
+# ntfy-high (buzzes), severity=warning to ntfy-low (silent); see policies.yaml.
+#
+# Covered elsewhere, so NOT here: UPS on battery buzzes from NUT's own
+# upssched push (infrastructure/nut), backup heartbeat absence and failed
+# cert renewals from OpenSearch monitors, failed cron jobs from
+# scripts/cron-notify.sh. The UPS and backup rules below are silent backstops
+# that keep working if those paths break.
+#
+# homelab_* metrics come from node-exporter's textfile collector
+# (logs/textfile): scripts/emit_alert_metrics.sh (certs, UPS; every minute)
+# and scripts/cron-notify.sh (cron job results).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: homelab
+    folder: Homelab alerts
+    interval: 1m
+    rules:
+      - uid: hl-target-down
+        title: Prometheus target down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model: {refId: A, expr: 'up', instant: true, range: false}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: lt, params: [1]}}]
+        noDataState: Alerting
+        execErrState: Error
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Scrape target {{ .Labels.job }} ({{ .Labels.instance }}) has been down for 5 minutes.'
+
+      - uid: hl-disk-85
+        title: Disk above 85%
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint=~"/|/data|/storage|/mnt/nas"} / node_filesystem_size_bytes{mountpoint=~"/|/data|/storage|/mnt/nas"})'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [85]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: '{{ .Labels.mountpoint }} is {{ humanize .Values.A.Value }}% full.'
+
+      - uid: hl-disk-95
+        title: Disk above 95%
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint=~"/|/data|/storage|/mnt/nas"} / node_filesystem_size_bytes{mountpoint=~"/|/data|/storage|/mnt/nas"})'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [95]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: '{{ .Labels.mountpoint }} is {{ humanize .Values.A.Value }}% full.'
+
+      - uid: hl-memory-low
+        title: Host memory pressure
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: lt, params: [10]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Only {{ humanize .Values.A.Value }}% of RAM available for 15 minutes.'
+
+      - uid: hl-restart-loop
+        title: Container restarting repeatedly
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # starts per container name in 30 min (a recreate keeps the name)
+              expr: 'changes(max by (name) (container_start_time_seconds{name!=""})[30m:1m])'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [5]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: '{{ .Labels.name }} restarted {{ .Values.A.Value }} times in 30 minutes.'
+
+      - uid: hl-backup-stale
+        title: Backup not succeeded in 26 h
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(time() - homelab_cron_last_success_timestamp_seconds{job="backup"}) / 3600'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [26]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Nightly backup last exited 0 {{ humanize .Values.A.Value }} h ago (backstop; the OpenSearch backup-no-heartbeat monitor is the loud one).'
+
+      - uid: hl-cert-expiry
+        title: Certificate expires in under 14 days
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(homelab_cert_not_after_timestamp_seconds - time()) / 86400'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: lt, params: [14]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: '{{ .Labels.cert }} expires in {{ humanize .Values.A.Value }} days (Let''s Encrypt renews at 30; check logs of renew-letsencrypt-certs.sh).'
+
+      - uid: hl-ups-on-battery
+        title: UPS on battery
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model: {refId: A, expr: 'homelab_ups_on_battery', instant: true, range: false}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [0]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: 'The UPS runs on battery (backstop; NUT already sent the high-priority push and shuts down at 5 minutes).'
+
+      - uid: hl-alert-metrics-stale
+        title: Alert metrics stale
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'time() - node_textfile_mtime_seconds{file=~".*/homelab-alerts\\.prom"}'
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [600]}}]
+        noDataState: Alerting
+        execErrState: Error
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: 'logs/textfile/homelab-alerts.prom is missing or older than 10 minutes: the cert and UPS rules are blind (cron line for emit_alert_metrics.sh).'
+
+      - uid: hl-textfile-error
+        title: node-exporter textfile parse error
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model: {refId: A, expr: 'node_textfile_scrape_error', instant: true, range: false}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{evaluator: {type: gt, params: [0]}}]
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: 'node-exporter cannot parse a file in logs/textfile; textfile-based alerts may be blind.'

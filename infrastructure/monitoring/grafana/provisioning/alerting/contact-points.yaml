@@ -1,0 +1,34 @@
+# Grafana unified alerting -> ntfy (topic homelab), docs/OBSERVABILITY.md#alerting.
+# Posted over the compose "infrastructure" network to the ntfy container with
+# the write-only "alerts" user's token (NTFY_PUBLISH_TOKEN in .env, passed to
+# the grafana container by docker-compose.yml; Grafana expands $VARS here).
+# template=grafana is ntfy's built-in template for Grafana's webhook JSON
+# (title + message). The priority is fixed per contact point:
+#   ntfy-high  4 = long vibration/sound on the phone   (severity=critical)
+#   ntfy-low   2 = silent, shows in the app/list only  (everything else)
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ntfy-high
+    receivers:
+      - uid: ntfy-high
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://ntfy/homelab?template=grafana&priority=4&tags=rotating_light,grafana
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: $NTFY_PUBLISH_TOKEN
+
+  - orgId: 1
+    name: ntfy-low
+    receivers:
+      - uid: ntfy-low
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://ntfy/homelab?template=grafana&priority=2&tags=grafana
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: $NTFY_PUBLISH_TOKEN
