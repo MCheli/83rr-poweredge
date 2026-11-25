@@ -1,0 +1,7 @@
+# /etc/sudoers.d/nut-pre-shutdown — managed by 83rr-poweredge infrastructure/nut/install.sh
+# upssched-cmd runs as the nut user; at 5 minutes on battery it runs
+# pre-shutdown.sh as root (save game worlds, unmount /mnt/nas) BEFORE
+# `upsmon -c fsd`, because FSD sends the Synology NAS into safe mode at once.
+# Exactly this script, no arguments (""), nothing else.
+# /etc/nut is root:nut 755 and the script root:nut 750, so nut cannot change it.
+nut ALL=(root) NOPASSWD: /etc/nut/pre-shutdown.sh ""
