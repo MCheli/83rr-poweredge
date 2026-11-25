@@ -107,7 +107,7 @@ make logs s=nginx
 
 # Rebuild after Dockerfile changes
 docker compose build nginx
-docker compose up -d --force-recreate nginx
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate nginx
 ```
 
 ## Metrics & Monitoring

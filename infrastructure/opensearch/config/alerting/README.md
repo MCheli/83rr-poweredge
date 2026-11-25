@@ -7,15 +7,15 @@ schedule and sends notifications when triggers fire.
 
 ```
 OpenSearch ───query───▶ Monitor ──fires─▶ Trigger ──sends─▶ Destination
-                       (5 min)         (threshold)         (email / webhook)
+                       (5 min)         (threshold)         (ntfy webhook)
 ```
 
 - **Monitors** in `monitors/` — one JSON file per monitor. Their actions
   publish to the notification channel `ntfy-homelab` (see "ntfy" below).
 - **Destinations** hold a token, so they're created via API after deploy
   (`wire-ntfy.py`), not stored in this repo.
-- **Channel notes** below cover ntfy (current), the retired SendGrid setup,
-  and the Uptime Kuma push-webhook idea.
+- **Channel notes** below cover ntfy (current) and the Uptime Kuma
+  push-webhook idea.
 
 ## Apply monitors
 
@@ -36,7 +36,7 @@ python3 infrastructure/opensearch/config/alerting/apply-monitors.py --ssh 83rr-p
 ```
 
 `wire-ntfy.py` is separate: it owns the `ntfy-homelab` channel (token) and only
-rewrites leftover SendGrid-format actions; it leaves these monitors alone.
+rewrites actions left in the old email-webhook format; it leaves these monitors alone.
 
 ### Rollout order for log-format / pipeline changes
 
@@ -131,15 +131,14 @@ docker exec ntfy ntfy token list alerts         # rotate: token add / token remo
 **OpenSearch:** `python3 infrastructure/opensearch/config/alerting/wire-ntfy.py`
 (re-runnable) creates/updates channel `ntfy-homelab` (webhook `http://ntfy/`
 on the infrastructure network, Bearer token read from `.env`) and rewrites any
-action still in SendGrid mail JSON into an ntfy JSON publish:
+action still in the old email-webhook JSON into an ntfy JSON publish:
 `{"topic":"homelab","title":…,"message":…,"priority":…}`. Priority follows the
 trigger severity (1→5 … 5→1). `--dry-run` shows the plan; `--test` /
 `--test-only` fire a one-off monitor through the channel. (OpenSearch's own
 "Send test message" button can't work here: its body isn't ntfy JSON.)
 
 **Uptime Kuma:** notification "ntfy → homelab" (type ntfy, server `http://ntfy`,
-access-token auth), linked to every monitor that had the SendGrid notification
-and set as the default for new monitors. `infrastructure/ntfy/kuma-ntfy.js`
+access-token auth), linked to every monitor and set as the default for new monitors. `infrastructure/ntfy/kuma-ntfy.js`
 does this from inside the container (`wire`, token on stdin) and sends a test
 through Kuma's own ntfy provider (`test`).
 
@@ -147,57 +146,6 @@ through Kuma's own ntfy provider (`test`).
 path and checks both landed in ntfy's cache. The Mac mini's weekly homelab
 check runs it every week (`act.sh alert-test`) and reports a failure as
 "alerting broken".
-
-### SendGrid email (retired 2026-10-31)
-
-Every alert from 2026-09-04 to 2026-10-31 failed with HTTP 401 "Maximum
-credits exceeded": the account is on SendGrid's retired free plan, which has
-0 send credits. The API key itself was valid. The old webhook channel
-`sendgrid-mail`, Kuma's SendGrid notification and `SENDGRID_API_KEY` were
-removed the same day. Kept below for reference only.
-
-Once you have a SendGrid API key with **Full Access** scope and a verified
-sender for `status@markcheli.com`:
-
-```bash
-export SENDGRID_API_KEY='SG.xxxxxxxx'
-docker exec opensearch curl -s -X POST "http://localhost:9200/_plugins/_alerting/destinations" \
-  -H 'Content-Type: application/json' \
-  -d "$(cat <<JSON
-{
-  "name": "sendgrid-email",
-  "type": "email",
-  "email": {
-    "email_account_id": "<email-account-id-from-step-below>",
-    "recipients": [{"type":"email","email":"mpcheli7@gmail.com"}]
-  }
-}
-JSON
-)"
-```
-
-OpenSearch's email destination needs an "email account" first, which holds
-the SMTP creds:
-
-```bash
-docker exec opensearch curl -s -X POST "http://localhost:9200/_plugins/_alerting/destinations/email_accounts" \
-  -H 'Content-Type: application/json' \
-  -d "$(cat <<JSON
-{
-  "name": "sendgrid-smtp",
-  "host": "smtp.sendgrid.net",
-  "port": 587,
-  "method": "start_tls",
-  "from": "status@markcheli.com",
-  "username": "apikey",
-  "password": "${SENDGRID_API_KEY}"
-}
-JSON
-)"
-```
-
-(SendGrid's SMTP convention: username is literally the string `apikey`,
-password is the API key itself.)
 
 ### Uptime Kuma webhook
 
@@ -357,3 +305,7 @@ internet scanner getting 404/301 paged as a healthcheck failure.
 Assistant", 60 s interval with retries), not by `nginx-5xx-burst`. HA runs on
 its own box and is restarted by hand; the HA phone app's reconnect loop then
 produces dozens of 502s that say nothing Kuma doesn't already know.
+
+## History
+
+- 2026-10-31: ntfy replaced email alerting (SendGrid, whose free plan had silently stopped sending on 2026-09-04); the old channel, Kuma notification and API key were removed.

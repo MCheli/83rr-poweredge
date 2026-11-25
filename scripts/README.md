@@ -215,8 +215,9 @@ Automated renewal script for Let's Encrypt wildcard certificates (*.ops.markchel
 
 **Cron Schedule:**
 ```cron
-0 3 * * * /home/mcheli/83rr-poweredge/scripts/renew-letsencrypt-certs.sh >> /var/log/letsencrypt-renewal.log 2>&1
+0 3 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh letsencrypt-renew /home/mcheli/83rr-poweredge/scripts/renew-letsencrypt-certs.sh >> /home/mcheli/letsencrypt/logs/renewal.log 2>&1
 ```
+(The whole crontab is versioned in `infrastructure/cron/crontab`.) Since 2026-11-25 the nginx test and reload pass both production compose files.
 
 **Manual Execution:**
 ```bash
@@ -506,7 +507,7 @@ scripts/logq.sh errors 0.25 tasks || echo "new errors after deploy"
 **Language:** Bash (runs on the server)
 
 **Description:**
-Dumps `cookbook-db` to `~/cookbook-backups/` (skipped on the first deploy), pulls `ghcr.io/mcheli/cookbook:latest`, creates `cookbook-db`/`cookbook-demo-db` only if missing (`--no-recreate`: it never restarts or upgrades a database), recreates `cookbook` and `cookbook-demo` with `--no-deps` (migrations run in the entrypoint; the demo reseeds Claudius Banks), waits for both health checks, then checks the public URLs: health, auth config, the public recipe count, and that a write to the demo is refused with 403. Uses `docker-compose.yml` + `docker-compose.prod.yml` explicitly, never the dev override file. Same shape as `tasks-deploy.sh`. Watchtower deploys new images on its own; this is the path with checks.
+Dumps `cookbook-db` to `~/cookbook-backups/` (skipped on the first deploy), pulls `ghcr.io/mcheli/cookbook:latest`, creates `cookbook-db`/`cookbook-demo-db` only if missing (`--no-recreate`: it never restarts or upgrades a database), recreates `cookbook` and `cookbook-demo` with `--no-deps` (migrations run in the entrypoint; the demo reseeds Claudius Banks), waits for both health checks, then checks the public URLs: health, auth config, the public recipe count, and that a write to the demo is refused with 403. Uses `docker-compose.yml` + `docker-compose.prod.yml` explicitly, never the dev override file. Same shape as `tasks-deploy.sh`, which also uses both production files since 2026-11-25 (it ran a bare `docker compose` before). Watchtower deploys new images on its own; this is the path with checks.
 
 **Usage:**
 ```bash

@@ -57,10 +57,10 @@ if [ -f "$LETSENCRYPT_DIR/config/live/status.markcheli.com/fullchain.pem" ]; the
 fi
 
 # Test NGINX configuration
-docker compose -f "$PROJECT_ROOT/docker-compose.yml" exec nginx nginx -t
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" -f "$PROJECT_ROOT/docker-compose.prod.yml" exec nginx nginx -t
 
 # Reload NGINX to apply new certificates
-docker compose -f "$PROJECT_ROOT/docker-compose.yml" exec nginx nginx -s reload
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" -f "$PROJECT_ROOT/docker-compose.prod.yml" exec nginx nginx -s reload
 
 echo "Certificate renewal completed successfully at $(date)"
 

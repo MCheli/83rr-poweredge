@@ -123,7 +123,7 @@ curl http://localhost:2020/api/v1/metrics
 # Reset position database (re-read all logs)
 docker compose stop fluent-bit
 docker run --rm -v 83rr-poweredge_fluent_bit_data:/data alpine rm -f /data/flb_docker.db
-docker compose up -d fluent-bit
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d fluent-bit
 ```
 
 ## Viewing Logs in OpenSearch

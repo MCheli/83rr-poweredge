@@ -195,13 +195,13 @@ make health
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Stop all services
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 
 # Restart a specific service
-docker compose restart <service_name>
+docker compose -f docker-compose.yml -f docker-compose.prod.yml restart <service_name>
 
 # Rebuild and restart a service
-docker compose up -d --build <service_name>
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build <service_name>
 
 # View logs
 docker compose logs -f <service_name>
@@ -313,9 +313,9 @@ python scripts/<script_name>.py
 
 ```bash
 # Make changes to configuration
-# Test deployment
-docker compose config
-docker compose up -d
+# Test deployment (on the server: production files, never the dev override)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Commit changes
 git add .

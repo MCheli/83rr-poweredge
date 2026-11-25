@@ -3,6 +3,9 @@
 # Watchtower also picks up new images on its own; this is the by-hand path with checks.
 set -euo pipefail
 cd ~/83rr-poweredge
+# Production files only: a plain `docker compose` would also load docker-compose.override.yml
+# (local development), which the runbooks say never to use on the server.
+dc() { docker compose -f docker-compose.yml -f docker-compose.prod.yml "$@"; }
 STAMP=$(date +%F-%H%M)
 mkdir -p ~/tasks-backups
 
@@ -11,11 +14,11 @@ docker exec tasks-db pg_dump -U tasks tasks | gzip > ~/tasks-backups/tasks-$STAM
 ls -la ~/tasks-backups/tasks-$STAMP.sql.gz
 
 echo "== pull"
-docker compose pull tasks tasks-demo 2>&1 | tail -3
+dc pull tasks tasks-demo 2>&1 | tail -3
 
 echo "== restart (migrations run in the entrypoint; the demo also reseeds Claudius)"
-docker compose up -d --no-deps tasks 2>&1 | tail -3
-docker compose up -d tasks-demo-db tasks-demo 2>&1 | tail -3
+dc up -d --no-deps tasks 2>&1 | tail -3
+dc up -d tasks-demo-db tasks-demo 2>&1 | tail -3
 
 for svc in tasks tasks-demo; do
   for i in $(seq 1 40); do

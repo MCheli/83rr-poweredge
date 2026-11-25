@@ -1,0 +1,25 @@
+# Let's Encrypt certificate renewal for *.ops.markcheli.com
+# Runs daily at 3:00 AM
+0 3 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh letsencrypt-renew /home/mcheli/83rr-poweredge/scripts/renew-letsencrypt-certs.sh >> /home/mcheli/letsencrypt/logs/renewal.log 2>&1
+
+# Daily backup to NAS at 2:00 AM
+0 2 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh backup /home/mcheli/83rr-poweredge/scripts/backup.sh >> /home/mcheli/83rr-poweredge/logs/backup.log 2>&1
+*/5 * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh host-metrics /home/mcheli/83rr-poweredge/scripts/emit_host_metrics.sh >> /home/mcheli/83rr-poweredge/logs/host_metrics.log 2>&1
+*/10 * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh security-telemetry /home/mcheli/83rr-poweredge/scripts/emit_security_telemetry.sh >> /home/mcheli/83rr-poweredge/logs/security_telemetry.log 2>&1
+0 8 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh tallied-demo-reseed docker restart tallied-demo >> /home/mcheli/83rr-poweredge/logs/tallied-demo-reseed.log 2>&1  # Tallied public demo: restart reseeds Claudius
+30 8 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh tasks-demo-reseed docker restart tasks-demo >> /home/mcheli/83rr-poweredge/logs/tasks-demo-reseed.log 2>&1  # Tasks public demo: restart reseeds Claudius
+30 3 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh sbom-scan /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1
+30 8 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh cookbook-demo-reseed docker restart cookbook-demo >> /home/mcheli/83rr-poweredge/logs/cookbook-demo-reseed.log 2>&1  # Cookbook public demo: restart reseeds demo data
+
+# AI Context trial (infrastructure/ai-context/README.md): mirror Seafile -> /data/ai-context, local git history
+# disabled 2026-11-23 (AI Context cut-over: the server is the main copy; Seafile receives pushes instead)
+#*/30 * * * * python3 /data/ai-context/bin/seafile-pull.py --config /data/ai-context/pull-config.json >> /data/ai-context/logs/seafile-pull.log 2>&1
+*/15 * * * * AUTOCOMMIT_PUSH_REPOS=/data/ai-context/notes /home/mcheli/83rr-poweredge/scripts/cron-notify.sh ai-context-autocommit /data/ai-context/bin/git-autocommit.sh /data/ai-context/notes /data/ai-context/raw >> /data/ai-context/logs/git-autocommit.log 2>&1
+*/30 * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh seafile-backup-push python3 /data/ai-context/bin/seafile-backup-push.py --config /data/ai-context/push-config.json >> /data/ai-context/logs/seafile-backup-push.log 2>&1
+7 * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh recent-ai-changes python3 /data/ai-context/bin/recent-ai-changes.py >> /data/ai-context/logs/recent-ai-changes.log 2>&1
+20 4 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh seafile-pull-work python3 /data/ai-context/bin/seafile-pull.py --config /data/ai-context/pull-work-config.json >> /data/ai-context/logs/seafile-pull-work.log 2>&1
+# Home Assistant auto-update (docs/home-assistant-auto-update.md): 04:15 America/New_York; server is UTC, --at-hour keeps the right firing
+15 8,9 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh ha-auto-update /home/mcheli/83rr-poweredge/scripts/ha-auto-update.py --at-hour 4 >/dev/null 2>&1
+
+# Alert metrics for Grafana (cert expiry, UPS state): docs/OBSERVABILITY.md#alerting
+* * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh alert-metrics /home/mcheli/83rr-poweredge/scripts/emit_alert_metrics.sh >> /home/mcheli/83rr-poweredge/logs/alert_metrics.log 2>&1
