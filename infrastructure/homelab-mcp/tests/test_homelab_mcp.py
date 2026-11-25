@@ -757,8 +757,20 @@ def test_env_set_replaces_appends_and_never_prints_values(tmp_path):
     assert "s3cret" not in r.stdout + r.stderr and "AAAAC3" not in r.stdout
     assert env_file.read_text() == "A=1\nHOMELAB_MCP_X=s3cret-value\n# c\nHOMELAB_MCP_KEY='ssh-ed25519 AAAAC3'\n"
     assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
-    (backup,) = tmp_path.glob(".env.bak-*")
+    (backup,) = tmp_path.glob(".env.bak*")
+    assert backup.name == ".env.bak"
     assert "old" in backup.read_text() and stat.S_IMODE(backup.stat().st_mode) == 0o600
+
+
+def test_env_set_keeps_one_backup_overwritten_each_run(tmp_path):
+    (tmp_path / ".env").write_text("A=1\n")
+    (tmp_path / ".env.bak").write_text("STALE=1\n")
+    (tmp_path / ".env.bak").chmod(0o644)
+    assert run_env_set(tmp_path, "A=2\n").returncode == 0
+    assert run_env_set(tmp_path, "A=3\n").returncode == 0
+    (backup,) = tmp_path.glob(".env.bak*")
+    assert backup.read_text() == "A=2\n" and stat.S_IMODE(backup.stat().st_mode) == 0o600
+    assert (tmp_path / ".env").read_text() == "A=3\n"
 
 
 def test_env_set_if_missing_keeps_existing(tmp_path):
@@ -773,4 +785,4 @@ def test_env_set_refuses_bad_input(tmp_path, stdin):
     (tmp_path / ".env").write_text("A=1\n")
     r = run_env_set(tmp_path, stdin)
     assert r.returncode == 2 and (tmp_path / ".env").read_text() == "A=1\n"
-    assert not list(tmp_path.glob(".env.bak-*"))
+    assert not list(tmp_path.glob(".env.bak*"))
