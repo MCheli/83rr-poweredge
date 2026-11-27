@@ -651,15 +651,28 @@ services:
     depends_on:
       tallied-db:
         condition: service_healthy
-    env_file: .env
+    # Explicit environment only (no env_file): the app's settings are its FINANCE_* fields
+    # (backend/app/config.py) plus APP_ROLE. tallied-scheduler takes the same list.
     environment:
       - APP_ROLE=web
+      - TZ=${TZ:-}
       - DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_BASE_URL=https://money.markcheli.com
       - FINANCE_DEV_MODE=false
       - FINANCE_CREDENTIAL_KEY=${TALLIED_CREDENTIAL_KEY}
       - FINANCE_DEMO_URL=https://money-demo.markcheli.com
+      - FINANCE_SECRET_KEY=${FINANCE_SECRET_KEY}
+      - FINANCE_API_KEY_PEPPER=${FINANCE_API_KEY_PEPPER}
+      - FINANCE_GOOGLE_CLIENT_ID=${FINANCE_GOOGLE_CLIENT_ID}
+      - FINANCE_GOOGLE_CLIENT_SECRET=${FINANCE_GOOGLE_CLIENT_SECRET}
+      - FINANCE_ANTHROPIC_API_KEY=${FINANCE_ANTHROPIC_API_KEY}
+      - FINANCE_RAPIDAPI_KEY=${FINANCE_RAPIDAPI_KEY}
+      - FINANCE_EMAIL_WEBHOOK_SECRET=${FINANCE_EMAIL_WEBHOOK_SECRET}
+      - FINANCE_DB_PUBLIC_HOST=${FINANCE_DB_PUBLIC_HOST}
+      - FINANCE_DB_PUBLIC_PORT=${FINANCE_DB_PUBLIC_PORT}
+      - FINANCE_DEV_USER_EMAIL=${FINANCE_DEV_USER_EMAIL}
+      - FINANCE_DEV_USER_PASSWORD=${FINANCE_DEV_USER_PASSWORD}
     networks:
       - infrastructure
     healthcheck:
@@ -681,15 +694,26 @@ services:
         condition: service_healthy
       tallied:
         condition: service_healthy
-    env_file: .env
     command: ["python", "-m", "app.scheduler"]
     environment:
       - APP_ROLE=scheduler
+      - TZ=${TZ:-}
       - DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_DATABASE_URL=postgresql://tallied_app:${TALLIED_APP_DB_PASSWORD}@tallied-db:5432/tallied
       - FINANCE_BASE_URL=https://money.markcheli.com
       - FINANCE_DEV_MODE=false
       - FINANCE_CREDENTIAL_KEY=${TALLIED_CREDENTIAL_KEY}
+      - FINANCE_SECRET_KEY=${FINANCE_SECRET_KEY}
+      - FINANCE_API_KEY_PEPPER=${FINANCE_API_KEY_PEPPER}
+      - FINANCE_GOOGLE_CLIENT_ID=${FINANCE_GOOGLE_CLIENT_ID}
+      - FINANCE_GOOGLE_CLIENT_SECRET=${FINANCE_GOOGLE_CLIENT_SECRET}
+      - FINANCE_ANTHROPIC_API_KEY=${FINANCE_ANTHROPIC_API_KEY}
+      - FINANCE_RAPIDAPI_KEY=${FINANCE_RAPIDAPI_KEY}
+      - FINANCE_EMAIL_WEBHOOK_SECRET=${FINANCE_EMAIL_WEBHOOK_SECRET}
+      - FINANCE_DB_PUBLIC_HOST=${FINANCE_DB_PUBLIC_HOST}
+      - FINANCE_DB_PUBLIC_PORT=${FINANCE_DB_PUBLIC_PORT}
+      - FINANCE_DEV_USER_EMAIL=${FINANCE_DEV_USER_EMAIL}
+      - FINANCE_DEV_USER_PASSWORD=${FINANCE_DEV_USER_PASSWORD}
     networks:
       - infrastructure
     healthcheck:
@@ -786,8 +810,9 @@ services:
     depends_on:
       tasks-db:
         condition: service_healthy
-    env_file: .env
+    # Explicit environment only (no env_file): the app reads only TASKS_* (backend/app/config.py).
     environment:
+      - TZ=${TZ:-}
       - TASKS_ENV=${TASKS_ENV}
       - TASKS_ENABLE_DOCS=${TASKS_ENABLE_DOCS}
       - TASKS_DATABASE_URL=${TASKS_DATABASE_URL}
@@ -950,7 +975,8 @@ services:
     logging: *default-logging
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
-    env_file: .env
+    # Explicit environment only (no env_file): these are every name the image reads that .env
+    # holds. Its GitHub section shells out to `gh`, which the image doesn't ship.
     environment:
       - TZ=America/New_York
       # Scheduled printing paused 2026-11-23: the thermal printer is unplugged. An empty
@@ -1074,8 +1100,10 @@ services:
     depends_on:
       energy-monitor-db:
         condition: service_healthy
-    env_file: .env
+    # Explicit environment only (no env_file): the app reads DATABASE_URL, SECRET_KEY and
+    # PANEL_TOOL_* (panel-tool/app/config.py).
     environment:
+      - TZ=${TZ:-}
       # Explicit +psycopg2: SQLAlchemy 2.1 made psycopg (v3) the default for
       # postgresql://, and the image only ships psycopg2-binary.
       - DATABASE_URL=postgresql+psycopg2://panel_tool:${ENERGY_MONITOR_DB_PASSWORD}@energy-monitor-db:5432/panel_tool
