@@ -2,7 +2,7 @@
 
 This directory contains all active infrastructure management scripts for the 83RR PowerEdge homelab.
 
-**Last Updated:** November 25, 2026
+**Last Updated:** November 27, 2026
 **Infrastructure Version:** Phase 6 (NGINX + Cloudflare + Docker Compose)
 **Architecture:** Local execution (Docker Compose + Makefile)
 
@@ -732,6 +732,31 @@ scripts/backup.sh --only ai-context   # AI Context mirror + basic-memory DB + ho
 
 ---
 
+### 24. `ha-unifi-bandwidth-guard.py` 🚀 HA UNIFI BANDWIDTH ALLOWLIST
+**Purpose:** Keep Home Assistant's UniFi per-client RX/TX sensors to a short allowlist, so the recorder doesn't fill with every client's rate
+**Size:** 10KB (+ `test_ha_unifi_bandwidth_guard.py`, unit tests for the filter and websocket framing)
+**Language:** Python 3 (standard library only, including a minimal websocket client; runs on the server from cron)
+
+**Description:**
+The UniFi integration's bandwidth option creates an RX and a TX sensor for every client, and those for clients that join later arrive **enabled**. Every 10 minutes this job reads HA's entity registry over the LAN websocket API (`HA_URL`, default `http://192.168.1.121:8123`) and sets `disabled_by: user` on every enabled UniFi client RX/TX sensor (unique_id `rx-<mac>` / `tx-<mac>`) whose MAC isn't allowlisted. Built-in allowlist: R630, DESKTOP-G2025 (gaming PC), Mac mini (wired), Meta Quest 3, MarksNAS; `HA_BANDWIDTH_ALLOW` (comma-separated MACs) replaces it. It never enables anything and never touches port RX/TX sensors, trackers, other entities or the integration options. Quiet runs log nothing; runs that disable something append the entity ids to `logs/ha-unifi-bandwidth-guard.log` (no secrets). Uses the `HA_AUTO_UPDATE_TOKEN` that `ha-auto-update.py` already has in `.env`.
+
+**Usage:**
+```bash
+scripts/ha-unifi-bandwidth-guard.py --dry-run            # what it would disable, changes nothing
+scripts/ha-unifi-bandwidth-guard.py                      # a real run (what cron runs)
+python3 -m unittest scripts/test_ha_unifi_bandwidth_guard.py
+# cron (mcheli, every 10 minutes):
+#   */10 * * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh ha-unifi-bandwidth-guard /home/mcheli/83rr-poweredge/scripts/ha-unifi-bandwidth-guard.py >/dev/null 2>&1
+```
+
+**When to Use:**
+- Runs itself; to add a device's bandwidth, add its MAC to the allowlist (or `HA_BANDWIDTH_ALLOW`) and re-enable its two sensors in HA
+- Not needed if the UniFi bandwidth option is turned off again
+
+**Referenced in:** this file (set up 2026-11-27 with the HA "Network" dashboard and alerts)
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -751,6 +776,8 @@ scripts/
 ├── cookbook-deploy.sh               # 🏗️ Cookbook app + demo deploy with checks
 ├── ha-auto-update.py                # 🏗️ Daily Home Assistant updates (soak, backup, health checks)
 ├── test_ha_auto_update.py           # Unit tests for ha-auto-update.py
+├── ha-unifi-bandwidth-guard.py      # 🚀 HA UniFi RX/TX sensors: keep only the allowlist (cron */10)
+├── test_ha_unifi_bandwidth_guard.py # Unit tests for ha-unifi-bandwidth-guard.py
 ├── ssh_manager.py                   # ⚠️ Emergency SSH
 ├── ai-context/                      # 🔄 Notes vault: bm.py (basic-memory client) + BM-CLIENT.md, recent-ai-changes.py, git-autocommit.sh, seafile-backup-push.py, seafile-pull.py (retired)
 ├── one-time/                        # One-time setup scripts
