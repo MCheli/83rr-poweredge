@@ -106,6 +106,13 @@ mode (DSM's clean shutdown) when the R630 declares FSD.
   No other host can reach upsd. If the NAS's address ever changes, update `NAS_IP` in
   install.sh and the ufw rule (`sudo ufw status numbered`, delete the old one).
 - `nut.conf` is `MODE=netserver` (was `standalone`) to match.
+- **No mDNS:** the nut-server package ships `/etc/avahi/services/nut.service`, which
+  advertises `_nut._tcp` on the LAN. Nothing uses it (the NAS is set up by IP, and ufw
+  admits only the NAS), and avahi logged ~13,000 "not fitting in legacy unicast packet"
+  warnings a week for it, the largest share of the weekly report's warnings. Since
+  2026-11-28 install.sh diverts it to `nut.service.disabled` with `dpkg-divert`, so
+  package upgrades keep it off. avahi notices the file is gone and drops the record by
+  itself, with no restart.
 
 ## Kill-power (off)
 
@@ -203,6 +210,7 @@ never blocks the shutdown, and the token is never on a command line or in a log.
 | `sudoers-nut-pre-shutdown` | `/etc/sudoers.d/nut-pre-shutdown` (440, root:root) | user `nut` may run exactly `/etc/nut/pre-shutdown.sh` (no arguments) as root; checked with `visudo -c` |
 | `nut-server-network-online.conf` | `/etc/systemd/system/nut-server.service.d/83rr-network-online.conf` (644) | upsd starts after `network-online.target` |
 | (install.sh) | ufw rule | TCP 3493 from 192.168.1.201 (the NAS) only |
+| (install.sh) | `/etc/avahi/services/nut.service` → `nut.service.disabled` | local dpkg diversion: no `_nut._tcp` mDNS advertisement |
 | (generated) | `/etc/nut/ntfy.env` | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` (from the repo `.env`), `NTFY_CACERT` |
 | `../nginx/certs/wildcard-markcheli.crt` | `/etc/nut/ntfy-origin.crt` (644) | public cert, pinned for the local push |
 
@@ -315,5 +323,6 @@ stays in): `sudo upsmon -c fsd`.
 sudo systemctl disable --now nut-monitor nut-server nut-driver-enumerator.path nut-driver.target
 sudo rm /etc/sudoers.d/nut-pre-shutdown /etc/systemd/system/nut-server.service.d/83rr-network-online.conf
 sudo ufw delete allow proto tcp from 192.168.1.201 to any port 3493
+sudo dpkg-divert --local --rename --remove /etc/avahi/services/nut.service   # mDNS advertisement back
 sudo apt-get remove nut-server nut-client      # /etc/nut stays; *.dist are the package originals
 ```

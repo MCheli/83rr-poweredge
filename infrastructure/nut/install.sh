@@ -29,6 +29,8 @@
 #   - nut-server drop-in: start after network-online.target (upsd LISTENs on
 #     the LAN address for the Synology NAS)
 #   - ufw: allow TCP 3493 from the NAS (NAS_IP) only
+#   - no mDNS advertisement: the package's /etc/avahi/services/nut.service is
+#     diverted to nut.service.disabled (dpkg-divert, so upgrades keep it off)
 #   - enables + restarts the driver enumerator, nut-server and nut-monitor
 # With the UPS USB cable not plugged in yet the driver (nut-driver@ups)
 # simply fails to find it and systemd keeps retrying; nothing shuts down.
@@ -54,12 +56,13 @@ DROPIN_FILE=${DROPIN_DIR}/83rr-network-online.conf
 HA_ENV="${NUT_DIR}/ha.env"
 WOL_IF=eno1                  # uplink, MAC ec:f4:bb:e6:f7:f4 (matched in the .link file)
 WOL_LINK=/etc/systemd/network/10-83rr-eno1-wol.link
+AVAHI_NUT=/etc/avahi/services/nut.service  # shipped by nut-server; advertises _nut._tcp
 
 CHECK_ONLY=false
 case "${1:-}" in
     "") ;;
     --check) CHECK_ONLY=true ;;
-    -h|--help) sed -n '2,34p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (use --check or nothing)" >&2; exit 2 ;;
 esac
 
@@ -91,6 +94,7 @@ status() {
     printf '  %-28s %s\n' "sudoers rule" "$([[ -e "$SUDOERS_FILE" ]] && echo "$SUDOERS_FILE" || echo MISSING)"
     printf '  %-28s %s\n' "nut-server drop-in" "$([[ -e "$DROPIN_FILE" ]] && echo "$DROPIN_FILE" || echo MISSING)"
     printf '  %-28s %s\n' "WoL .link file" "$([[ -e "$WOL_LINK" ]] && echo "$WOL_LINK" || echo MISSING)"
+    printf '  %-28s %s\n' "mDNS _nut._tcp" "$([[ -e "$AVAHI_NUT" ]] && echo "advertised (${AVAHI_NUT} present)" || echo off)"
     if [[ $EUID -eq 0 ]]; then
         printf '  %-28s %s\n' "${WOL_IF} Wake-on" "$(ethtool "$WOL_IF" 2>/dev/null | awk -F': ' '/^[[:space:]]*Wake-on:/ {print $2}') (want g)"
         local ha="MISSING"
@@ -265,6 +269,13 @@ if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; the
 else
     echo "  WARNING: ufw not active; upsd on ${LAN_IP}:${NUT_PORT} is not firewalled"
 fi
+
+echo "== mDNS (no _nut._tcp advertisement)"
+# The NAS is set up by IP and ufw admits only the NAS, so advertising upsd on the
+# LAN helps nobody, and avahi logged ~13,000 "not fitting in legacy unicast
+# packet" warnings a week for it. avahi watches its services directory and drops
+# the record by itself: no restart. Idempotent; undo: README.md "Roll back".
+dpkg-divert --local --rename --divert "${AVAHI_NUT}.disabled" --add "$AVAHI_NUT" | sed 's/^/  /'
 
 echo "== /run/nut"
 if [[ ! -d /run/nut ]]; then
