@@ -1,14 +1,15 @@
 # NGINX Reverse Proxy for 83RR PowerEdge Infrastructure
 # Supports both development (localhost) and production (domain) routing
 
-# Pinned (was floating nginx:alpine). 1.30.7 (2026-11-21, was 1.30.6) is the
-# 2026-11-18 nginx security release (HTTP/2, HTTP/3, resolver, TLS 1.3 fixes);
-# 1.30.6 already covered CVE-2026-15176 and CVE-2026-97629. Digest-pinned:
-# bump tag and digest together.
-FROM nginx:1.30.7-alpine@sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3
+# Pinned (was floating nginx:alpine). 1.30.8 (bumped 2026-11-28, was 1.30.7) fixes
+# CVE-2026-132779 (this config doesn't enable ssl_early_data); 1.30.7 was the
+# 2026-11-18 nginx security release (HTTP/2, HTTP/3, resolver, TLS 1.3 fixes).
+# Alpine 3.24 base. Digest-pinned: bump tag and digest together.
+FROM nginx:1.30.8-alpine@sha256:8eb04fe3b385090e9aa02961f77398ad09b6bf33ab07f6669a5bb7acce22c0d3
 
-# Pick up Alpine security fixes newer than the base image (e.g. zlib 1.4-r0, brotli-libs
-# for CVE-2026-111497). Install OpenSSL for certificate generation and
+# Pick up Alpine security fixes newer than the base image (the 1.30.8 base still has
+# zlib 1.3.2-r1 and libxml2 2.13.9-r3; this gets zlib 1.4-r0 and libxml2 2.13.9-r5).
+# Install OpenSSL for certificate generation and
 # envsubst for environment substitution
 RUN apk upgrade --no-cache && apk add --no-cache openssl gettext
 
