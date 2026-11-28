@@ -101,6 +101,11 @@ class InfrastructureHealthTest:
                 'expected_content': '"status"',
                 'description': 'Knowledge (notes vault reader) API health'
             },
+            'knowledge-demo': {
+                'url': 'https://knowledge-demo.markcheli.com/api/auth/config',
+                'expected_content': '"demo_mode":true',
+                'description': 'Knowledge public demo (made-up notes, rebuilt nightly)'
+            },
             'uptime-kuma': {
                 # "/" is a deliberate nginx 302 to the public status page.
                 'url': 'https://status.markcheli.com/status/homelab',
@@ -184,6 +189,7 @@ class InfrastructureHealthTest:
             'tasks-demo.markcheli.com',
             'cookbook-demo.markcheli.com',
             'knowledge.markcheli.com',
+            'knowledge-demo.markcheli.com',
             'status.markcheli.com',
             'minecraft.markcheli.com',
             'dashboard.ops.markcheli.com',
@@ -228,6 +234,7 @@ class InfrastructureHealthTest:
             'tasks-db': {'status': 'running', 'health': 'healthy'},
             'tasks-demo': {'status': 'running', 'health': 'healthy'},
             'tasks-demo-db': {'status': 'running', 'health': 'healthy'},
+            'knowledge-demo': {'status': 'running', 'health': 'healthy'},
             'daily-report': {'status': 'running', 'health': 'healthy'},
             'energy-monitor': {'status': 'running', 'health': 'healthy'},
             'energy-monitor-db': {'status': 'running', 'health': 'healthy'},

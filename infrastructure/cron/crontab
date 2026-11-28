@@ -10,6 +10,7 @@
 30 8 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh tasks-demo-reseed docker restart tasks-demo >> /home/mcheli/83rr-poweredge/logs/tasks-demo-reseed.log 2>&1  # Tasks public demo: restart reseeds Claudius
 30 3 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh sbom-scan /home/mcheli/83rr-poweredge/scripts/sbom-scan.sh >/dev/null 2>&1
 30 8 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh cookbook-demo-reseed docker restart cookbook-demo >> /home/mcheli/83rr-poweredge/logs/cookbook-demo-reseed.log 2>&1  # Cookbook public demo: restart reseeds demo data
+30 8 * * * /home/mcheli/83rr-poweredge/scripts/cron-notify.sh knowledge-demo-reseed docker restart knowledge-demo >> /home/mcheli/83rr-poweredge/logs/knowledge-demo-reseed.log 2>&1  # Knowledge public demo: restart regenerates the vault, forgets visitors' edits
 
 # AI Context trial (infrastructure/ai-context/README.md): mirror Seafile -> /data/ai-context, local git history
 # disabled 2026-11-23 (AI Context cut-over: the server is the main copy; Seafile receives pushes instead)
