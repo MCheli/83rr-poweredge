@@ -241,7 +241,11 @@ services:
     # 3.9.0 (2026-11-01, was 3.2.0): in-place minor upgrade, no index migration.
     # One-way: once 3.9 has written to the volume, 3.2 can't open it again, so
     # tar the volume before the bump and restore that tarball to roll back.
-    image: opensearchproject/opensearch:3.9.0@sha256:3b55f6b6249cfdb92b52ee59adc8a266203ba9ef9f5d82544fad6f1af2f3609e
+    # 3.10.1 (2026-11-28, was 3.9.0): bundled JDK 25.0.5.1, Reactor Netty 1.3.9.
+    # 3.10.0's only breaking changes remove the experimental Views feature and
+    # the macOS/x64 archives (neither used). Same one-way rule: tar
+    # opensearch_data first. Dashboards 3.10.0 is the newest 3.10 build.
+    image: opensearchproject/opensearch:3.10.1@sha256:02358b2be62b268a404a54581184d027ac0dfa8f875be15fe4c4fa3f8884f464
     container_name: opensearch
     restart: unless-stopped
     logging: *default-logging
@@ -283,8 +287,10 @@ services:
   # OpenSearch Dashboards (Logging UI)
   # ═════════════════════════════════════════════════════════════════════════════
   opensearch-dashboards:
-    # MUST match the opensearch version above.
-    image: opensearchproject/opensearch-dashboards:3.9.0@sha256:256d4cea5928868ac09bca642a0ac8285a2b7e4b7fdd45c4ec06e75a5cf3184c
+    # MUST match the opensearch version above (same major.minor; there is no
+    # Dashboards 3.10.1, and 3.10.0 runs against OpenSearch 3.10.1).
+    # 3.10.0 (2026-11-28, was 3.9.0): bundles Node 22.23.4 (was 22.23.0).
+    image: opensearchproject/opensearch-dashboards:3.10.0@sha256:90e839fc7fb3ac80fbe87b0a08fe378ed9b7cb52fcbafa08840915f2b152bcf1
     container_name: opensearch-dashboards
     restart: unless-stopped
     logging: *default-logging
@@ -1220,7 +1226,9 @@ services:
     # Patch bumps within 10.11: docs/seafile-db-mariadb-10.11.19.md
     # 2026-11-21: same-tag digest refresh (upstream rebuild 2026-11-20 on a
     # fresh Ubuntu base; same MariaDB 10.11.19).
-    image: mariadb:10.11.19@sha256:e5fe75b2b9de0eb9f6f9a4d9c97272fb3a7480e389ccd487a786bab2a12cc0d7
+    # 10.11.20 (2026-11-28, was 10.11.19): MariaDB Q4 security release. Patch
+    # bump within 10.11, same procedure as the 10.11.19 runbook (dump first).
+    image: mariadb:10.11.20@sha256:aed943ea1f5904cc600bc1459fb25fe09b1a4cf76b6c1ef9a65af57a8b9f1738
     container_name: seafile-db
     restart: unless-stopped
     logging: *default-logging
