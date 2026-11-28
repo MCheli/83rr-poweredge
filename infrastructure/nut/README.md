@@ -221,6 +221,18 @@ Installing before the cable is in is fine.
 PR1500LCDRT2U), `ups.status` `OL`, `ups.load` 28 % of 1000 W (≈ 280 W, close to Home
 Assistant's "Server Wattage" plug at ≈ 296 W), `battery.runtime` 1500 s at that load.
 
+**The 72 "Failed to start nut-driver@cp1500" lines** in the weekly report of 2026-11-28
+come from that install and nothing later. Between 14:37:53 and 14:55:27 UTC on 2026-11-25 the
+driver (then still named `cp1500`) was enabled while the UPS had no USB link, and systemd
+restarted it every ~15 s ("No matching HID UPS found"). The extra "insufficient permissions
+on everything" line refers to the Dell hubs and the iDRAC virtual NIC, not to the UPS. The
+kernel first saw `idVendor=0764` at 14:55:21 when the cable went in (one reconnect at
+14:55:28). Checked 2026-11-28: no driver errors and no USB disconnects since the 15:56 boot,
+`upsc` OL at 100 %, NAS still a client. The lines drop out of the 7-day window on
+2026-12-02. If driver failures show up again, check
+`journalctl -k | grep -E 'idVendor=0764|USB disconnect'` first: a 0764 disconnect means the
+cable or port.
+
 ## Install
 
 On the server, from the repo checkout:
