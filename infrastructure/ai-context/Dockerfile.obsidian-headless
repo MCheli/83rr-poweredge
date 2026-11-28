@@ -1,10 +1,14 @@
 # Obsidian Sync headless client (official, open beta): https://obsidian.md/help/sync/headless
 # Runs `ob sync --continuous` for one vault. Login and vault setup are one-off
 # `docker compose run` steps (see README.md); state lives in a named volume.
-FROM node:22-alpine
+# Pinned (was floating node:22-alpine): Node 22.23.5 (Nov 11 Node security
+# release) on Alpine 3.24. Digest-pinned: bump tag and digest together.
+FROM node:22.23.5-alpine3.24@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
 
 ARG OBSIDIAN_HEADLESS_VERSION=0.0.14
-RUN npm install -g "obsidian-headless@${OBSIDIAN_HEADLESS_VERSION}" \
+# apk upgrade: Alpine fixes newer than the base image (zlib 1.4-r0; the base has 1.3.2-r1).
+RUN apk upgrade --no-cache \
+    && npm install -g "obsidian-headless@${OBSIDIAN_HEADLESS_VERSION}" \
     && npm cache clean --force
 
 # node = uid/gid 1000 in the official image; matches the deploy user on the host

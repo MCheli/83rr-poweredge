@@ -1,8 +1,9 @@
 # homelab-mcp: claude.ai connector (Seafile "AI Context" reader + Mac mini session bus over LAN ssh).
 # Built on the server from this repo (not published to GHCR, not watchtower-managed):
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml build homelab-mcp
-# Pinned (was floating 3.13-slim); rebuild picks up the current Debian base.
-FROM python:3.13.18-slim
+# Pinned (was floating 3.13-slim). Digest-pinned since 2026-11-28 (the
+# 2026-11-28 Debian trixie rebuild); bump tag and digest together.
+FROM python:3.13.18-slim@sha256:168d3a5d10f2152f8e8d77b6843ac82c22a846cfefeef7afdf9aa630404e82a7
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -10,8 +11,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     FASTMCP_HOME=/data
 
-# ssh client only, for the optional session-bus tools (outbound to the Mac mini on the LAN).
+# Debian security updates newer than the pinned base (openssl and friends), then
+# the ssh client only, for the optional session-bus tools (outbound to the Mac mini on the LAN).
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends openssh-client \
     && rm -rf /var/lib/apt/lists/*
 

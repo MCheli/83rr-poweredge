@@ -6,7 +6,7 @@ NGINX serves as the main reverse proxy and SSL termination point for all service
 
 - **Role**: Reverse proxy, SSL termination, load balancing
 - **Ports**: 80 (HTTP), 443 (HTTPS), 25565 (Minecraft TCP passthrough)
-- **Image**: nginx:1.30.7-alpine (custom Dockerfile, digest-pinned)
+- **Image**: nginx:1.30.8-alpine (custom Dockerfile, digest-pinned)
 
 ## Architecture
 
