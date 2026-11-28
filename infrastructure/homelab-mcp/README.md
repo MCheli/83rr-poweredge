@@ -13,7 +13,9 @@ Anthropic's cloud and can't see the LAN. It lets Claude:
   work (repos, files, ssh back to this server, Home Assistant). The mini has no
   public port and no tunnel, and
 - over that same link, read Mark's **iMessages, live and read-only**
-  (`imessage_*` tools, since 2026-11-23), so Claude can spot texts that need him.
+  (`imessage_*` tools, since 2026-11-23), so Claude can spot texts that need him,
+  and **send** one into a chat that already exists (`imessage_send`, since
+  2026-11-28; limited on the mini, see below).
 
 ```
 claude.ai ──HTTPS──▶ Cloudflare ──▶ nginx (mcp.markcheli.com) ──▶ homelab-mcp:8000
@@ -22,6 +24,7 @@ claude.ai ──HTTPS──▶ Cloudflare ──▶ nginx (mcp.markcheli.com) �
                                                                      ├─▶ basic-memory:8000/mcp (MCP client, 6 read + write/edit, project pinned)
                                                                      └─▶ ssh (LAN) ─▶ Mac mini bus-gateway ─┬─▶ session-bus
                                                                                                            └─▶ iMessage service (0600 socket) ─▶ chat.db, mode=ro
+                                                                                                                                                 └─ imessage_send ─▶ Messages.app
 ```
 
 ## Tools
@@ -81,8 +84,8 @@ With `BUS_SSH_TARGET` set, these are added (otherwise they don't exist):
 
 `bus_config` and `bus_setup` are never offered.
 
-With `BUS_SSH_TARGET` set these four **read-only iMessage tools** are added too
-(`app/imessage.py`). They travel over the same ssh link to bus-gateway, which
+With `BUS_SSH_TARGET` set these four **read-only iMessage tools** and
+`imessage_send` are added too (`app/imessage.py`). They travel over the same ssh link to bus-gateway, which
 hands them to the iMessage service on the mini; this container never sees
 chat.db, and nothing new listens anywhere. Answers are near-real-time (what
 Messages has right now, seconds old).
@@ -93,6 +96,10 @@ Messages has right now, seconds old).
 | `imessage_search(query, contact, since, limit)` | Case-insensitive text search; `contact` (name, phone or email) limits it to chats that person is in |
 | `imessage_threads(since, limit)` | Chats with recent activity: participants, last message time + preview, `incoming_since_my_last_reply` |
 | `imessage_unanswered(hours, limit)` | Incoming messages (default last 48 h) Mark hasn't followed with a message or tapback in that chat; group chats included and marked |
+| `imessage_send(chat, text, image_base64?, image_filename?)` | Sends as Mark into one **existing** chat through Messages on the mini, then returns the message as read back from chat.db (`status` sent / delivered / pending) or an error. Labelled as acting (claude.ai asks first). |
+
+`imessage_threads` rows carry `chat_id` (the chat's guid), the most precise way
+to name a chat for `imessage_send`.
 
 Guarantees, all enforced on the mini (`mac-mini-collector`, `collector/imessage_service.py`):
 chat.db is opened `file:…?mode=ro` with `PRAGMA query_only` and nothing can be
@@ -102,6 +109,31 @@ nightly collector's filter, tapbacks and system rows are skipped; `limit` is
 1–100 (default 25), each text is cut at 1,000 characters and each answer kept
 under 50 KB; inputs are validated and SQL is parameterized; logs on both ends
 carry counts and timings only, never message text, names or handles.
+
+`imessage_send` limits, all enforced on the mini (`collector/imessage_send.py`
+and bus-gateway), whatever this server sends:
+
+- **Existing chats only, never guessed.** `chat` must match exactly one chat in
+  chat.db that has messages: its `chat_id`, identifier, a 1:1 chat's phone
+  number or email, the contact's full name, or a group's name as
+  `imessage_threads` shows it. No match, or more than one, is an error listing
+  the candidates (with `chat_id`); nothing is sent to a new recipient.
+- **Size:** text up to 2,000 characters; at most one PNG/JPEG/HEIC/GIF image
+  up to 10 MB (checked by its bytes), in a private temp folder deleted once
+  Messages has its copy.
+- **Rate:** at most 10 sends per rolling hour.
+- **Audit:** an append-only log on the mini (time, chat, SHA-256 of the text
+  plus its first 80 characters, attachment name, result); the attempt is
+  logged before Messages is asked.
+- **Off switches** on the mini: `~/.session-bus/remote-off` (everything) and
+  `~/.session-bus/imessage-send-off` (sending only).
+- **Read back:** the sent row is read back from chat.db and returned, or a
+  clear error (Messages' error code, the row not appearing, or the missing
+  macOS Automation permission and where to grant it).
+
+This server only rejects obviously oversized input before it travels. A 10 MB
+image is about 14 MB of JSON-RPC, so the MCP SDK's 4 MB request-body limit is
+raised to 16 MB in `server.py` and nginx allows 16 MB on the MCP path.
 
 ## Session bus on the Mac mini
 
@@ -115,7 +147,7 @@ JSON request to the gateway. The mini's host key is pinned here
 
 The gateway is installed root-owned outside `~/repos` and re-checks every
 request on the mini, so even a compromised server can only use the eight bus
-tools and four iMessage tools above, and only in ways that leave Mark in control:
+tools and five iMessage tools above, and only in ways that leave Mark in control:
 
 - permission modes `default`, `plan` and `dontAsk` only (more is an opt-in on
   the mini), so no session edits or runs a command his rules don't allow
@@ -131,6 +163,8 @@ tools and four iMessage tools above, and only in ways that leave Mark in control
 - the `imessage_*` tools are forwarded to the iMessage service's own 0600
   socket (a LaunchAgent under the collector's Full-Disk-Access launcher, so no
   new grant); the gateway never opens chat.db and the service can only read it;
+  `imessage_send` is the one tool that acts, within the limits above, and has
+  its own off switch;
 - nothing but `bus_stop` while `~/.session-bus/remote-off` exists (the
   iMessage tools included).
 
@@ -150,8 +184,9 @@ needs a unique name, so a retry after a timeout can't start a second session.
   only). The server checks at startup that the token's permission is `r` and
   refuses to start with an `rw` token. The client only sends GET requests.
 - **iMessages:** never on this server. The `imessage_*` tools are plain
-  requests over the pinned ssh link to the mini, where the read-only service
-  answers them (see Tools above). No message text is logged here; the ssh
+  requests over the pinned ssh link to the mini, where the iMessage service
+  answers them (see Tools above); sending is only possible into chats that
+  already exist, at most 10 an hour, audited on the mini. No message text is logged here; the ssh
   reply is parsed and handed straight back to the caller.
 - **Network:** no published ports. nginx proxies only the MCP and OAuth paths;
   everything else on the host is a 404. Seafile (`http://seafile`) and

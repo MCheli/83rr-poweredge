@@ -1,6 +1,6 @@
-"""Read-only iMessage tools, answered on the Mac mini.
+"""iMessage tools, answered on the Mac mini: four read-only ones and imessage_send.
 
-homelab-mcp never touches chat.db. Each imessage_* call travels over the same
+homelab-mcp never touches chat.db or Messages. Each imessage_* call travels over the same
 ssh link as the bus_* tools (bus.py: dedicated key, forced command, pinned
 host key) to bus-gateway on the mini, which hands it to the iMessage service
 there (mac-mini-collector, `collector imessage-serve`): a LaunchAgent under the
@@ -13,6 +13,15 @@ and one-time passwords are dropped there with the nightly collector's filter,
 tapbacks and system rows are skipped. The clamps below only keep obviously
 out-of-range numbers from making a round trip. Nothing here logs message text,
 names or handles.
+
+imessage_send (since 2026-11-28) asks Messages on the mini to send text and/or
+one image into a chat that already exists. Every limit is enforced there, not
+here (mac-mini-collector's collector/imessage_send.py and bus-gateway): existing
+chats only, matched exactly, an ambiguous name is an error listing the matches;
+2,000 characters and one PNG/JPEG/HEIC/GIF image up to 10 MB; 10 sends an hour;
+an append-only audit log; off switches. This side only rejects obviously
+oversized input before it travels, and labels the tool as acting so claude.ai
+asks before using it.
 """
 
 from __future__ import annotations
@@ -20,19 +29,29 @@ from __future__ import annotations
 from typing import Awaitable, Callable
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+# Sending can't be undone and reaches other people: labelled like the acting bus tools, so claude.ai asks first.
+SENDS = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
 
 DEFAULT_LIMIT, MAX_LIMIT = 25, 100
 DEFAULT_HOURS, MAX_HOURS = 48, 24 * 31
+MAX_SEND_TEXT = 2000
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_IMAGE_B64 = 4 * ((MAX_IMAGE_BYTES + 2) // 3)
 
 IMESSAGE_INSTRUCTIONS = """\
  The imessage_* tools read Mark's iMessages/SMS from his Mac mini, live (what \
-Messages has right now, seconds old) and strictly read-only: nothing can be \
-sent, replied to, reacted to, marked read or deleted from here. Use \
-imessage_unanswered to see what needs him, imessage_threads for an overview of \
-active chats, imessage_recent for the latest messages and imessage_search to \
-find one. Verification codes and one-time passwords are removed before anything \
+Messages has right now, seconds old). The four read tools are strictly \
+read-only. Use imessage_unanswered to see what needs him, imessage_threads for \
+an overview of active chats, imessage_recent for the latest messages and \
+imessage_search to find one. imessage_send sends a message (text, optionally \
+one image) as Mark into a chat that already exists: use it only when Mark asked \
+for that message to that chat in this conversation, and show him the exact text \
+and recipient first. It can't start a new conversation, react, mark read or \
+delete; an ambiguous chat name comes back as an error listing the matches (pick \
+one chat_id with Mark, never guess); at most 10 sends an hour. Verification codes and one-time passwords are removed before anything \
 is returned; tapbacks and system rows are skipped. Times are ISO 8601 with \
 offset in US Eastern; senders are contact names when known, "me" for Mark.\
 """
@@ -105,7 +124,38 @@ def register_imessage_tools(mcp: FastMCP, call: Call | None) -> list[str]:
         return await call("imessage_unanswered", {"hours": clamp(hours, 1, MAX_HOURS, DEFAULT_HOURS),
                                                   "limit": clamp(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)})
 
+    async def imessage_send(chat: str, text: str, image_base64: str | None = None,
+                            image_filename: str | None = None) -> dict:
+        """Send an iMessage/SMS as Mark into a chat that already exists, through Messages on his Mac mini.
+
+        Only when Mark asked for this exact message to this chat; it can't be
+        unsent. chat: the chat_id from imessage_threads (most precise), a contact's
+        full name, a phone number or email Mark already has a chat with, or a group
+        chat's name as imessage_threads shows it. Nothing is guessed: no match, or
+        more than one (e.g. a contact with both a phone and an email chat, or two
+        groups with one name), returns an error listing the candidates with their
+        chat_id; ask Mark which one and call again with it. Never a new recipient.
+        text: up to 2,000 characters ("" to send only the image). image_base64:
+        optional, one PNG, JPEG, HEIC or GIF up to 10 MB; image_filename optional
+        (its extension must match). At most 10 sends per hour. Returns the message
+        as read back from Messages' database (status sent, delivered or pending),
+        or an error saying what went wrong; check imessage_recent before retrying
+        an uncertain send.
+        """
+        if not isinstance(chat, str) or not chat.strip() or len(chat) > 200:
+            raise ToolError("`chat` must be a chat_id, contact name, phone number, email or group name "
+                            "(up to 200 characters).")
+        if text is not None and len(text) > MAX_SEND_TEXT:
+            raise ToolError(f"`text` is {len(text)} characters; the limit is {MAX_SEND_TEXT}. Nothing was sent.")
+        if image_base64 is not None and len(image_base64) > MAX_IMAGE_B64 + 1024:
+            raise ToolError("The image is larger than 10 MB. Nothing was sent.")
+        if not (text or "").strip() and not image_base64:
+            raise ToolError("Nothing to send: give `text`, an image, or both.")
+        return await call("imessage_send", {"chat": chat, "text": text, "image_base64": image_base64 or None,
+                                            "image_filename": image_filename if image_base64 else None})
+
     tools = [imessage_recent, imessage_search, imessage_threads, imessage_unanswered]
     for fn in tools:
         mcp.tool(fn, annotations=READ_ONLY)
-    return [fn.__name__ for fn in tools]
+    mcp.tool(imessage_send, annotations=SENDS)
+    return [fn.__name__ for fn in tools] + [imessage_send.__name__]

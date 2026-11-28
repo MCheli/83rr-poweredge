@@ -3,9 +3,9 @@
 It always offers read-only tools for the Seafile "AI Context" library. When
 BUS_SSH_TARGET is set it also offers session-bus tools that start and manage
 Claude Code sessions on the Mac mini, reached over the LAN by ssh (see bus.py),
-and four read-only imessage_* tools answered by the iMessage service on the
-mini over that same link (see imessage.py); the mini itself is never exposed
-to the internet. When NOTES_MCP_URL is set it
+and the imessage_* tools (four read-only ones and imessage_send, limited on the
+mini) answered by the iMessage service there over that same link (see
+imessage.py); the mini itself is never exposed to the internet. When NOTES_MCP_URL is set it
 also offers notes_* tools (search/read, plus notes_write and notes_edit since the
 2026-11-23 AI Context cut-over) forwarded to basic-memory on the internal Docker
 network (see notes.py); basic-memory itself gets no new public URL, so these
@@ -49,6 +49,34 @@ log = logging.getLogger("homelab-mcp")
 READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 # Starting, messaging or stopping a session changes things; claude.ai asks before these by default.
 ACTS = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
+
+
+# One imessage_send can carry a 10 MB image as base64 (about 14 MB of JSON-RPC). The MCP SDK refuses
+# request bodies over 4 MB on the streamable-HTTP endpoint, and FastMCP doesn't expose the setting, so
+# its session manager is given this limit instead (test_request_body_limit_is_raised checks it still
+# takes after upgrades). nginx caps the same path at 16 MB; everything still needs the OAuth token.
+MAX_REQUEST_BODY = 16 * 1024 * 1024
+
+
+def _raise_request_body_limit(limit: int = MAX_REQUEST_BODY) -> None:
+    from fastmcp.server import http as fastmcp_http
+    from mcp.server.transport_security import RequestBodyLimitMiddleware
+
+    cls = fastmcp_http.FastMCPStreamableHTTPSessionManager
+    if getattr(cls, "_homelab_body_limit", None) == limit:
+        return
+    original = cls.__init__
+
+    def __init__(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        self.max_request_body_size = limit
+        self.asgi_app = RequestBodyLimitMiddleware(self._handle_request, limit)
+
+    cls.__init__ = __init__
+    cls._homelab_body_limit = limit
+
+
+_raise_request_body_limit()
 
 
 def env(name: str, default: str | None = None, *, required: bool = False) -> str:
@@ -481,7 +509,7 @@ if mini_bus is not None:
     for fn, hints in BUS_TOOLS.items():
         mcp.tool(fn, annotations=hints)
 
-# ── read-only iMessage tools, answered on the Mac mini over the same ssh link ──
+# ── iMessage tools (four read-only, plus imessage_send), answered on the Mac mini over the same ssh link ──
 IMESSAGE_TOOLS = register_imessage_tools(mcp, bus_call if mini_bus is not None else None)
 
 # ── notes via basic-memory (only when NOTES_MCP_URL is set): six read tools,
