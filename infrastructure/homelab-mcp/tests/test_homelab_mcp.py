@@ -204,15 +204,16 @@ NOTES_READ_TOOLS = {"notes_search", "notes_read", "notes_list", "notes_find", "n
 NOTES_WRITE_TOOLS = {"notes_write", "notes_edit"}  # since the AI Context cut-over (2026-11-23)
 NOTES_TOOLS = NOTES_READ_TOOLS | NOTES_WRITE_TOOLS
 IMESSAGE_TOOLS = {"imessage_recent", "imessage_search", "imessage_threads", "imessage_unanswered"}
+IMESSAGE_SEND_TOOLS = {"imessage_send"}  # since 2026-11-28; limits enforced on the mini
 
 
 async def test_registered_tools(tools):
     listed = {t.name: t for t in await tools.mcp.list_tools()}
-    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS | NOTES_TOOLS | IMESSAGE_TOOLS  # never bus_config or bus_setup
+    assert set(listed) == SEAFILE_TOOLS | BUS_TOOLS | NOTES_TOOLS | IMESSAGE_TOOLS | IMESSAGE_SEND_TOOLS  # never bus_config or bus_setup
     for name in SEAFILE_TOOLS | NOTES_READ_TOOLS | IMESSAGE_TOOLS | {"bus_sessions", "bus_status", "bus_logs",
                                                                        "bus_wait", "bus_doctor"}:
         assert listed[name].annotations.read_only_hint is True
-    for name in ("bus_spawn", "bus_send", "bus_stop", "notes_write", "notes_edit"):  # the acting tools
+    for name in ("bus_spawn", "bus_send", "bus_stop", "notes_write", "notes_edit", "imessage_send"):  # the acting tools
         assert listed[name].annotations.read_only_hint is False
         assert listed[name].annotations.destructive_hint is True
     assert "bypassPermissions" not in json.dumps(listed["bus_spawn"].parameters)
@@ -397,6 +398,81 @@ async def test_imessage_descriptions_promise_read_only_and_no_codes(tools):
         assert "read-only" in desc and "verification code" in desc and "live" in desc, name
         assert not {"project", "task", "message_text", "send"} & set(listed[name].parameters["properties"])
     assert "imessage_unanswered" in tools.mcp.instructions and "read-only" in tools.mcp.instructions
+
+
+# ── imessage_send (limits enforced on the mini; this side only pre-checks sizes) ──
+
+SEND_REPLY = {"ok": True, "result": {"status": "sent", "chat": "Alex Example", "chat_id": "any;-;+15555550101",
+                                     "is_group": False, "messages": [{"text": "On my way", "is_sent": True}]}}
+
+
+async def test_imessage_send_forwards_over_the_bus_link(ssh, tools):
+    ssh.reply(SEND_REPLY)
+    out = await call_json(tools, "imessage_send", {"chat": "Alex Example", "text": "On my way"})
+    assert out["status"] == "sent" and out["messages"][0]["text"] == "On my way"
+    assert ssh.sent() == {"tool": "imessage_send", "args": {"chat": "Alex Example", "text": "On my way"}, "caller": ""}
+
+
+async def test_imessage_send_with_image(ssh, tools):
+    ssh.reply(SEND_REPLY)
+    await call_json(tools, "imessage_send", {"chat": "any;-;+15555550101", "text": "", "image_base64": "iVBORw0KGgo=",
+                                             "image_filename": "a.png"})
+    assert ssh.sent()["args"] == {"chat": "any;-;+15555550101", "text": "", "image_base64": "iVBORw0KGgo=",
+                                  "image_filename": "a.png"}
+    await call_json(tools, "imessage_send", {"chat": "x", "text": "hi", "image_filename": "a.png"})
+    assert ssh.sent()["args"] == {"chat": "x", "text": "hi"}      # a filename without an image is dropped
+
+
+@pytest.mark.parametrize("args,match", [
+    ({"chat": "Alex", "text": "x" * 2001}, "limit is 2000"),
+    ({"chat": "  ", "text": "hi"}, "`chat` must be"),
+    ({"chat": "x" * 201, "text": "hi"}, "`chat` must be"),
+    ({"chat": "Alex", "text": "   "}, "Nothing to send"),
+    ({"chat": "Alex", "text": "", "image_base64": "A" * (14 * 1024 * 1024 + 4)}, "larger than 10 MB"),
+])
+async def test_imessage_send_rejects_oversized_input_before_it_travels(ssh, tools, args, match):
+    from fastmcp.exceptions import ToolError
+
+    with pytest.raises(ToolError, match=match):
+        await call_json(tools, "imessage_send", args)
+    assert not (ssh.dir / "stdin").exists() or ssh.sent() is None
+
+
+async def test_imessage_send_mini_refusal_is_a_tool_error(ssh, tools):
+    from fastmcp.exceptions import ToolError
+
+    ssh.reply({"ok": False, "error": "2 chats match 'Family'; nothing was sent. Call again with one chat_id ..."})
+    with pytest.raises(ToolError, match="2 chats match 'Family'"):
+        await call_json(tools, "imessage_send", {"chat": "Family", "text": "hi"})
+
+
+async def test_imessage_send_description_and_instructions(tools):
+    listed = {t.name: t for t in await tools.mcp.list_tools()}
+    tool = listed["imessage_send"]
+    assert set(tool.parameters["properties"]) == {"chat", "text", "image_base64", "image_filename"}
+    assert set(tool.parameters["required"]) == {"chat", "text"}
+    desc = tool.description or ""
+    for phrase in ("already exists", "Only when Mark asked", "2,000 characters", "10 MB", "10 sends per hour",
+                   "chat_id", "Never a new recipient"):
+        assert phrase in desc, phrase
+    assert "imessage_send" in tools.mcp.instructions and "never guess" in tools.mcp.instructions
+
+
+def test_request_body_limit_is_raised_for_images():
+    import server
+    from fastmcp.server.http import FastMCPStreamableHTTPSessionManager
+
+    sm = FastMCPStreamableHTTPSessionManager(app=server.mcp._mcp_server)
+    assert sm.max_request_body_size == server.MAX_REQUEST_BODY == 16 * 1024 * 1024
+    assert sm.asgi_app.max_body_size == 16 * 1024 * 1024
+
+
+def test_nginx_allows_16m_on_the_mcp_path():
+    conf = (APP.parent.parent / "nginx" / "conf.d" / "production.conf").read_text()
+    block = conf[conf.index("server_name mcp.markcheli.com;"):]
+    block = block[:block.index("\n}\n")]
+    loc = block[block.index("location ~ ^/((mcp|"):]
+    assert "client_max_body_size 16m;" in loc[:loc.index("}")]
 
 
 def test_no_imessage_tools_without_the_bus():

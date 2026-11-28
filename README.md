@@ -94,7 +94,8 @@ curl https://flask.markcheli.com/health
   - Java Edition server (port 25565)
 - **homelab-mcp** - https://mcp.markcheli.com/mcp (claude.ai custom connector, Google OAuth, one allowed account)
   - Read-only Seafile "AI Context" library, basic-memory notes (read + write/edit), Claude Code sessions on the Mac mini over the LAN (`bus_*`)
-  - **Read-only, live iMessage tools** (`imessage_recent`, `imessage_search`, `imessage_threads`, `imessage_unanswered`, since 2026-11-23): forwarded over the same pinned ssh link to the Mac mini, where a small service under the collector's Full-Disk-Access launcher opens `chat.db` read-only (`mode=ro`) and listens only on a 0600 Unix socket. Nothing can be sent, marked read or deleted; verification codes are dropped; no message text is ever logged. Details: `infrastructure/homelab-mcp/README.md`
+  - **Read-only, live iMessage tools** (`imessage_recent`, `imessage_search`, `imessage_threads`, `imessage_unanswered`, since 2026-11-23): forwarded over the same pinned ssh link to the Mac mini, where a small service under the collector's Full-Disk-Access launcher opens `chat.db` read-only (`mode=ro`) and listens only on a 0600 Unix socket. Nothing can be marked read or deleted; verification codes are dropped; no message text is ever logged here.
+  - **`imessage_send`** (since 2026-11-28): send text and optionally one image into a chat that **already exists** (never a new recipient; an ambiguous name is an error listing the matches), through Messages on the mini. Limits enforced on the mini: 2,000 characters, one PNG/JPEG/HEIC/GIF up to 10 MB, 10 sends per hour, append-only audit log, separate off switch for sending. Details: `infrastructure/homelab-mcp/README.md`
 
 **LAN-Only Services** (*.ops.markcheli.com):
 - **Grafana** - https://dashboard.ops.markcheli.com
