@@ -436,6 +436,8 @@ services:
   # Monitoring: Grafana (Visualization Dashboards)
   # ═════════════════════════════════════════════════════════════════════════════
   grafana:
+    # 13.3.2 (2026-11-28, was 13.3.1): security patch (CVE-2026-107561,
+    # CVE-2026-88960). Patch bump within 13.3, no new migration.
     # 13.3.1 (2026-11-14, was 13.3.0): Grafana's 10 Nov security release
     # (CVE-2026-102589/-107509/-110992/-111024/-13721/-14242). -111000 was
     # already fixed in 13.0.10; -106475 is the Elasticsearch plugin (not used).
@@ -449,7 +451,7 @@ services:
     # Provisioned dashboards use only timeseries/stat/gauge/bargauge/table
     # panels, so React 19 and the removed Graph UI components don't affect
     # them. No image renderer, CLI calls or command override.
-    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+    image: grafana/grafana:13.3.2@sha256:81556409ba48b2b922e0adb69a2511337d8ba7578f11962eefa6149a2d815101
     container_name: grafana
     restart: unless-stopped
     logging: *default-logging
@@ -1044,11 +1046,16 @@ services:
   # message format: infrastructure/opensearch/config/alerting/README.md.
   # ═════════════════════════════════════════════════════════════════════════════
   ntfy:
+    # v2.38.3 (2026-11-28, was v2.37.2): security releases v2.38.0-v2.38.3
+    # (message templating, SMTP library, reservations, proxy IP handling,
+    # web push endpoint check). No schema change in the notes, but v2.38.3
+    # deletes stored web push subscriptions that fail the new endpoint check:
+    # tar ntfy_data before the first start. server.yml needs no changes.
     # v2.37.2 (2026-11-07, was v2.36.0). server.yml needed no changes. v2.37
     # adds an additive user.db table (schema 10 -> 11); v2.36 still runs on it.
     # The 2026-11-01 v2.11 -> v2.36 upgrade migrated cache.db/user.db: rolling
     # back past v2.36 means restoring the ntfy_data tarball.
-    image: binwiederhier/ntfy:v2.37.2@sha256:1875ddcf815c8a3c981d6d78c67a93452d0abba79b1ab9520b1f5f5238902bd7
+    image: binwiederhier/ntfy:v2.38.3@sha256:874299b207a9815e7a0cf551b3a094241db7604fa2d274bbd86f569154b6ea51
     container_name: ntfy
     command: serve
     restart: unless-stopped
@@ -1248,7 +1255,11 @@ services:
       - infrastructure
 
   seafile:
-    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.29@sha256:9506f49d5e5065082c134e6348498eed5a5866ddbd94bd5a3e479a6c285bc61a}
+    # 13.0.30 (2026-11-28, was 13.0.29): upstream security release (share-link,
+    # WOPI/OnlyOffice permission checks, block upload validation). Same-major
+    # bump: the image runs only minor-upgrade.sh. notification-server stays on
+    # 13.0.29 (no 13.0.30 image). Runbook pattern: docs/seafile-upgrade-13.0.29.md.
+    image: ${SEAFILE_IMAGE:-seafileltd/seafile-mc:13.0.30@sha256:92df4680b5cbf2cdb0c7257942a9bea42b1c297aad9eab6bbd017e53f1ccfc2f}
     container_name: seafile
     restart: unless-stopped
     logging: *default-logging
